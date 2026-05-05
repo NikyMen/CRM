@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+# Instalar OpenSSL para Prisma
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+RUN npm install -g pnpm
+
+COPY backend/package.json backend/pnpm-lock.yaml ./
+COPY backend/prisma ./prisma/
+
+RUN pnpm install --no-frozen-lockfile
+
+COPY backend/ .
+
+RUN pnpm exec prisma generate
+
+RUN pnpm exec tsc --outDir dist
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/app.js"]

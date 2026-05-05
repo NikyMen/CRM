@@ -1,0 +1,329 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #f8fafc;
+  --surface-0: #ffffff;
+  --surface-1: #f1f5f9;
+  --surface-2: #e2e8f0;
+  --surface-input: #f8fafc;
+  --ink-primary: #0f172a;
+  --ink-secondary: #475569;
+  --ink-tertiary: #64748b;
+  --ink-muted: #94a3b8;
+  --border-0: rgba(15, 23, 42, 0.08);
+  --border-1: rgba(15, 23, 42, 0.14);
+  --border-2: rgba(15, 23, 42, 0.22);
+  --border-focus: #047857;
+  --accent: #047857;
+  --accent-hover: #065f46;
+  --accent-muted: #d1fae5;
+  --accent-text: #065f46;
+  --gold: #b45309;
+  --gold-muted: #fef3c7;
+  --gold-text: #78350f;
+  --semantic-success: #047857;
+  --semantic-success-bg: #ecfdf5;
+  --semantic-warning: #b45309;
+  --semantic-warning-bg: #fffbeb;
+  --semantic-danger: #b91c1c;
+  --semantic-danger-bg: #fef2f2;
+  --chat-surface: #f8fafc;
+  --chat-incoming-bg: #ffffff;
+  --chat-incoming-border: rgba(15, 23, 42, 0.12);
+  --chat-outgoing-bg: #047857;
+  --chat-outgoing-text: #ffffff;
+  --chat-outgoing-muted: rgba(255, 255, 255, 0.88);
+  --chat-pattern: linear-gradient(180deg, rgba(4, 120, 87, 0.05), transparent 22%),
+    repeating-linear-gradient(135deg, rgba(15, 23, 42, 0.035) 0, rgba(15, 23, 42, 0.035) 1px, transparent 1px, transparent 18px);
+  --background: var(--canvas);
+  --foreground: var(--ink-primary);
+  --surface: var(--surface-0);
+  --surface-strong: var(--surface-0);
+  --surface-muted: var(--surface-2);
+  --border-soft: var(--border-0);
+  --border-strong: var(--border-2);
+  --overlay: rgba(248, 250, 252, 0.86);
+  --sidebar-background: rgba(255, 255, 255, 0.9);
+  --panel-border: var(--border-1);
+  --panel-border-strong: var(--border-2);
+  --button-border: var(--border-2);
+
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+
+  --color-white: #f0f9ff;
+  --color-slate-50: #e0f2fe;
+}
+
+.dark {
+  --canvas: #0c1222;
+  --surface-0: #151d2e;
+  --surface-1: #1a2540;
+  --surface-2: #1f2d4a;
+  --surface-input: #1a2540;
+  --ink-primary: #f1f5f9;
+  --ink-secondary: #cbd5e1;
+  --ink-tertiary: #94a3b8;
+  --ink-muted: #64748b;
+  --border-0: rgba(241, 245, 249, 0.08);
+  --border-1: rgba(241, 245, 249, 0.13);
+  --border-2: rgba(241, 245, 249, 0.2);
+  --border-focus: #34d399;
+  --accent: #34d399;
+  --accent-hover: #10b981;
+  --accent-muted: rgba(52, 211, 153, 0.16);
+  --accent-text: #6ee7b7;
+  --gold: #fbbf24;
+  --gold-muted: rgba(251, 191, 36, 0.16);
+  --gold-text: #fcd34d;
+  --semantic-success: #34d399;
+  --semantic-success-bg: rgba(52, 211, 153, 0.14);
+  --semantic-warning: #fbbf24;
+  --semantic-warning-bg: rgba(251, 191, 36, 0.14);
+  --semantic-danger: #f87171;
+  --semantic-danger-bg: rgba(248, 113, 113, 0.14);
+  --chat-surface: #0f172a;
+  --chat-incoming-bg: #172033;
+  --chat-incoming-border: rgba(241, 245, 249, 0.1);
+  --chat-outgoing-bg: #065f46;
+  --chat-outgoing-text: #ffffff;
+  --chat-outgoing-muted: rgba(255, 255, 255, 0.82);
+  --chat-pattern: linear-gradient(180deg, rgba(52, 211, 153, 0.06), transparent 22%),
+    repeating-linear-gradient(135deg, rgba(241, 245, 249, 0.035) 0, rgba(241, 245, 249, 0.035) 1px, transparent 1px, transparent 18px);
+  --background: var(--canvas);
+  --foreground: var(--ink-primary);
+  --surface: var(--surface-0);
+  --surface-strong: var(--surface-0);
+  --surface-muted: var(--surface-2);
+  --border-soft: var(--border-0);
+  --border-strong: var(--border-2);
+  --overlay: rgba(12, 18, 34, 0.86);
+  --sidebar-background: rgba(21, 29, 46, 0.9);
+  --panel-border: var(--border-1);
+  --panel-border-strong: var(--border-2);
+  --button-border: var(--border-2);
+
+  --color-white: #202843;
+  --color-slate-50: #262f4b;
+  --color-slate-100: #313b58;
+  --color-slate-200: #46516e;
+  --color-slate-300: #63708f;
+  --color-slate-400: #8894b0;
+  --color-slate-500: #a5b0ca;
+  --color-slate-600: #c1cbe0;
+  --color-slate-700: #d7deee;
+  --color-slate-800: #e8edf8;
+  --color-slate-900: #f7f9ff;
+  --color-slate-950: #0d1324;
+
+  --color-primary-600: #83a8ea;
+  --color-primary-700: #a9c0f4;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Inter", var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-white: var(--color-white, #ffffff);
+  --color-slate-50: var(--color-slate-50, #f8fafc);
+  --color-slate-100: var(--color-slate-100, #f1f5f9);
+  --color-slate-200: var(--color-slate-200, #e2e8f0);
+  --color-slate-300: var(--color-slate-300, #cbd5e1);
+  --color-slate-400: var(--color-slate-400, #94a3b8);
+  --color-slate-500: var(--color-slate-500, #64748b);
+  --color-slate-600: var(--color-slate-600, #475569);
+  --color-slate-700: var(--color-slate-700, #334155);
+  --color-slate-800: var(--color-slate-800, #1e293b);
+  --color-slate-900: var(--color-slate-900, #0f172a);
+  --color-slate-950: var(--color-slate-950, #020617);
+
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--color-primary-600, var(--primary-600));
+  --color-primary-700: var(--color-primary-700, var(--primary-700));
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+
+  --shadow-office: 0 4px 14px 0 rgba(0, 0, 0, 0.05);
+  --shadow-office-hover: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+
+  --radius-card: 1rem;
+  --radius-button: 0.5rem;
+}
+
+body {
+  background: radial-gradient(circle at top left, rgba(125, 211, 252, 0.28), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.18), transparent 28%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark body {
+  background: radial-gradient(circle at top left, rgba(129, 155, 214, 0.22), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(102, 121, 174, 0.18), transparent 28%),
+    var(--background);
+}
+
+body,
+body *,
+body *::before,
+body *::after {
+  transition:
+    background-color 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    fill 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer utilities {
+  .glass-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    @apply backdrop-blur-md shadow-[var(--shadow-glass)];
+  }
+
+  .interactive-card {
+    background: linear-gradient(180deg, var(--surface-strong) 0%, var(--color-white) 100%);
+    border: 1px solid var(--panel-border);
+    @apply rounded-[var(--radius-card)] shadow-[var(--shadow-office)] transition-all duration-300 ease-out;
+  }
+
+  .interactive-card:hover {
+    border-color: var(--panel-border-strong);
+    @apply -translate-y-1 shadow-[var(--shadow-office-hover)];
+  }
+
+  .dark .interactive-card {
+    box-shadow:
+      0 18px 40px -24px rgba(15, 23, 42, 0.95),
+      inset 0 1px 0 rgba(148, 163, 184, 0.08);
+  }
+
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-primary-700 px-4 py-2 font-medium text-white shadow-md transition-all duration-200 hover:bg-primary-800 hover:shadow-lg active:scale-95;
+  }
+
+  .btn-secondary {
+    border-color: var(--button-border);
+    @apply flex items-center justify-center gap-2 rounded-[var(--radius-button)] border bg-white px-4 py-2 font-medium text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:text-primary-700 active:scale-95;
+  }
+
+  .dark .btn-secondary {
+    border-color: var(--button-border);
+    @apply bg-slate-800 text-slate-200 hover:bg-slate-700;
+  }
+
+  .page-title {
+    color: var(--ink-primary);
+    font-size: 1.375rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .page-subtitle {
+    color: var(--ink-secondary);
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .section-label {
+    color: var(--ink-tertiary);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .ctrl-input {
+    width: 100%;
+    border: 1px solid var(--border-1);
+    border-radius: var(--radius-button);
+    background-color: var(--surface-input);
+    color: var(--ink-primary);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  }
+
+  .ctrl-input::placeholder {
+    color: var(--ink-muted);
+  }
+
+  .ctrl-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.14);
+  }
+
+  .badge-owner {
+    @apply rounded-full border border-amber-200 bg-amber-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-800 shadow-sm;
+  }
+
+  .badge-admin {
+    @apply rounded-full border border-primary-200 bg-primary-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary-800 shadow-sm;
+  }
+
+  .badge-member {
+    @apply rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-800 shadow-sm;
+  }
+
+  .badge-viewer {
+    @apply rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-slate-600 shadow-sm;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

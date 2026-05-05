@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Environment variables — NUNCA subir al repo
+.env
+.env.local
+.env.production
+.env*.local
+
+# Prisma generated client
+backend/node_modules/
+backend/src/generated/
+backend/prisma/src/generated/
+
+# Local runtime data
+backend/.data/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+coverage/
+output/
+
+# Turbopack / Next.js cache
+.turbo/
