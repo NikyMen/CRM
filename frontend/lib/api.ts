@@ -3,6 +3,8 @@ import { auth } from './auth'
 import type {
   Contact, Deal, Webhook,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
+  StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
+  StockMovement, StockMovementType, StockProduct,
 } from '@/types'
 
 // Apunta al backend que ya tenemos corriendo
@@ -198,6 +200,106 @@ export const notesApi = {
 // Dashboard
 export const dashboardApi = {
   get: () => api.get('/dashboard'),
+}
+
+export const stockApi = {
+  dashboard: () =>
+    api.get<StockDashboard>('/stock/dashboard'),
+
+  listCategories: () =>
+    api.get<StockCategory[]>('/stock/categories'),
+
+  createCategory: (data: { name: string; description?: string }) =>
+    api.post<StockCategory>('/stock/categories', data),
+
+  listProducts: (params?: {
+    search?: string
+    categoryId?: string
+    stockState?: 'all' | 'low' | 'out' | 'active'
+    page?: number
+    limit?: number
+  }) =>
+    api.get<PaginatedResult<StockProduct>>('/stock/products', { params }),
+
+  createProduct: (data: {
+    name: string
+    description?: string
+    sku?: string
+    categoryId?: string
+    price?: number
+    cost?: number
+    image?: string
+    images?: string[]
+    featured?: boolean
+    stockQuantity?: number
+    minStock?: number
+  }) =>
+    api.post<StockProduct>('/stock/products', data),
+
+  updateProduct: (id: string, data: Partial<{
+    name: string
+    description: string
+    sku: string
+    categoryId: string
+    price: number
+    cost: number
+    image: string
+    images: string[]
+    featured: boolean
+    stockQuantity: number
+    minStock: number
+  }>) =>
+    api.patch<StockProduct>(`/stock/products/${id}`, data),
+
+  deleteProduct: (id: string) =>
+    api.delete(`/stock/products/${id}`),
+
+  quickSale: (id: string, data?: {
+    quantity?: number
+    paymentMethod?: string
+    reference?: string
+    note?: string
+  }) =>
+    api.post(`/stock/products/${id}/quick-sale`, data),
+
+  listMovements: (params?: {
+    productId?: string
+    type?: StockMovementType
+    page?: number
+    limit?: number
+  }) =>
+    api.get<PaginatedResult<StockMovement>>('/stock/movements', { params }),
+
+  createMovement: (data: {
+    productId: string
+    type: StockMovementType
+    quantity: number
+    reason: string
+    note?: string
+    batchCode?: string
+  }) =>
+    api.post<StockMovement>('/stock/movements', data),
+
+  listCash: (params?: {
+    type?: StockCashTransactionType
+    page?: number
+    limit?: number
+  }) =>
+    api.get<PaginatedResult<StockCashTransaction>>('/stock/cash', { params }),
+
+  createCash: (data: {
+    type: StockCashTransactionType
+    category: string
+    amount: number
+    paymentMethod?: string
+    reference?: string
+    note?: string
+    occurredAt?: string
+  }) =>
+    api.post<StockCashTransaction>('/stock/cash', data),
+
+  deleteCash: (id: string) =>
+    api.delete(`/stock/cash/${id}`),
 }
 
 export const whatsappApi = {

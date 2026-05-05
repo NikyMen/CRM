@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { authenticate } from '../../core/auth/auth.service'
-import { number } from 'zod'
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
@@ -20,6 +19,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       dealsByStage,
       recentActivities,
       recentContacts,
+      stockProducts,
     ] = await Promise.all([
 
       // Total de contactos activos
@@ -73,6 +73,20 @@ export async function dashboardRoutes(app: FastifyInstance) {
           createdAt: true,
         },
       }),
+
+      db.stockProduct.findMany({
+        where: { workspaceId, isArchived: false },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          price: true,
+          stockQuantity: true,
+          minStock: true,
+          updatedAt: true,
+        },
+      }),
     ])
 
     // Enriquecer dealsByStage con el nombre de la etapa
@@ -87,6 +101,19 @@ export async function dashboardRoutes(app: FastifyInstance) {
     // Valor total en pipeline
     const pipelineValue = dealsByStage.reduce(
       (sum: any, d: any) => sum + Number(d._sum.value ?? 0), 0
+    )
+
+    const lowStockProducts = stockProducts
+      .filter((p: any) => p.stockQuantity > 0 && p.stockQuantity <= p.minStock)
+      .sort((a: any, b: any) => a.stockQuantity - b.stockQuantity)
+    const outOfStockProducts = stockProducts.filter((p: any) => p.stockQuantity <= 0)
+    const unitsInStock = stockProducts.reduce(
+      (sum: number, p: any) => sum + Number(p.stockQuantity ?? 0),
+      0
+    )
+    const inventoryValue = stockProducts.reduce(
+      (sum: number, p: any) => sum + Number(p.price ?? 0) * Number(p.stockQuantity ?? 0),
+      0
     )
 
     return reply.send({
@@ -107,6 +134,21 @@ export async function dashboardRoutes(app: FastifyInstance) {
           color:     stagesMap[d.stageId]?.color ?? '#6366f1',
           count:     d._count.id,
           value:     d._sum.value ?? 0,
+        })),
+      },
+      stock: {
+        totalProducts: stockProducts.length,
+        unitsInStock,
+        lowStockProducts: lowStockProducts.length,
+        outOfStockProducts: outOfStockProducts.length,
+        inventoryValue,
+        criticalProducts: lowStockProducts.slice(0, 5).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          stockQuantity: p.stockQuantity,
+          minStock: p.minStock,
+          updatedAt: p.updatedAt,
         })),
       },
       recentActivities: recentActivities.map((a: any) => ({

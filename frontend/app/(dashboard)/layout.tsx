@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import {
   Users, KanbanSquare, Webhook, MessageSquare, Inbox, MessagesSquare,
-  Key, LogOut, LayoutDashboard, Layers,
+  Key, LogOut, LayoutDashboard, Layers, Package,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/contacts', label: 'Contactos', icon: Users },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
+  { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },
   { href: '/chats', label: 'Chats', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/inbox', label: 'Inbox', icon: Inbox, roles: ['owner', 'admin', 'member'] as Role[] },

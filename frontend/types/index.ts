@@ -215,6 +215,21 @@ export interface DashboardData {
       value:     number
     }[]
   }
+  stock: {
+    totalProducts: number
+    unitsInStock: number
+    lowStockProducts: number
+    outOfStockProducts: number
+    inventoryValue: number
+    criticalProducts: {
+      id: string
+      name: string
+      sku?: string | null
+      stockQuantity: number
+      minStock: number
+      updatedAt: string
+    }[]
+  }
   recentActivities: {
     id:          string
     type:        string
@@ -222,6 +237,88 @@ export interface DashboardData {
     contactName: string | null
     createdAt:   string
   }[]
+}
+
+export type StockMovementType = 'IN' | 'OUT' | 'SALE' | 'ADJUSTMENT'
+export type StockCashTransactionType = 'INCOME' | 'EXPENSE'
+
+export interface StockCategory {
+  id: string
+  workspaceId: string
+  name: string
+  description?: string | null
+  productCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StockProduct {
+  id: string
+  workspaceId: string
+  categoryId?: string | null
+  category?: {
+    id: string
+    name: string
+  } | null
+  name: string
+  description: string
+  sku?: string | null
+  price: number
+  cost?: number | null
+  image?: string | null
+  images: string[]
+  featured: boolean
+  stockQuantity: number
+  minStock: number
+  isArchived: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StockMovement {
+  id: string
+  workspaceId: string
+  productId: string
+  product?: {
+    id: string
+    name: string
+    sku?: string | null
+  } | null
+  type: StockMovementType
+  quantity: number
+  reason: string
+  note?: string | null
+  batchCode?: string | null
+  userId?: string | null
+  createdAt: string
+}
+
+export interface StockCashTransaction {
+  id: string
+  workspaceId: string
+  type: StockCashTransactionType
+  category: string
+  amount: number
+  paymentMethod?: string | null
+  reference?: string | null
+  note?: string | null
+  occurredAt: string
+  createdAt: string
+}
+
+export interface StockDashboard {
+  metrics: {
+    totalProducts: number
+    unitsInStock: number
+    lowStockProducts: number
+    outOfStockProducts: number
+    inventoryValue: number
+    inventoryCost: number
+    netCash: number
+  }
+  lowStockProducts: StockProduct[]
+  recentMovements: StockMovement[]
+  recentCashTransactions: StockCashTransaction[]
 }
 
 // WhatsApp QR

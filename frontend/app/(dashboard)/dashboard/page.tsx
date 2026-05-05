@@ -9,6 +9,7 @@ import {
   Users, KanbanSquare, DollarSign, Activity,
   Loader2, PhoneCall, Send, Calendar,
   CheckSquare, MessageSquare, Clock, ArrowRight, Layers,
+  Package, TriangleAlert, Archive,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -107,6 +108,72 @@ export default function DashboardPage() {
           color="bg-orange-50 text-orange-600 border-orange-100"
         />
       </div>
+
+      {data.stock && (
+        <div className="interactive-card mb-8 p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+              <Package size={20} className="text-primary-500" /> Stock operativo
+            </h3>
+            <Link
+              href="/stock"
+              className="flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-bold text-primary-600 transition-colors hover:border-primary-100 hover:bg-primary-50 hover:text-primary-700"
+            >
+              Gestionar stock <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Productos</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{data.stock.totalProducts}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Unidades</p>
+              <p className="mt-2 text-2xl font-black text-emerald-700">{data.stock.unitsInStock}</p>
+            </div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50/80 p-4">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-700">
+                <TriangleAlert size={14} /> Alertas
+              </p>
+              <p className="mt-2 text-2xl font-black text-amber-700">
+                {data.stock.lowStockProducts + data.stock.outOfStockProducts}
+              </p>
+            </div>
+            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Valor estimado</p>
+              <p className="mt-2 text-2xl font-black text-blue-700">
+                ${data.stock.inventoryValue.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {data.stock.criticalProducts.length > 0 ? (
+            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {data.stock.criticalProducts.slice(0, 3).map((product) => (
+                <Link
+                  key={product.id}
+                  href="/stock"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white p-3 transition-colors hover:bg-amber-50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-900">{product.name}</p>
+                    <p className="text-xs font-semibold text-slate-400">Minimo {product.minStock}</p>
+                  </div>
+                  <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-sm font-black text-amber-700">
+                    {product.stockQuantity}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+              <Archive size={18} className="text-slate-400" />
+              <p className="text-sm font-semibold text-slate-500">Sin alertas de stock.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Leads por etapa */}
