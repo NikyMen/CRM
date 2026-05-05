@@ -656,26 +656,8 @@ export default function ChatsPage() {
 
   return (
     <div className="animate-fade-in mx-auto max-w-[1680px] px-4 pb-20 pt-6 md:px-8 md:pb-8 md:pt-8">
-      <div className="mb-4 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-        <div>
-          <h1 className="page-title">Chats</h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl px-2 py-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--border-0)' }}>
-          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: statusStyle.bg, color: statusStyle.color }}>
-            {session?.status === 'CONNECTED' ? <Wifi size={13} /> : <WifiOff size={13} />}
-            {statusStyle.label}
-          </span>
-          <button onClick={() => setSettingsOpen((current) => !current)} className="btn-secondary !h-9 !px-3 !py-0">
-            <Settings2 size={14} />
-            Sesion
-            {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-        </div>
-      </div>
-
       {settingsOpen && (
-        <div className="mb-4 interactive-card overflow-hidden p-4">
+        <div className="interactive-card static-card mb-4 overflow-hidden p-4">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
             <div className="space-y-3">
               {!session?.runtimeCompatible && <Notice title="Runtime incompatible" body="Este backend esta corriendo en un contexto serverless. Baileys necesita un proceso Node persistente para que la conexion no se rompa." />}
@@ -747,14 +729,29 @@ export default function ChatsPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:grid-cols-[390px_minmax(0,1fr)]">
 
-        <section className="interactive-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
+        <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
           <div className="shrink-0 border-b px-5 py-4" style={{ borderColor: 'var(--border-0)', background: 'var(--surface-0)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="section-label">Inbox</p>
                 <h2 className="mt-1 text-lg font-bold" style={{ color: 'var(--ink-primary)' }}>Conversaciones</h2>
               </div>
-              <p className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--surface-2)', color: 'var(--ink-secondary)' }}>{filteredChats.length}</p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <p className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--surface-2)', color: 'var(--ink-secondary)' }}>{filteredChats.length}</p>
+                <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: statusStyle.bg, color: statusStyle.color }}>
+                  {session?.status === 'CONNECTED' ? <Wifi size={13} /> : <WifiOff size={13} />}
+                  {statusStyle.label}
+                </span>
+                <button
+                  onClick={() => setSettingsOpen((current) => !current)}
+                  className="btn-secondary !h-9 !px-3 !py-0 text-xs"
+                  aria-expanded={settingsOpen}
+                >
+                  <Settings2 size={14} />
+                  Configuracion
+                  {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
             </div>
 
             <div className="relative mt-4">
@@ -847,7 +844,7 @@ export default function ChatsPage() {
           </div>
         </section>
 
-        <section className="interactive-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:sticky lg:top-6 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
+        <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:sticky lg:top-6 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
           {selectedChat ? (
             <>
               <div className="shrink-0 border-b px-5 py-4" style={{ borderColor: 'var(--border-0)' }}>

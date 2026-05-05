@@ -22,11 +22,11 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/contacts', label: 'Contactos', icon: Users },
+  { href: '/chats', label: 'Chats', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
   { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },
-  { href: '/chats', label: 'Chats', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
+  { href: '/contacts', label: 'Contactos', icon: Users },
   { href: '/webhooks', label: 'Webhooks', icon: Webhook, roles: ['owner', 'admin'] as Role[] },
   { href: '/api-keys', label: 'API Keys', icon: Key, roles: ['owner', 'admin'] as Role[] },
   { href: '/team', label: 'Equipo', icon: Users, roles: ['owner', 'admin'] as Role[] },
