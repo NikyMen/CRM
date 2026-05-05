@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { contactsApi, activitiesApi, notesApi } from '@/lib/api'
 import type { Contact, Activity, Note } from '@/types'
@@ -9,6 +9,7 @@ import {
   ArrowLeft, Phone, Mail, Tag, Loader2,
   Plus, Trash2, MessageSquare, Clock,
   PhoneCall, Calendar, CheckSquare, Send,
+  Pencil, Save, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -39,6 +40,25 @@ const STATUS_COLORS: Record<string, string> = {
   CHURNED:   'bg-rose-50 text-rose-600 border-rose-200',
 }
 
+const CONTACT_STATUSES: Contact['status'][] = ['LEAD', 'QUALIFIED', 'ACTIVE', 'CUSTOMER', 'CHURNED']
+
+function formatPhoneNumber(value?: string | null) {
+  const digits = value?.replace(/\D/g, '') ?? ''
+  if (!digits) return null
+
+  if (digits.length === 13 && digits.startsWith('549')) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7, 10)} ${digits.slice(10)}`
+  }
+
+  if (digits.length > 10) {
+    return [digits.slice(0, 3), digits.slice(3, 7), digits.slice(7, 10), digits.slice(10)]
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim()
+}
+
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router       = useRouter()
@@ -46,6 +66,16 @@ export default function ContactDetailPage() {
   const [tab, setTab]               = useState<'actividades' | 'notas'>('actividades')
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [noteContent, setNoteContent]           = useState('')
+  const [editingContact, setEditingContact]     = useState(false)
+  const [contactForm, setContactForm] = useState({
+    firstName: '',
+    lastName:  '',
+    email:     '',
+    phone:     '',
+    status:    'LEAD' as Contact['status'],
+    source:    '',
+    tags:      '',
+  })
   const [activityForm, setActivityForm] = useState({
     type:        'CALL',
     title:       '',
@@ -67,6 +97,20 @@ export default function ContactDetailPage() {
     queryKey: ['notes', id],
     queryFn:  () => notesApi.list(id).then((r) => r.data),
   })
+
+  useEffect(() => {
+    if (!contact) return
+
+    setContactForm({
+      firstName: contact.firstName ?? '',
+      lastName:  contact.lastName ?? '',
+      email:     contact.email ?? '',
+      phone:     contact.phone ?? '',
+      status:    contact.status,
+      source:    contact.source ?? '',
+      tags:      contact.tags.join(', '),
+    })
+  }, [contact])
 
   // ─── Mutaciones ───────────────────────────────────────────────
   const createActivity = useMutation({
@@ -101,6 +145,25 @@ export default function ContactDetailPage() {
     onSuccess:  () => queryClient.invalidateQueries({ queryKey: ['notes', id] }),
   })
 
+  const updateContact = useMutation({
+    mutationFn: () => contactsApi.update(id, {
+      firstName: contactForm.firstName.trim(),
+      lastName:  contactForm.lastName.trim() || undefined,
+      email:     contactForm.email.trim() || undefined,
+      phone:     contactForm.phone.trim() || undefined,
+      status:    contactForm.status,
+      source:    contactForm.source.trim() || undefined,
+      tags:      contactForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    }),
+    onSuccess: (response) => {
+      queryClient.setQueryData(['contact', id], response.data)
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-chats'] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      setEditingContact(false)
+    },
+  })
+
   if (contactLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -121,11 +184,19 @@ export default function ContactDetailPage() {
         >
           <ArrowLeft size={20} strokeWidth={2.5}/>
         </button>
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-primary-50 to-primary-100 border border-primary-200 flex items-center justify-center text-primary-600 font-extrabold text-lg shrink-0 shadow-sm relative overflow-hidden">
-             <span className="relative z-10">{contact.firstName[0]}{contact.lastName?.[0] ?? ''}</span>
+             {contact.avatar ? (
+               <img
+                 src={contact.avatar}
+                 alt={`${contact.firstName} ${contact.lastName ?? ''}`}
+                 className="h-full w-full object-cover"
+               />
+             ) : (
+               <span className="relative z-10">{contact.firstName[0]}{contact.lastName?.[0] ?? ''}</span>
+             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
               {contact.firstName} {contact.lastName}
             </h1>
@@ -146,6 +217,13 @@ export default function ContactDetailPage() {
             </div>
           </div>
         </div>
+        <button
+          onClick={() => setEditingContact((current) => !current)}
+          className="btn-secondary h-10 px-4 shrink-0"
+        >
+          {editingContact ? <X size={16} /> : <Pencil size={16} />}
+          {editingContact ? 'Cerrar' : 'Editar'}
+        </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden animate-slide-up bg-slate-50/50">
@@ -164,14 +242,14 @@ export default function ContactDetailPage() {
                 <span className="text-sm font-semibold text-slate-700 truncate">{contact.email}</span>
               </div>
             )}
-            {contact.phone && (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
-                   <Phone size={14} strokeWidth={2.5}/>
-                </div>
-                <span className="text-sm font-semibold text-slate-700">{contact.phone}</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
+                 <Phone size={14} strokeWidth={2.5}/>
               </div>
-            )}
+              <span className="text-sm font-semibold text-slate-700">
+                {formatPhoneNumber(contact.phone) ?? 'Sin telefono cargado'}
+              </span>
+            </div>
             {contact.tags.length > 0 && (
               <div className="flex items-start gap-3 mt-1">
                 <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
@@ -187,6 +265,69 @@ export default function ContactDetailPage() {
               </div>
             )}
           </div>
+
+          {editingContact && (
+            <div className="mt-8 border-t border-slate-100 pt-6">
+              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+                Editar datos
+              </h3>
+              <div className="space-y-3">
+                <input
+                  value={contactForm.firstName}
+                  onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Nombre"
+                />
+                <input
+                  value={contactForm.lastName}
+                  onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Apellido"
+                />
+                <input
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Telefono"
+                />
+                <input
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Email"
+                />
+                <select
+                  value={contactForm.status}
+                  onChange={(e) => setContactForm({ ...contactForm, status: e.target.value as Contact['status'] })}
+                  className="ctrl-input"
+                >
+                  {CONTACT_STATUSES.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+                <input
+                  value={contactForm.source}
+                  onChange={(e) => setContactForm({ ...contactForm, source: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Fuente"
+                />
+                <input
+                  value={contactForm.tags}
+                  onChange={(e) => setContactForm({ ...contactForm, tags: e.target.value })}
+                  className="ctrl-input"
+                  placeholder="Tags separados por coma"
+                />
+              </div>
+              <button
+                onClick={() => updateContact.mutate()}
+                disabled={!contactForm.firstName.trim() || updateContact.isPending}
+                className="btn-primary mt-4 w-full"
+              >
+                {updateContact.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Guardar cambios
+              </button>
+            </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-slate-100">
             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
