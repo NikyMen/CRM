@@ -4,7 +4,7 @@ import type {
   Contact, Deal, Webhook,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
-  StockMovement, StockMovementType, StockProduct,
+  StockMovement, StockMovementType, StockProduct, WhatsAppChat,
 } from '@/types'
 
 // Apunta al backend que ya tenemos corriendo
@@ -317,6 +317,9 @@ export const whatsappApi = {
 
   listMessages: (jid: string, params?: { limit?: number }) =>
     api.get(`/whatsapp/chats/${encodeURIComponent(jid)}/messages`, { params }),
+
+  updateChat: (jid: string, data: { displayName: string }) =>
+    api.patch<WhatsAppChat>(`/whatsapp/chats/${encodeURIComponent(jid)}`, data),
 
   deleteChat: (jid: string) =>
     api.delete(`/whatsapp/chats/${encodeURIComponent(jid)}`),

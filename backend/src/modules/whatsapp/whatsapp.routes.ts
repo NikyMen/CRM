@@ -25,6 +25,10 @@ const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(4096),
 })
 
+const updateChatSchema = z.object({
+  displayName: z.string().trim().min(1).max(120),
+})
+
 const maintenanceQuerySchema = z.object({
   days: z.coerce.number().min(1).max(30).default(2),
 })
@@ -88,6 +92,13 @@ export async function whatsappRoutes(app: FastifyInstance) {
     const query = messagesQuerySchema.parse(req.query)
     const jid = decodeURIComponent(req.params.jid)
     return reply.send(await whatsAppManager.listMessages(ctx.workspaceId, jid, query.limit))
+  })
+
+  app.patch<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string }
+    const jid = decodeURIComponent(req.params.jid)
+    const body = updateChatSchema.parse(req.body) as { displayName: string }
+    return reply.send(await whatsAppManager.updateChat(ctx.workspaceId, jid, body))
   })
 
   app.delete<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {

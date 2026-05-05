@@ -15,11 +15,11 @@ import { useToast } from '@/components/ui/toast'
 import {
   AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp,
   Loader2, MessageSquareText, RefreshCcw,
-  Search, Send, Settings2, Smartphone, Trash2, Unplug, Wifi, WifiOff,
+  Pencil, Save, Search, Send, Settings2, Smartphone, Trash2, Unplug, UsersRound, Wifi, WifiOff, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
-type ChatFilter = 'all' | 'linked' | 'unread'
+type ChatFilter = 'all' | 'linked' | 'unread' | 'groups'
 
 const STATUS_STYLES: Record<string, { label: string; bg: string; color: string }> = {
   CONNECTED: { label: 'Conectado', bg: 'var(--semantic-success-bg)', color: 'var(--semantic-success)' },
@@ -55,8 +55,29 @@ function formatMessageDay(value: string) {
   return new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date(value))
 }
 
+function formatPhoneNumber(value?: string | null) {
+  const digits = value?.replace(/\D/g, '') ?? ''
+  if (!digits) return null
+
+  if (digits.length === 13 && digits.startsWith('549')) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7, 10)} ${digits.slice(10)}`
+  }
+
+  if (digits.length > 10) {
+    return [
+      digits.slice(0, 3),
+      digits.slice(3, 7),
+      digits.slice(7, 10),
+      digits.slice(10),
+    ].filter(Boolean).join(' ')
+  }
+
+  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim()
+}
+
 function chatTitle(chat?: WhatsAppChat | null) {
   if (!chat) return 'Sin chat'
+  if (chat.isGroup && chat.displayName && chat.displayName !== chat.jid) return chat.displayName
   if (chat.displayName && chat.displayName !== chat.jid) return chat.displayName
   if (chat.contactName) return chat.contactName
   return chat.phoneNumber ?? chat.jid
@@ -68,20 +89,22 @@ function chatInitial(chat?: WhatsAppChat | null) {
 
 function chatPrimaryName(chat?: WhatsAppChat | null) {
   if (!chat) return 'Sin chat'
-  if (chat.contactName) return chat.contactName
+  if (chat.isGroup && chat.displayName && chat.displayName !== chat.jid) return chat.displayName
   if (chat.displayName && chat.displayName !== chat.jid) return chat.displayName
+  if (chat.contactName) return chat.contactName
   return chat.phoneNumber ?? chat.jid
 }
 
 function chatPhoneLine(chat?: WhatsAppChat | null) {
   if (!chat) return null
-  if (chat.phoneNumber) return chat.phoneNumber
+  if (chat.phoneNumber) return formatPhoneNumber(chat.phoneNumber)
   const match = chat.jid.match(/^(\d+)(?=@s\.whatsapp\.net$)/)
-  return match?.[1] ?? null
+  return formatPhoneNumber(match?.[1])
 }
 
 function messageSenderName(message: WhatsAppMessage, chat?: WhatsAppChat | null) {
   if (message.fromMe) return 'Tu'
+  if (chat?.isGroup && message.pushName) return message.pushName
   return message.pushName ?? chat?.displayName ?? chat?.contactName ?? chat?.phoneNumber ?? 'Contacto'
 }
 
@@ -338,6 +361,8 @@ export default function ChatsPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
   const [selectedJid, setSelectedJid] = useState<string | null>(null)
   const [messageText, setMessageText] = useState('')
+  const [editingChat, setEditingChat] = useState(false)
+  const [chatNameDraft, setChatNameDraft] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [localEchoesByJid, setLocalEchoesByJid] = useState<Record<string, WhatsAppMessage[]>>({})
   const deferredSearch = useDeferredValue(chatSearch)
@@ -368,12 +393,20 @@ export default function ChatsPage() {
     refetchIntervalInBackground: true,
   })
 
-  const chats = useMemo(() => (chatsQuery.data ?? []).filter((chat) => !chat.isGroup), [chatsQuery.data])
+  const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
   const filteredChats = useMemo(() => chats.filter((chat) => {
+    if (chatFilter === 'groups') return chat.isGroup
+    if (chat.isGroup) return false
     if (chatFilter === 'linked') return Boolean(chat.contactId)
     if (chatFilter === 'unread') return chat.unreadCount > 0
     return true
   }), [chatFilter, chats])
+
+  useEffect(() => {
+    if (requestedJid && chats.some((chat) => chat.jid === requestedJid && chat.isGroup)) {
+      setChatFilter('groups')
+    }
+  }, [chats, requestedJid])
 
   useEffect(() => {
     if (filteredChats.length === 0) return void setSelectedJid(null)
@@ -456,6 +489,27 @@ export default function ChatsPage() {
     },
     onError: (error) => {
       toast({ type: 'error', title: 'No se pudo eliminar el chat', description: toErrorMessage(error) })
+    },
+  })
+
+  const updateChatMutation = useMutation({
+    mutationFn: (payload: { jid: string; displayName: string }) =>
+      whatsappApi.updateChat(payload.jid, { displayName: payload.displayName }).then((r) => r.data),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<WhatsAppChat[] | undefined>(['whatsapp-chats', deferredSearch], (current) =>
+        current?.map((chat) => chat.jid === updated.jid ? { ...chat, ...updated } : chat)
+      )
+      queryClient.setQueryData<WhatsAppMessagesPayload | undefined>(['whatsapp-messages', updated.jid], (current) =>
+        current ? { ...current, chat: updated } : current
+      )
+      setEditingChat(false)
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-chats'] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      toast({ type: 'success', title: 'Nombre actualizado' })
+    },
+    onError: (error) => {
+      toast({ type: 'error', title: 'No se pudo actualizar el nombre', description: toErrorMessage(error) })
     },
   })
 
@@ -568,10 +622,19 @@ export default function ChatsPage() {
     (session.hasActiveSocket || ['CONNECTED', 'CONNECTING', 'PAIRING', 'ERROR'].includes(sessionStatus))
   )
 
+  useEffect(() => {
+    setEditingChat(false)
+    setChatNameDraft(selectedChat ? chatPrimaryName(selectedChat) : '')
+  }, [selectedChat?.jid])
+
   const handleQrSubmit = () => canGenerateQr && connectMutation.mutate()
   const handleResume = () => canResumeSession && connectMutation.mutate()
   const handleDisconnect = () => canDisconnectSession && disconnectMutation.mutate()
   const handleSendMessage = () => selectedJid && messageText.trim() && sendMutation.mutate()
+  const handleSaveChatName = () => {
+    if (!selectedChat || !chatNameDraft.trim()) return
+    updateChatMutation.mutate({ jid: selectedChat.jid, displayName: chatNameDraft.trim() })
+  }
   const handleDeleteChat = () => {
     if (!selectedChat || !canDeleteChat) return
     if (!window.confirm(`Vas a eliminar el chat local de "${chatPrimaryName(selectedChat)}". Los mensajes persistidos en este CRM se borran.`)) return
@@ -699,8 +762,8 @@ export default function ChatsPage() {
               <input value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} placeholder="Buscar chat, telefono o contacto" className="ctrl-input !pl-10" />
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl p-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-0)' }}>
-              {(['all', 'linked', 'unread'] as ChatFilter[]).map((filter) => (
+            <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl p-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-0)' }}>
+              {(['all', 'linked', 'unread', 'groups'] as ChatFilter[]).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setChatFilter(filter)}
@@ -712,7 +775,7 @@ export default function ChatsPage() {
                     boxShadow: chatFilter === filter ? '0 8px 18px rgba(15,23,42,0.06)' : 'none',
                   }}
                 >
-                  {filter === 'all' ? 'Todo' : filter === 'linked' ? 'CRM' : 'Sin leer'}
+                  {filter === 'all' ? 'Todo' : filter === 'linked' ? 'CRM' : filter === 'unread' ? 'Sin leer' : 'Grupos'}
                 </button>
               ))}
             </div>
@@ -752,7 +815,11 @@ export default function ChatsPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink-primary)' }}>{chatPrimaryName(chat)}</p>
-                              {chatPhoneLine(chat) ? (
+                              {chat.isGroup ? (
+                                <p className="mt-0.5 inline-flex items-center gap-1 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>
+                                  <UsersRound size={12} /> Grupo
+                                </p>
+                              ) : chatPhoneLine(chat) ? (
                                 <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>{chatPhoneLine(chat)}</p>
                               ) : null}
                             </div>
@@ -798,10 +865,55 @@ export default function ChatsPage() {
                         chatInitial(selectedChat)
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xl font-bold" style={{ color: 'var(--ink-primary)' }}>{chatPrimaryName(selectedChat)}</p>
+                    <div className="min-w-0 flex-1">
+                      {editingChat ? (
+                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                          <input
+                            value={chatNameDraft}
+                            onChange={(event) => setChatNameDraft(event.target.value)}
+                            className="ctrl-input h-10 min-w-0 text-base font-semibold"
+                            autoFocus
+                          />
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              onClick={handleSaveChatName}
+                              disabled={updateChatMutation.isPending || !chatNameDraft.trim()}
+                              className="btn-primary !h-10 !px-3"
+                            >
+                              {updateChatMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                              Guardar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingChat(false)
+                                setChatNameDraft(chatPrimaryName(selectedChat))
+                              }}
+                              className="btn-secondary !h-10 !px-3"
+                              disabled={updateChatMutation.isPending}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-xl font-bold" style={{ color: 'var(--ink-primary)' }}>{chatPrimaryName(selectedChat)}</p>
+                          {canManage ? (
+                            <button
+                              onClick={() => setEditingChat(true)}
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-[rgba(5,150,105,0.08)]"
+                              style={{ color: 'var(--ink-tertiary)' }}
+                              aria-label="Editar nombre"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--ink-secondary)' }}>
-                        {chatPhoneLine(selectedChat) ? (
+                        {selectedChat.isGroup ? (
+                          <span className="inline-flex items-center gap-1"><UsersRound size={13} />Grupo de WhatsApp</span>
+                        ) : chatPhoneLine(selectedChat) ? (
                           <span className="truncate">{chatPhoneLine(selectedChat)}</span>
                         ) : null}
                       </div>

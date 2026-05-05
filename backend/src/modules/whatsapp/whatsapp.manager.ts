@@ -748,7 +748,6 @@ export class WhatsAppManager {
     const chats = await prisma.whatsAppChat.findMany({
       where: {
         workspaceId,
-        isGroup: false,
         messages: {
           some: {},
         },
@@ -780,14 +779,7 @@ export class WhatsAppManager {
       take: 150,
     })
 
-    return Promise.all(chats.map(async (chat) => ({
-      ...chat,
-      phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(chat.jid),
-      profileImageUrl: await this.getChatProfileImageUrl(workspaceId, chat.jid),
-      contactName: chat.contact
-        ? `${chat.contact.firstName}${chat.contact.lastName ? ` ${chat.contact.lastName}` : ''}`
-        : null,
-    })))
+    return Promise.all(chats.map((chat) => this.serializeChatRecord(workspaceId, chat)))
   }
 
   async listMessages(workspaceId: string, jid: string, limit = 60) {
@@ -823,18 +815,116 @@ export class WhatsAppManager {
     ])
 
     return {
-      chat: {
-        ...chat,
-        phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(chat.jid),
-        profileImageUrl: await this.getChatProfileImageUrl(workspaceId, chat.jid),
-        contactName: chat.contact
-          ? `${chat.contact.firstName}${chat.contact.lastName ? ` ${chat.contact.lastName}` : ''}`
-          : null,
-      },
+      chat: await this.serializeChatRecord(workspaceId, chat),
       items: items.reverse().map((item) => this.serializeMessageRecord(item)),
       totalMessages,
       historyAnchorAvailable: totalMessages > 0,
     }
+  }
+
+  private async serializeChatRecord(workspaceId: string, chat: any) {
+    return {
+      ...chat,
+      phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(chat.jid),
+      profileImageUrl: await this.getChatProfileImageUrl(workspaceId, chat.jid),
+      contactName: chat.contact
+        ? `${chat.contact.firstName}${chat.contact.lastName ? ` ${chat.contact.lastName}` : ''}`
+        : null,
+    }
+  }
+
+  async updateChat(workspaceId: string, jid: string, input: { displayName: string }) {
+    await this.ensureDevMaintenanceAppliedOnce()
+    const canonicalJid = await this.resolveCanonicalJid(workspaceId, jid)
+    const displayName = normalizeLabel(input.displayName)
+
+    if (!displayName) {
+      throw new ValidationError('El nombre del chat es obligatorio.')
+    }
+
+    const chat = await prisma.whatsAppChat.findUnique({
+      where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    })
+
+    if (!chat) {
+      throw new AppError(404, 'Chat no encontrado.', 'NOT_FOUND')
+    }
+
+    const phoneNumber = normalizePhoneNumber(chat.phoneNumber) ?? extractPhoneNumberFromJid(canonicalJid)
+    let contactId = chat.contactId
+
+    await prisma.$transaction(async (tx: any) => {
+      if (!chat.isGroup) {
+        const { firstName, lastName } = splitContactName(displayName)
+
+        if (contactId) {
+          await tx.contact.updateMany({
+            where: { id: contactId, workspaceId, isArchived: false },
+            data: { firstName, lastName },
+          })
+        } else {
+          const created = await tx.contact.create({
+            data: {
+              workspaceId,
+              firstName,
+              lastName,
+              phone: phoneNumber,
+              status: 'LEAD',
+              source: 'WHATSAPP',
+              tags: ['whatsapp'],
+              channels: [
+                {
+                  type: 'whatsapp',
+                  identifier: phoneNumber ?? canonicalJid,
+                  metadata: { jid: canonicalJid },
+                },
+              ],
+            },
+            select: { id: true },
+          })
+          contactId = created.id
+        }
+      }
+
+      await tx.whatsAppChat.update({
+        where: { id: chat.id },
+        data: {
+          displayName,
+          ...(contactId && !chat.isGroup ? { contactId } : {}),
+        },
+      })
+
+      if (contactId && !chat.isGroup) {
+        await tx.deal.updateMany({
+          where: {
+            workspaceId,
+            status: 'OPEN',
+            isArchived: false,
+            OR: [
+              { contacts: { some: { contactId } } },
+              { customData: { path: ['whatsAppChatJid'], equals: canonicalJid } },
+            ],
+          },
+          data: { title: displayName },
+        })
+      }
+    })
+
+    const updated = await prisma.whatsAppChat.findUnique({
+      where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    })
+
+    return this.serializeChatRecord(workspaceId, updated)
   }
 
   async deleteChat(workspaceId: string, jid: string) {
@@ -1330,6 +1420,45 @@ export class WhatsAppManager {
     return canonical
   }
 
+  private async resolveMessageRemoteJid(workspaceId: string, rawRemoteJid: string, message: any) {
+    const remoteJid = await this.resolveCanonicalJid(workspaceId, rawRemoteJid)
+    if (!isLidJid(remoteJid) || message?.key?.fromMe) return remoteJid
+
+    const displayName = selectChatDisplayName(message?.pushName)
+    const phoneJid = await this.findUniquePhoneChatByDisplayName(workspaceId, displayName)
+    if (!phoneJid) return remoteJid
+
+    await this.rememberPhoneNumberShare(workspaceId, remoteJid, phoneJid)
+    return phoneJid
+  }
+
+  private async findUniquePhoneChatByDisplayName(workspaceId: string, displayName?: string | null) {
+    const normalizedDisplayName = normalizePersonName(displayName)
+    if (!normalizedDisplayName || !/[^\d\s()+-]/.test(normalizedDisplayName)) return null
+
+    const chats = await prisma.whatsAppChat.findMany({
+      where: {
+        workspaceId,
+        isGroup: false,
+        jid: { endsWith: '@s.whatsapp.net' },
+      },
+      include: {
+        contact: {
+          select: { firstName: true, lastName: true },
+        },
+      },
+      orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
+      take: 250,
+    })
+
+    const matches = chats.filter((chat: any) =>
+      normalizePersonName(chat.displayName) === normalizedDisplayName ||
+      normalizePersonName(buildContactName(chat.contact)) === normalizedDisplayName
+    )
+
+    return matches.length === 1 ? matches[0].jid : null
+  }
+
   private async mergeChatAlias(workspaceId: string, fromJid: string, toJid: string) {
     if (fromJid === toJid) return
 
@@ -1594,16 +1723,21 @@ export class WhatsAppManager {
     const rawRemoteJid = message?.key?.remoteJid ?? message?.remoteJid
     const messageId = message?.key?.id
     if (!supportsChat(rawRemoteJid) || !messageId) return null
-    const remoteJid = await this.resolveCanonicalJid(workspaceId, rawRemoteJid)
+    const fromMe = Boolean(message?.key?.fromMe)
+    const remoteJid = await this.resolveMessageRemoteJid(workspaceId, rawRemoteJid, message)
 
     let chat = await prisma.whatsAppChat.findUnique({
       where: { workspaceId_jid: { workspaceId, jid: remoteJid } },
     })
 
+    if (!chat && fromMe && isLidJid(remoteJid)) {
+      return null
+    }
+
     if (!chat) {
       await this.persistChat(workspaceId, {
         id: remoteJid,
-        name: message?.pushName,
+        name: fromMe ? null : message?.pushName,
         conversationTimestamp: message?.messageTimestamp,
       })
 
@@ -1664,6 +1798,7 @@ export class WhatsAppManager {
       ? await this.ensureMessageMedia(workspaceId, persistedWithQuote, message, details)
       : persistedWithQuote
 
+    const inboundPushName = fromMe ? null : message?.pushName
     const groupName = chat.isGroup ? await this.resolveGroupDisplayName(workspaceId, remoteJid) : null
     const chatDisplayName = chat.isGroup
       ? selectChatDisplayName(
@@ -1672,12 +1807,19 @@ export class WhatsAppManager {
           chat.phoneNumber,
           remoteJid
         )
-      : selectChatDisplayName(
-          message?.pushName,
-          chat.displayName,
-          chat.phoneNumber,
-          remoteJid
-        )
+      : chat.contactId
+        ? selectChatDisplayName(
+            chat.displayName,
+            inboundPushName,
+            chat.phoneNumber,
+            remoteJid
+          )
+        : selectChatDisplayName(
+            inboundPushName,
+            chat.displayName,
+            chat.phoneNumber,
+            remoteJid
+          )
 
     await prisma.whatsAppChat.update({
       where: { id: chat.id },
@@ -1685,17 +1827,17 @@ export class WhatsAppManager {
         displayName: chatDisplayName ?? undefined,
         lastMessageAt: sentAt,
         lastMessagePreview: messagePreview(details.messageType, details.text),
-        lastMessageFromMe: Boolean(message?.key?.fromMe),
+        lastMessageFromMe: fromMe,
       },
     })
 
-    if (!message?.key?.fromMe && !chat.isGroup) {
+    if (!fromMe && !chat.isGroup) {
       await this.ensureLeadForIncomingMessage(workspaceId, {
         id: chat.id,
         contactId: chat.contactId,
         displayName: chatDisplayName ?? chat.displayName,
         phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(remoteJid),
-      }, remoteJid, sentAt, message?.pushName)
+      }, remoteJid, sentAt, inboundPushName)
     }
 
     return persistedWithMedia
