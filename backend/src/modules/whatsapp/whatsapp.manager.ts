@@ -49,6 +49,7 @@ const MAINTENANCE_ROOT = path.resolve(process.cwd(), '.data', 'maintenance')
 const WHATSAPP_PRUNE_ONCE_MARKER = path.resolve(MAINTENANCE_ROOT, 'whatsapp-prune-once.json')
 const RECOVERY_SYNC_SKEW_MS = 15 * 60 * 1000
 const RECOVERY_SYNC_MAX_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000
+const PROFILE_PHOTO_MAX_BYTES = 500_000
 const APP_STATE_SYNC_COLLECTIONS = [
   'critical_block',
   'critical_unblock_low',
@@ -91,6 +92,10 @@ function hasReadableDisplayName(value?: string | null, fallback?: string | null)
   if (!normalized) return false
   if (fallback && normalized === fallback) return false
   return /[^\d\s()+-]/.test(normalized)
+}
+
+function isImageDataUrl(value?: string | null) {
+  return Boolean(value?.startsWith('data:image/'))
 }
 
 function selectChatDisplayName(...candidates: Array<string | null | undefined>) {
@@ -772,7 +777,7 @@ export class WhatsAppManager {
       },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, avatar: true },
         },
       },
       orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
@@ -789,7 +794,7 @@ export class WhatsAppManager {
       where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, avatar: true },
         },
       },
     })
@@ -826,7 +831,7 @@ export class WhatsAppManager {
     return {
       ...chat,
       phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(chat.jid),
-      profileImageUrl: await this.getChatProfileImageUrl(workspaceId, chat.jid),
+      profileImageUrl: await this.resolveChatProfileImageUrl(workspaceId, chat),
       contactName: chat.contact
         ? `${chat.contact.firstName}${chat.contact.lastName ? ` ${chat.contact.lastName}` : ''}`
         : null,
@@ -846,7 +851,7 @@ export class WhatsAppManager {
       where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, avatar: true },
         },
       },
     })
@@ -919,7 +924,7 @@ export class WhatsAppManager {
       where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, avatar: true },
         },
       },
     })
@@ -1361,9 +1366,31 @@ export class WhatsAppManager {
     return cache
   }
 
-  async getChatProfileImageUrl(workspaceId: string, jid?: string | null) {
+  private async resolveChatProfileImageUrl(workspaceId: string, chat?: any) {
+    if (!chat || chat.isGroup) return null
+    const storedAvatar = normalizeLabel(chat.contact?.avatar)
+    if (storedAvatar) return storedAvatar
+    return this.getChatProfileImageUrl(workspaceId, chat.jid, chat.contactId ?? chat.contact?.id ?? null)
+  }
+
+  async getChatProfileImageUrl(workspaceId: string, jid?: string | null, contactId?: string | null) {
     const normalizedJid = normalizeLabel(jid)
     if (!normalizedJid || normalizedJid.endsWith('@g.us')) return null
+
+    if (!contactId) {
+      const chat = await prisma.whatsAppChat.findUnique({
+        where: { workspaceId_jid: { workspaceId, jid: normalizedJid } },
+        include: {
+          contact: {
+            select: { id: true, avatar: true },
+          },
+        },
+      })
+
+      const storedAvatar = normalizeLabel(chat?.contact?.avatar)
+      if (storedAvatar) return storedAvatar
+      contactId = chat?.contactId ?? chat?.contact?.id ?? null
+    }
 
     const cache = this.getWorkspaceProfilePhotoCache(workspaceId)
     const cached = cache.get(normalizedJid)
@@ -1379,10 +1406,40 @@ export class WhatsAppManager {
 
     try {
       const url = await entry.sock.profilePictureUrl(normalizedJid, 'image')
-      cache.set(normalizedJid, { url: url ?? null, expiresAt: Date.now() + 30 * 60 * 1000 })
-      return url ?? null
+      const storedAvatar = url ? await this.downloadProfileImageAsDataUrl(url) : null
+
+      if (storedAvatar && contactId) {
+        await db.contact.updateMany({
+          where: { id: contactId, workspaceId, isArchived: false },
+          data: { avatar: storedAvatar },
+        })
+      }
+
+      const result = storedAvatar ?? url ?? null
+      cache.set(normalizedJid, { url: result, expiresAt: Date.now() + 30 * 60 * 1000 })
+      return result
     } catch {
       cache.set(normalizedJid, { url: null, expiresAt: Date.now() + 5 * 60 * 1000 })
+      return null
+    }
+  }
+
+  private async downloadProfileImageAsDataUrl(url: string) {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) return null
+
+      const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
+      if (!contentType?.startsWith('image/')) return null
+
+      const contentLength = Number(response.headers.get('content-length') ?? 0)
+      if (contentLength > PROFILE_PHOTO_MAX_BYTES) return null
+
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (!buffer.length || buffer.length > PROFILE_PHOTO_MAX_BYTES) return null
+
+      return `data:${contentType};base64,${buffer.toString('base64')}`
+    } catch {
       return null
     }
   }
