@@ -5,11 +5,12 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import {
-  Users, KanbanSquare, Webhook, MessagesSquare,
-  Key, LogOut, LayoutDashboard, Layers, Package, Menu, X,
+  Users, KanbanSquare, MessagesSquare,
+  LogOut, LayoutDashboard, Layers, Package, Menu, X, Settings,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
+import { UserAvatar } from '@/components/UserAvatar'
 
 import type { Role } from '@/types'
 
@@ -22,14 +23,12 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/chats', label: 'Chats', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
+  { href: '/chats', label: 'WhatsApp', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
   { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },
   { href: '/contacts', label: 'Contactos', icon: Users },
-  { href: '/webhooks', label: 'Webhooks', icon: Webhook, roles: ['owner', 'admin'] as Role[] },
-  { href: '/api-keys', label: 'API Keys', icon: Key, roles: ['owner', 'admin'] as Role[] },
-  { href: '/team', label: 'Equipo', icon: Users, roles: ['owner', 'admin'] as Role[] },
+  { href: '/settings', label: 'Configuracion', icon: Settings },
 ]
 
 function WorkspaceHeader({
@@ -45,9 +44,13 @@ function WorkspaceHeader({
       style={{ borderBottom: '1px solid var(--panel-border)' }}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 text-lg font-bold text-white shadow-sm shadow-primary-700/30">
-          {user?.workspaceName ? user.workspaceName[0].toUpperCase() : 'C'}
-        </div>
+        <UserAvatar
+          avatar={user?.avatar}
+          firstName={user?.firstName}
+          lastName={user?.lastName}
+          email={user?.email}
+          size="md"
+        />
         <div className="flex min-w-0 flex-col justify-center">
           <h1 className="truncate text-sm font-bold leading-tight tracking-tight text-slate-900">
             {user?.workspaceName ?? 'CRM Studio'}
@@ -161,6 +164,19 @@ export default function DashboardLayout({
     }
     setChecking(false)
   }, [router])
+
+  useEffect(() => {
+    function refreshUser() {
+      setUser(auth.get())
+    }
+
+    window.addEventListener('crm_user_updated', refreshUser)
+    window.addEventListener('storage', refreshUser)
+    return () => {
+      window.removeEventListener('crm_user_updated', refreshUser)
+      window.removeEventListener('storage', refreshUser)
+    }
+  }, [])
 
   useEffect(() => {
     setMobileNavOpen(false)

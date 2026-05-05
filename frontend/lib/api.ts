@@ -64,6 +64,9 @@ export const authApi = {
 
   me: () => api.get('/auth/me'),
 
+  updateAvatar: (avatar: string | null) =>
+    api.patch('/auth/me/avatar', { avatar }),
+
   listApiKeys: () =>
     api.get('/auth/api-keys'),
 
@@ -327,8 +330,15 @@ export const whatsappApi = {
   syncHistory: (jid: string, params?: { count?: number }) =>
     api.post(`/whatsapp/chats/${encodeURIComponent(jid)}/history`, undefined, { params }),
 
-  sendMessage: (jid: string, text: string) =>
-    api.post(`/whatsapp/chats/${encodeURIComponent(jid)}/messages`, { text }),
+  sendMessage: (jid: string, data: {
+    text?: string
+    file?: {
+      fileName: string
+      mimeType: string
+      dataBase64: string
+    }
+  }) =>
+    api.post(`/whatsapp/chats/${encodeURIComponent(jid)}/messages`, data),
 }
 
 // Equipo

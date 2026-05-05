@@ -28,8 +28,10 @@ export default function LoginPage() {
         workspaceId:   data.workspace.id,
         role:          data.role,
         firstName:     data.user.firstName,
+        lastName:      data.user.lastName,
         email:         data.user.email,
         workspaceName: data.workspace.name,
+        avatar:        data.user.avatar,
       })
 
       router.push('/contacts')

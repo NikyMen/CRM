@@ -679,12 +679,14 @@ export class InboxService {
 
       const conversation = await tx.conversation.upsert({
         where: {
-          connectionId_contactId: {
-            connectionId: connection.id,
+          workspaceId_channel_contactId: {
+            workspaceId: connection.workspaceId,
+            channel: message.channel,
             contactId: identity.contactId,
           },
         },
         update: {
+          connectionId: connection.id,
           provider: message.provider,
           channel: message.channel,
           externalThreadId: message.externalThreadId,

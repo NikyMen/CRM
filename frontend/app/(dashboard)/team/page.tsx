@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth'
 import type { Role } from '@/types'
 import { UserPlus, Trash2, Shield, Loader2, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
+import { UserAvatar } from '@/components/UserAvatar'
 
 const ROLE_LABELS: Record<Role, string> = {
   owner:  'Owner',
@@ -176,9 +177,12 @@ export default function TeamPage() {
               >
                 <div className="flex items-center gap-4 flex-1">
                   {/* Avatar Elegante */}
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-slate-100 to-slate-200 border border-slate-300/50 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0 shadow-sm">
-                    {member.user.firstName[0]}{member.user.lastName?.[0] ?? ''}
-                  </div>
+                  <UserAvatar
+                    avatar={member.user.avatar}
+                    firstName={member.user.firstName}
+                    lastName={member.user.lastName}
+                    email={member.user.email}
+                  />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">

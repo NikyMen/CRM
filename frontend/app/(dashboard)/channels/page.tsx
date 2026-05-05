@@ -14,7 +14,7 @@ export default function ChannelsPage() {
               Solo QR
             </div>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">
-              WhatsApp se conecta desde Chats
+              WhatsApp se conecta desde WhatsApp
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Quitamos el alta manual, tokens, PIN y popup de Meta de esta pantalla. El unico camino habilitado para vincular WhatsApp es escanear un QR.
@@ -31,13 +31,13 @@ export default function ChannelsPage() {
             <QrCode className="text-emerald-600 dark:text-emerald-300" size={24} />
             <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Vinculacion por QR</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-              Genera el QR en Chats y escanealo desde WhatsApp, en Dispositivos vinculados.
+              Genera el QR en WhatsApp y escanealo desde WhatsApp, en Dispositivos vinculados.
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/45">
             <MessageSquareText className="text-sky-600 dark:text-sky-300" size={24} />
-            <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Operacion en Chats</h2>
+            <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Operacion en WhatsApp</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Una vez conectado, ahi mismo ves conversaciones, mensajes y envio desde el CRM.
             </p>
@@ -47,7 +47,7 @@ export default function ChannelsPage() {
         <div className="border-t border-slate-200 p-6 dark:border-slate-700">
           <Link href="/chats" className="btn-primary inline-flex items-center gap-2">
             <QrCode size={17} />
-            Ir a Chats y generar QR
+            Ir a WhatsApp y generar QR
           </Link>
         </div>
       </section>

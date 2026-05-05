@@ -263,7 +263,7 @@ function LeadChatModal({
   })
 
   const sendMutation = useMutation({
-    mutationFn: () => whatsappApi.sendMessage(jid!, text.trim()),
+    mutationFn: () => whatsappApi.sendMessage(jid!, { text: text.trim() }),
     onSuccess: () => {
       setText('')
       queryClient.invalidateQueries({ queryKey: ['lead-chat-messages', jid] })

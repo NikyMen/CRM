@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { config } from '../../core/config'
-import { whatsAppManager } from './whatsapp.manager'
+import { ValidationError } from '../../types'
+import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
 
 const connectSchema = z.object({
   mode: z.literal('qr').optional().default('qr'),
@@ -21,8 +22,23 @@ const historyQuerySchema = z.object({
   count: z.coerce.number().min(10).max(120).default(40),
 })
 
+const outboundFileSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.string().trim().min(1).max(160),
+  dataBase64: z.string().min(1).max(Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.4)),
+})
+
 const sendMessageSchema = z.object({
-  text: z.string().trim().min(1).max(4096),
+  text: z.string().trim().max(4096).optional(),
+  file: outboundFileSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (!value.text?.trim() && !value.file) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Debes enviar texto o un archivo',
+      path: ['text'],
+    })
+  }
 })
 
 const updateChatSchema = z.object({
@@ -36,6 +52,32 @@ const maintenanceQuerySchema = z.object({
 function isLocalRequest(ip?: string | null) {
   if (!ip) return false
   return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)
+}
+
+function decodeOutboundFile(file: z.infer<typeof outboundFileSchema>) {
+  const normalizedBase64 = file.dataBase64
+    .replace(/^data:[^;]+;base64,/i, '')
+    .replace(/\s/g, '')
+
+  if (!/^[a-zA-Z0-9+/]+={0,2}$/.test(normalizedBase64)) {
+    throw new ValidationError('Archivo invalido: base64 no valido')
+  }
+
+  const buffer = Buffer.from(normalizedBase64, 'base64')
+  if (!buffer.length) {
+    throw new ValidationError('Archivo invalido: contenido vacio')
+  }
+
+  if (buffer.length > WHATSAPP_OUTBOUND_FILE_MAX_BYTES) {
+    throw new ValidationError('El archivo supera el limite de 8 MB')
+  }
+
+  return {
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+    buffer,
+    sizeBytes: buffer.length,
+  }
 }
 
 export async function whatsappRoutes(app: FastifyInstance) {
@@ -123,10 +165,16 @@ export async function whatsappRoutes(app: FastifyInstance) {
     return reply.status(202).send(await whatsAppManager.requestHistorySync(ctx.workspaceId, jid, query.count))
   })
 
-  app.post<{ Params: { jid: string } }>('/chats/:jid/messages', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post<{ Params: { jid: string } }>('/chats/:jid/messages', {
+    preHandler: requireRole('owner', 'admin', 'member'),
+    bodyLimit: Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.5),
+  }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const jid = decodeURIComponent(req.params.jid)
     const body = sendMessageSchema.parse(req.body)
-    return reply.status(201).send(await whatsAppManager.sendTextMessage(ctx.workspaceId, jid, body.text))
+    return reply.status(201).send(await whatsAppManager.sendChatMessage(ctx.workspaceId, jid, {
+      text: body.text,
+      file: body.file ? decodeOutboundFile(body.file) : undefined,
+    }))
   })
 }

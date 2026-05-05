@@ -208,17 +208,16 @@ body *::after {
   .interactive-card {
     background: linear-gradient(180deg, var(--surface-strong) 0%, var(--color-white) 100%);
     border: 1px solid var(--panel-border);
-    @apply rounded-[var(--radius-card)] shadow-[var(--shadow-office)] transition-all duration-300 ease-out;
+    @apply rounded-[var(--radius-card)] shadow-[var(--shadow-office)] transition-colors duration-200 ease-out;
   }
 
   .interactive-card:hover {
     border-color: var(--panel-border-strong);
-    @apply -translate-y-1 shadow-[var(--shadow-office-hover)];
+    box-shadow: var(--shadow-office-hover);
   }
 
   .static-card:hover {
     border-color: var(--panel-border);
-    translate: none;
     transform: none;
     box-shadow: var(--shadow-office);
   }

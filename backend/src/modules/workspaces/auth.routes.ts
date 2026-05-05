@@ -45,6 +45,8 @@ export async function authRoutes(app: FastifyInstance) {
         id:        user.id,
         email:     user.email,
         firstName: user.firstName,
+        lastName:  user.lastName,
+        avatar:    user.avatar,
       },
       workspace: {
         id:   workspace.id,
@@ -97,11 +99,46 @@ export async function authRoutes(app: FastifyInstance) {
       workspaceId: string
       role: string
     }
+    const user = await db.user.findUnique({
+      where: { id: ctx.sub },
+      select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
+    })
+
     return reply.send({
       userId:      ctx.sub,
       workspaceId: ctx.workspaceId,
       role:        ctx.role,
+      user,
     })
+  })
+
+  app.patch('/me/avatar', async (req, reply) => {
+    await req.jwtVerify()
+    const ctx = req.user as { sub: string; userId?: string }
+
+    const { avatar } = z.object({
+      avatar: z.string().trim().max(500_000).nullable(),
+    }).parse(req.body)
+
+    if (
+      avatar &&
+      !['preset:emerald', 'preset:blue', 'preset:amber', 'preset:rose', 'preset:slate'].includes(avatar) &&
+      !avatar.startsWith('data:image/') &&
+      !/^https?:\/\//i.test(avatar)
+    ) {
+      return reply.status(422).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Avatar invalido',
+      })
+    }
+
+    const user = await db.user.update({
+      where: { id: ctx.userId ?? ctx.sub },
+      data: { avatar },
+      select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
+    })
+
+    return reply.send({ user })
   })
 
   // ─── POST /auth/api-keys ───────────────────────────────────────

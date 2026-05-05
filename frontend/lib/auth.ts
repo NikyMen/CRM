@@ -7,8 +7,10 @@ export interface StoredAuth {
   workspaceId: string
   role: string
   firstName: string
+  lastName?: string | null
   email: string
   workspaceName: string
+  avatar?: string | null
 }
 
 export const auth = {
@@ -16,6 +18,15 @@ export const auth = {
     if (typeof window === 'undefined') return
     localStorage.setItem(TOKEN_KEY, data.token)
     localStorage.setItem(USER_KEY, JSON.stringify(data))
+    window.dispatchEvent(new Event('crm_user_updated'))
+  },
+
+  updateUser(data: Partial<Omit<StoredAuth, 'token'>>) {
+    if (typeof window === 'undefined') return
+    const current = this.get()
+    if (!current) return
+    localStorage.setItem(USER_KEY, JSON.stringify({ ...current, ...data }))
+    window.dispatchEvent(new Event('crm_user_updated'))
   },
 
   get(): StoredAuth | null {

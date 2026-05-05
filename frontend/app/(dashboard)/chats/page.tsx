@@ -15,11 +15,14 @@ import { useToast } from '@/components/ui/toast'
 import {
   AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp,
   Loader2, MessageSquareText, RefreshCcw,
-  Pencil, Save, Search, Send, Settings2, Smartphone, Trash2, Unplug, UsersRound, Wifi, WifiOff, X,
+  Paperclip, Pencil, Save, Search, Send, Settings2, Smartphone, Trash2, Unplug, UsersRound, Wifi, WifiOff, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 type ChatFilter = 'all' | 'linked' | 'unread' | 'groups'
+type SendDraft = { text: string; file: File | null }
+
+const MAX_CHAT_FILE_BYTES = 8 * 1024 * 1024
 
 const STATUS_STYLES: Record<string, { label: string; bg: string; color: string }> = {
   CONNECTED: { label: 'Conectado', bg: 'var(--semantic-success-bg)', color: 'var(--semantic-success)' },
@@ -113,6 +116,45 @@ function formatMediaDuration(value?: number | null) {
   const minutes = Math.floor(value / 60)
   const seconds = value % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function formatFileSize(value?: number | null) {
+  if (!value || value < 1) return null
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`
+  return `${value} B`
+}
+
+function inferFileMessageType(file?: File | null) {
+  const mimeType = file?.type.toLowerCase() ?? ''
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
+function mediaFallbackLabel(message: WhatsAppMessage) {
+  if (message.mediaFileName) return message.mediaFileName
+  if (message.messageType === 'image') return 'Imagen'
+  if (message.messageType === 'video') return 'Video'
+  if (message.messageType === 'audio') return 'Audio'
+  return message.text ?? 'Documento'
+}
+
+function toBase64Payload(file: File) {
+  return new Promise<{ fileName: string; mimeType: string; dataBase64: string }>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const value = String(reader.result ?? '')
+      resolve({
+        fileName: file.name || 'archivo',
+        mimeType: file.type || 'application/octet-stream',
+        dataBase64: value.includes(',') ? value.split(',')[1] : value,
+      })
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('No se pudo leer el archivo'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function quotedPreview(message: WhatsAppMessage) {
@@ -342,6 +384,25 @@ function MessageBody({ message }: { message: WhatsAppMessage }) {
     )
   }
 
+  if (expectsMedia) {
+    const sizeLabel = formatFileSize(message.mediaSizeBytes)
+    const isPlaceholderText = ['[Imagen]', '[Video]', '[Audio]', '[Documento]'].includes(message.text ?? '')
+
+    return (
+      <div className="space-y-3">
+        {quoted}
+        <div className="inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold" style={{ background: 'rgba(15,23,42,0.08)' }}>
+          <Paperclip size={14} />
+          <span className="truncate">{mediaFallbackLabel(message)}</span>
+          {sizeLabel ? <span className="shrink-0 text-xs opacity-70">{sizeLabel}</span> : null}
+        </div>
+        {message.text && !isPlaceholderText && message.text !== message.mediaFileName ? (
+          <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {quoted}
@@ -361,12 +422,14 @@ export default function ChatsPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
   const [selectedJid, setSelectedJid] = useState<string | null>(null)
   const [messageText, setMessageText] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [editingChat, setEditingChat] = useState(false)
   const [chatNameDraft, setChatNameDraft] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [localEchoesByJid, setLocalEchoesByJid] = useState<Record<string, WhatsAppMessage[]>>({})
   const deferredSearch = useDeferredValue(chatSearch)
   const messagesViewportRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setRequestedJid(new URLSearchParams(window.location.search).get('jid'))
@@ -514,29 +577,42 @@ export default function ChatsPage() {
   })
 
   const sendMutation = useMutation({
-    mutationFn: () => whatsappApi.sendMessage(selectedJid!, messageText.trim()).then((r) => r.data),
-    onMutate: async () => {
-      if (!selectedJid || !messageText.trim()) return null
+    mutationFn: async (payload: SendDraft) => {
+      const file = payload.file ? await toBase64Payload(payload.file) : undefined
+      return whatsappApi.sendMessage(selectedJid!, {
+        text: payload.text || undefined,
+        file,
+      }).then((r) => r.data)
+    },
+    onMutate: async (payload) => {
+      if (!selectedJid || (!payload.text && !payload.file)) return null
+      const optimisticId = `optimistic-${Date.now()}`
+      const messageType = payload.file ? inferFileMessageType(payload.file) : 'text'
+      const fallbackText =
+        payload.text ||
+        (messageType === 'image' ? '[Imagen]' :
+          messageType === 'video' ? '[Video]' :
+            messageType === 'audio' ? '[Audio]' : '[Documento]')
       const optimisticMessage: WhatsAppMessage = {
-        id: `optimistic-${Date.now()}`,
+        id: optimisticId,
         workspaceId: '',
         sessionId: '',
         chatId: '',
         remoteJid: selectedJid,
-        messageId: `optimistic-${Date.now()}`,
+        messageId: optimisticId,
         fromMe: true,
         participant: null,
         pushName: null,
-        messageType: 'text',
-        text: messageText.trim(),
+        messageType,
+        text: fallbackText,
         status: 'sending',
         sentAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         mediaUrl: null,
-        mediaMimeType: null,
-        mediaFileName: null,
-        mediaSizeBytes: null,
+        mediaMimeType: payload.file?.type || null,
+        mediaFileName: payload.file?.name || null,
+        mediaSizeBytes: payload.file?.size || null,
         mediaDurationSeconds: null,
         quotedMessageId: null,
         quotedText: null,
@@ -552,6 +628,11 @@ export default function ChatsPage() {
     },
     onSuccess: (created: WhatsAppMessage | null, _vars, context) => {
       setMessageText('')
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+
       if (selectedJid && created) {
         setLocalEchoesByJid((current) => {
           const items = current[selectedJid] ?? []
@@ -630,7 +711,15 @@ export default function ChatsPage() {
   const handleQrSubmit = () => canGenerateQr && connectMutation.mutate()
   const handleResume = () => canResumeSession && connectMutation.mutate()
   const handleDisconnect = () => canDisconnectSession && disconnectMutation.mutate()
-  const handleSendMessage = () => selectedJid && messageText.trim() && sendMutation.mutate()
+  const handleSendMessage = () => {
+    const text = messageText.trim()
+    if (!selectedJid || (!text && !selectedFile) || sendMutation.isPending) return
+    if (selectedFile?.type.startsWith('audio/') && text) {
+      toast({ type: 'error', title: 'Audio sin texto', description: 'WhatsApp no admite caption en audios. Envia el audio solo.' })
+      return
+    }
+    sendMutation.mutate({ text, file: selectedFile })
+  }
   const handleSaveChatName = () => {
     if (!selectedChat || !chatNameDraft.trim()) return
     updateChatMutation.mutate({ jid: selectedChat.jid, displayName: chatNameDraft.trim() })
@@ -639,6 +728,20 @@ export default function ChatsPage() {
     if (!selectedChat || !canDeleteChat) return
     if (!window.confirm(`Vas a eliminar el chat local de "${chatPrimaryName(selectedChat)}". Los mensajes persistidos en este CRM se borran.`)) return
     deleteChatMutation.mutate(selectedChat.jid)
+  }
+  const handleFileChange = (file?: File | null) => {
+    if (!file) {
+      setSelectedFile(null)
+      return
+    }
+
+    if (file.size > MAX_CHAT_FILE_BYTES) {
+      toast({ type: 'error', title: 'Archivo demasiado grande', description: 'El limite actual para WhatsApp desde CRM es 8 MB.' })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    setSelectedFile(file)
   }
   const handleReLogin = () => { auth.clear(); window.location.href = '/login' }
 
@@ -655,7 +758,7 @@ export default function ChatsPage() {
   }, [selectedJid, liveItems.length])
 
   return (
-    <div className="animate-fade-in mx-auto max-w-[1680px] px-4 pb-20 pt-6 md:px-8 md:pb-8 md:pt-8">
+    <div className="animate-fade-in flex min-h-[calc(100dvh-4rem)] flex-col gap-4 px-3 py-3 md:h-full md:min-h-0 md:overflow-hidden md:px-4 md:py-4">
       {settingsOpen && (
         <div className="interactive-card static-card mb-4 overflow-hidden p-4">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
@@ -727,9 +830,9 @@ export default function ChatsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:grid-cols-[390px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-[340px_minmax(0,1fr)] lg:items-stretch lg:overflow-hidden xl:grid-cols-[390px_minmax(0,1fr)]">
 
-        <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
+        <section className="interactive-card static-card flex min-h-[460px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-full lg:min-h-0">
           <div className="shrink-0 border-b px-5 py-4" style={{ borderColor: 'var(--border-0)', background: 'var(--surface-0)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -844,7 +947,7 @@ export default function ChatsPage() {
           </div>
         </section>
 
-        <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:sticky lg:top-6 lg:h-[calc(100vh-10.5rem)] lg:min-h-0">
+        <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-full lg:min-h-0">
           {selectedChat ? (
             <>
               <div className="shrink-0 border-b px-5 py-4" style={{ borderColor: 'var(--border-0)' }}>
@@ -1019,25 +1122,63 @@ export default function ChatsPage() {
               </div>
 
               <div className="shrink-0 border-t px-4 py-4" style={{ borderColor: 'rgba(5,150,105,0.2)', background: 'linear-gradient(180deg, var(--surface-0), rgba(5,150,105,0.05))' }}>
-                <div className="flex items-end gap-3 rounded-2xl p-3" style={{ background: 'var(--surface-1)', border: '1px solid rgba(5,150,105,0.28)', boxShadow: '0 16px 36px rgba(5,150,105,0.1)' }}>
-                  <textarea
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={
-                      canManage
-                        ? session?.status === 'CONNECTED'
-                          ? 'Escribe un mensaje'
-                          : 'Conecta o reanuda la sesion para enviar'
-                        : 'Tu rol no permite enviar mensajes'
-                    }
-                    rows={2}
-                    className="ctrl-input min-h-[72px] resize-none !border-transparent !bg-transparent !shadow-none"
-                    disabled={!canManage || session?.status !== 'CONNECTED' || sendMutation.isPending}
-                  />
-                  <button onClick={handleSendMessage} disabled={!canManage || session?.status !== 'CONNECTED' || sendMutation.isPending || !messageText.trim()} className="btn-primary !h-12 !px-4">
-                    {sendMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                    Enviar
-                  </button>
+                <div className="space-y-3 rounded-2xl p-3" style={{ background: 'var(--surface-1)', border: '1px solid rgba(5,150,105,0.28)', boxShadow: '0 16px 36px rgba(5,150,105,0.1)' }}>
+                  {selectedFile ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm" style={{ background: 'var(--surface-0)', border: '1px solid var(--border-0)', color: 'var(--ink-secondary)' }}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Paperclip size={14} className="shrink-0" />
+                        <span className="truncate font-semibold" style={{ color: 'var(--ink-primary)' }}>{selectedFile.name}</span>
+                        <span className="shrink-0 text-xs">{formatFileSize(selectedFile.size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                        }}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[rgba(15,23,42,0.06)]"
+                        aria-label="Quitar archivo"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-end gap-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => handleFileChange(event.target.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!canManage || session?.status !== 'CONNECTED' || sendMutation.isPending}
+                      className="btn-secondary !h-12 !w-12 !px-0 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="Adjuntar archivo"
+                    >
+                      <Paperclip size={16} />
+                    </button>
+                    <textarea
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      placeholder={
+                        canManage
+                          ? session?.status === 'CONNECTED'
+                            ? 'Escribe un mensaje'
+                            : 'Conecta o reanuda la sesion para enviar'
+                          : 'Tu rol no permite enviar mensajes'
+                      }
+                      rows={2}
+                      className="ctrl-input min-h-[72px] resize-none !border-transparent !bg-transparent !shadow-none"
+                      disabled={!canManage || session?.status !== 'CONNECTED' || sendMutation.isPending}
+                    />
+                    <button onClick={handleSendMessage} disabled={!canManage || session?.status !== 'CONNECTED' || sendMutation.isPending || (!messageText.trim() && !selectedFile)} className="btn-primary !h-12 !px-4">
+                      {sendMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                      Enviar
+                    </button>
+                  </div>
                 </div>
               </div>
             </>

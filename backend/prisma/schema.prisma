@@ -454,6 +454,7 @@ model Conversation {
   @@index([workspaceId, channel, lastMessageAt])
   @@index([contactId])
   @@unique([connectionId, contactId])
+  @@unique([workspaceId, channel, contactId])
   @@map("conversations")
 }
 

@@ -29,6 +29,18 @@ type PersistMessageOptions = {
   recoveryCutoff?: Date | null
 }
 
+type OutboundFile = {
+  fileName: string
+  mimeType: string
+  buffer: Buffer
+  sizeBytes: number
+}
+
+type SendChatMessageInput = {
+  text?: string
+  file?: OutboundFile
+}
+
 type ProfilePhotoCacheEntry = {
   url: string | null
   expiresAt: number
@@ -45,6 +57,7 @@ const MEDIA_ROOT = config.WHATSAPP_MEDIA_DIR
   ? path.resolve(config.WHATSAPP_MEDIA_DIR)
   : path.resolve(process.cwd(), '.data', 'whatsapp-media')
 
+export const WHATSAPP_OUTBOUND_FILE_MAX_BYTES = 8 * 1024 * 1024
 const MAINTENANCE_ROOT = path.resolve(process.cwd(), '.data', 'maintenance')
 const WHATSAPP_PRUNE_ONCE_MARKER = path.resolve(MAINTENANCE_ROOT, 'whatsapp-prune-once.json')
 const RECOVERY_SYNC_SKEW_MS = 15 * 60 * 1000
@@ -458,6 +471,19 @@ function mediaExtension(messageType: string, mimeType?: string | null, fileName?
 
   const [, subtype] = normalizedMime.split('/')
   return subtype ? `.${subtype.replace(/[^a-z0-9]/gi, '')}` : ''
+}
+
+function inferOutboundMessageType(mimeType: string) {
+  const normalized = mimeType.split(';')[0]?.trim().toLowerCase()
+  if (normalized?.startsWith('image/')) return 'image'
+  if (normalized?.startsWith('video/')) return 'video'
+  if (normalized?.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
+function safeFileName(value: string) {
+  const cleaned = value.replace(/[\\/:*?"<>|]/g, '_').trim()
+  return cleaned || 'archivo'
 }
 
 function isDownloadableMediaMessage(messageType: string) {
@@ -964,7 +990,27 @@ export class WhatsAppManager {
   }
 
   async sendTextMessage(workspaceId: string, jid: string, text: string) {
+    return this.sendChatMessage(workspaceId, jid, { text })
+  }
+
+  async sendChatMessage(workspaceId: string, jid: string, input: SendChatMessageInput) {
     this.assertRuntimeReady()
+    const text = input.text?.trim() ?? ''
+    const file = input.file
+
+    if (!text && !file) {
+      throw new ValidationError('Debes enviar texto o un archivo.')
+    }
+
+    if (file && file.sizeBytes > WHATSAPP_OUTBOUND_FILE_MAX_BYTES) {
+      throw new ValidationError('El archivo supera el limite de 8 MB.')
+    }
+
+    const messageType = file ? inferOutboundMessageType(file.mimeType) : 'text'
+    if (messageType === 'audio' && text) {
+      throw new ValidationError('WhatsApp no admite texto adjunto en audios. Envia el audio sin texto.')
+    }
+
     const sendJid = await this.resolveCanonicalJid(workspaceId, jid)
 
     let entry = this.sockets.get(workspaceId)
@@ -982,10 +1028,15 @@ export class WhatsAppManager {
       throw new AppError(409, 'WhatsApp todavia no esta conectado. Espera unos segundos y reintenta.', 'WHATSAPP_NOT_CONNECTED')
     }
 
-    const sent = await entry.sock.sendMessage(sendJid, { text })
-    const persisted =
+    const sent = await entry.sock.sendMessage(sendJid, this.buildOutboundMessageContent({ text, file }))
+    let persisted =
       (sent ? await this.persistMessage(workspaceId, sent) : null) ??
-      await this.persistOutgoingFallback(workspaceId, sendJid, text, sent)
+      await this.persistOutgoingFallback(workspaceId, sendJid, text, sent, file)
+
+    if (persisted && file && !persisted.mediaPath) {
+      persisted = await this.storeUploadedMedia(workspaceId, persisted, file, messageType)
+    }
+
     return persisted ? this.serializeMessageRecord(persisted) : null
   }
 
@@ -2148,7 +2199,46 @@ export class WhatsAppManager {
     }
   }
 
-  private async persistOutgoingFallback(workspaceId: string, jid: string, text: string, sent?: any) {
+  private buildOutboundMessageContent(input: SendChatMessageInput) {
+    const text = input.text?.trim()
+    const file = input.file
+    if (!file) return { text }
+
+    const messageType = inferOutboundMessageType(file.mimeType)
+    const fileName = safeFileName(file.fileName)
+
+    if (messageType === 'image') {
+      return {
+        image: file.buffer,
+        mimetype: file.mimeType,
+        ...(text && { caption: text }),
+      }
+    }
+
+    if (messageType === 'video') {
+      return {
+        video: file.buffer,
+        mimetype: file.mimeType,
+        ...(text && { caption: text }),
+      }
+    }
+
+    if (messageType === 'audio') {
+      return {
+        audio: file.buffer,
+        mimetype: file.mimeType,
+      }
+    }
+
+    return {
+      document: file.buffer,
+      mimetype: file.mimeType,
+      fileName,
+      ...(text && { caption: text }),
+    }
+  }
+
+  private async persistOutgoingFallback(workspaceId: string, jid: string, text: string, sent?: any, file?: OutboundFile) {
     jid = await this.resolveCanonicalJid(workspaceId, jid)
     let chat = await prisma.whatsAppChat.findUnique({
       where: { workspaceId_jid: { workspaceId, jid } },
@@ -2169,8 +2259,10 @@ export class WhatsAppManager {
 
     const sentAt = toDate(sent?.messageTimestamp) ?? new Date()
     const messageId = sent?.key?.id ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const messageType = file ? inferOutboundMessageType(file.mimeType) : 'text'
+    const preview = text || messagePreview(messageType, null)
 
-    const record = await prisma.whatsAppMessage.upsert({
+    let record = await prisma.whatsAppMessage.upsert({
       where: {
         workspaceId_remoteJid_messageId: {
           workspaceId,
@@ -2187,29 +2279,74 @@ export class WhatsAppManager {
         fromMe: true,
         participant: null,
         pushName: null,
-        messageType: 'text',
-        text,
+        messageType,
+        text: preview,
         status: 'sent',
         sentAt,
       },
       update: {
         chatId: chat.id,
-        text,
+        messageType,
+        text: preview,
         status: 'sent',
         sentAt,
       },
     })
 
+    if (file) {
+      record = await this.storeUploadedMedia(workspaceId, record, file, messageType)
+    }
+
     await prisma.whatsAppChat.update({
       where: { id: chat.id },
       data: {
         lastMessageAt: sentAt,
-        lastMessagePreview: text,
+        lastMessagePreview: messagePreview(messageType, preview),
         lastMessageFromMe: true,
       },
     })
 
     return record
+  }
+
+  private async storeUploadedMedia(workspaceId: string, record: any, file: OutboundFile, messageType: string) {
+    const extension = mediaExtension(messageType, file.mimeType, file.fileName)
+    const relativePath = path.join(workspaceId, `${record.id}${extension}`)
+    const absolutePath = path.resolve(MEDIA_ROOT, relativePath)
+    const mediaRoot = path.resolve(MEDIA_ROOT)
+
+    if (!absolutePath.startsWith(mediaRoot)) {
+      return record
+    }
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true })
+    await fs.writeFile(absolutePath, file.buffer)
+
+    await prisma.$executeRawUnsafe(
+      `
+        UPDATE whatsapp_messages
+        SET
+          "mediaPath" = $1,
+          "mediaMimeType" = $2,
+          "mediaFileName" = $3,
+          "mediaSizeBytes" = $4,
+          "updatedAt" = NOW()
+        WHERE id = $5
+      `,
+      relativePath,
+      file.mimeType,
+      safeFileName(file.fileName),
+      file.sizeBytes,
+      record.id
+    )
+
+    return {
+      ...record,
+      mediaPath: relativePath,
+      mediaMimeType: file.mimeType,
+      mediaFileName: safeFileName(file.fileName),
+      mediaSizeBytes: file.sizeBytes,
+    }
   }
 
   private async ensureMessageMedia(
