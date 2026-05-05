@@ -3,10 +3,10 @@
 import { startTransition, useEffect, useState } from 'react'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { dealsApi, whatsappApi } from '@/lib/api'
+import { dealsApi, pipelinesApi, whatsappApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import { useToast } from '@/components/ui/toast'
-import type { KanbanBoard, KanbanCard, KanbanColumn, WhatsAppMessagesPayload } from '@/types'
+import type { KanbanBoard, KanbanCard, KanbanColumn, Pipeline, WhatsAppMessagesPayload } from '@/types'
 import {
   DndContext,
   DragOverlay,
@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { DollarSign, GripVertical, Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 
 function chatTitle(deal: KanbanCard) {
@@ -352,6 +352,79 @@ function LeadChatModal({
   )
 }
 
+function PipelineSwitchModal({
+  open,
+  pipelines,
+  currentPipelineId,
+  isLoading,
+  onClose,
+  onSelect,
+}: {
+  open: boolean
+  pipelines: Pipeline[]
+  currentPipelineId: string
+  isLoading: boolean
+  onClose: () => void
+  onSelect: (pipeline: Pipeline) => void
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/40 px-4 pt-24" onClick={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pipeline-switch-title"
+        className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 id="pipeline-switch-title" className="text-base font-extrabold text-slate-950">Cambiar embudo</h2>
+            <p className="mt-0.5 text-xs font-semibold text-slate-500">Elegí qué tablero de leads ver.</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="max-h-[52vh] overflow-y-auto p-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="animate-spin text-emerald-500" size={24} />
+            </div>
+          ) : pipelines.length === 0 ? (
+            <div className="px-3 py-8 text-center text-sm font-semibold text-slate-500">No hay embudos disponibles.</div>
+          ) : (
+            pipelines.map((pipeline) => {
+              const isCurrent = pipeline.id === currentPipelineId
+
+              return (
+                <button
+                  key={pipeline.id}
+                  type="button"
+                  onClick={() => onSelect(pipeline)}
+                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-extrabold text-slate-950">{pipeline.name}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-500">{pipeline.stages.length} etapas</p>
+                  </div>
+                  {isCurrent ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                      <Check size={16} strokeWidth={2.5} />
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function KanbanPage() {
   const { pipelineId } = useParams<{ pipelineId: string }>()
   const pathname = usePathname()
@@ -362,6 +435,7 @@ export default function KanbanPage() {
   const canDeleteLead = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
   const [activeId, setActiveId] = useState<string | null>(null)
   const [openDeal, setOpenDeal] = useState<KanbanCard | null>(null)
+  const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
 
   useEffect(() => {
     if (pathname.startsWith('/deals/')) {
@@ -376,6 +450,11 @@ export default function KanbanPage() {
   const { data: board, isLoading } = useQuery<KanbanBoard>({
     queryKey: ['kanban', pipelineId],
     queryFn: () => dealsApi.getKanban(pipelineId).then((response) => response.data),
+  })
+
+  const { data: pipelines = [], isLoading: isLoadingPipelines } = useQuery<Pipeline[]>({
+    queryKey: ['pipelines'],
+    queryFn: () => pipelinesApi.list().then((response) => response.data),
   })
 
   const moveMutation = useMutation({
@@ -415,6 +494,13 @@ export default function KanbanPage() {
     if (!canDeleteLead) return
     if (!window.confirm(`Vas a eliminar el lead "${chatTitle(deal)}". Esta accion lo saca del tablero.`)) return
     deleteLeadMutation.mutate(deal.id)
+  }
+
+  function handleSelectPipeline(pipeline: Pipeline) {
+    setIsPipelineSwitcherOpen(false)
+    if (pipeline.id === pipelineId) return
+    setOpenDeal(null)
+    router.push(`/leads/${pipeline.id}`)
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -473,9 +559,18 @@ export default function KanbanPage() {
       <header className="sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white px-8 py-6">
         <div className="flex items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Leads con chat</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Leads con chat</h1>
+              <button
+                type="button"
+                onClick={() => setIsPipelineSwitcherOpen(true)}
+                className="inline-flex max-w-[min(420px,100%)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-extrabold text-slate-800 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+              >
+                <span className="truncate">{board.pipeline.name}</span>
+                <ChevronDown size={16} strokeWidth={2.5} />
+              </button>
+            </div>
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{board.pipeline.name}</span>
               <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{totalDeals} leads activos</span>
               {totalValue > 0 ? (
                 <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
@@ -528,6 +623,14 @@ export default function KanbanPage() {
         onDeleteLead={handleDeleteLead}
         canDeleteLead={Boolean(canDeleteLead)}
         isDeletingLead={deleteLeadMutation.isPending}
+      />
+      <PipelineSwitchModal
+        open={isPipelineSwitcherOpen}
+        pipelines={pipelines}
+        currentPipelineId={pipelineId}
+        isLoading={isLoadingPipelines}
+        onClose={() => setIsPipelineSwitcherOpen(false)}
+        onSelect={handleSelectPipeline}
       />
     </div>
   )
