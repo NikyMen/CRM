@@ -12,14 +12,15 @@ import type {
   WhatsAppSessionSnapshot,
 } from '@/types'
 import { useToast } from '@/components/ui/toast'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 import {
   AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp,
-  Loader2, MessageSquareText, RefreshCcw,
-  Paperclip, Pencil, Save, Search, Send, Settings2, Smartphone, Trash2, Unplug, UsersRound, Wifi, WifiOff, X,
+  Loader2, RefreshCcw,
+  Paperclip, Pencil, Save, Search, Send, Settings2, Smartphone, Trash2, Unplug, Wifi, WifiOff, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
-type ChatFilter = 'all' | 'linked' | 'unread' | 'groups'
+type ChatFilter = 'all' | 'linked' | 'unread'
 type SendDraft = { text: string; file: File | null }
 
 const MAX_CHAT_FILE_BYTES = 8 * 1024 * 1024
@@ -458,18 +459,11 @@ export default function ChatsPage() {
 
   const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
   const filteredChats = useMemo(() => chats.filter((chat) => {
-    if (chatFilter === 'groups') return chat.isGroup
     if (chat.isGroup) return false
     if (chatFilter === 'linked') return Boolean(chat.contactId)
     if (chatFilter === 'unread') return chat.unreadCount > 0
     return true
   }), [chatFilter, chats])
-
-  useEffect(() => {
-    if (requestedJid && chats.some((chat) => chat.jid === requestedJid && chat.isGroup)) {
-      setChatFilter('groups')
-    }
-  }, [chats, requestedJid])
 
   useEffect(() => {
     if (filteredChats.length === 0) return void setSelectedJid(null)
@@ -862,8 +856,8 @@ export default function ChatsPage() {
               <input value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} placeholder="Buscar chat, telefono o contacto" className="ctrl-input !pl-10" />
             </div>
 
-            <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl p-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-0)' }}>
-              {(['all', 'linked', 'unread', 'groups'] as ChatFilter[]).map((filter) => (
+            <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl p-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-0)' }}>
+              {(['all', 'linked', 'unread'] as ChatFilter[]).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setChatFilter(filter)}
@@ -875,7 +869,7 @@ export default function ChatsPage() {
                     boxShadow: chatFilter === filter ? '0 8px 18px rgba(15,23,42,0.06)' : 'none',
                   }}
                 >
-                  {filter === 'all' ? 'Todo' : filter === 'linked' ? 'CRM' : filter === 'unread' ? 'Sin leer' : 'Grupos'}
+                  {filter === 'all' ? 'Todo' : filter === 'linked' ? 'CRM' : 'Sin leer'}
                 </button>
               ))}
             </div>
@@ -915,11 +909,7 @@ export default function ChatsPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink-primary)' }}>{chatPrimaryName(chat)}</p>
-                              {chat.isGroup ? (
-                                <p className="mt-0.5 inline-flex items-center gap-1 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>
-                                  <UsersRound size={12} /> Grupo
-                                </p>
-                              ) : chatPhoneLine(chat) ? (
+                              {chatPhoneLine(chat) ? (
                                 <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>{chatPhoneLine(chat)}</p>
                               ) : null}
                             </div>
@@ -939,7 +929,7 @@ export default function ChatsPage() {
               </div>
             ) : (
               <div className="px-6 py-20 text-center">
-                <MessageSquareText size={30} className="mx-auto mb-3" style={{ color: 'var(--ink-muted)' }} />
+                <WhatsAppLogo size={30} className="mx-auto mb-3" style={{ color: 'var(--ink-muted)' }} />
                 <p className="text-sm font-semibold" style={{ color: 'var(--ink-primary)' }}>Todavia no llegaron conversaciones reales</p>
                 <p className="mt-1 text-xs leading-5" style={{ color: 'var(--ink-tertiary)' }}>Este inbox empieza vacio y solo muestra chats cuando alguien manda un mensaje persistible al WhatsApp conectado.</p>
               </div>
@@ -1011,9 +1001,7 @@ export default function ChatsPage() {
                         </div>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--ink-secondary)' }}>
-                        {selectedChat.isGroup ? (
-                          <span className="inline-flex items-center gap-1"><UsersRound size={13} />Grupo de WhatsApp</span>
-                        ) : chatPhoneLine(selectedChat) ? (
+                        {chatPhoneLine(selectedChat) ? (
                           <span className="truncate">{chatPhoneLine(selectedChat)}</span>
                         ) : null}
                       </div>
@@ -1097,7 +1085,7 @@ export default function ChatsPage() {
                 ) : (
                   <div className="flex h-full items-center justify-center">
                     <div className="max-w-[420px] text-center">
-                      <MessageSquareText size={34} className="mx-auto mb-4" style={{ color: 'var(--ink-muted)' }} />
+                      <WhatsAppLogo size={34} className="mx-auto mb-4" style={{ color: 'var(--ink-muted)' }} />
                       <p className="text-base font-semibold" style={{ color: 'var(--ink-primary)' }}>
                         Todavia no hay mensajes persistidos para este chat
                       </p>
@@ -1185,7 +1173,7 @@ export default function ChatsPage() {
           ) : (
             <div className="flex h-full items-center justify-center px-8 text-center">
               <div>
-                <MessageSquareText size={34} className="mx-auto mb-4" style={{ color: 'var(--ink-muted)' }} />
+                <WhatsAppLogo size={34} className="mx-auto mb-4" style={{ color: 'var(--ink-muted)' }} />
                 <p className="text-base font-semibold" style={{ color: 'var(--ink-primary)' }}>Selecciona un chat</p>
                 <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-tertiary)' }}>
                   Elige una conversacion nueva del inbox para ver contexto y responder desde el CRM.

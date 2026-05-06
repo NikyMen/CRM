@@ -225,7 +225,9 @@ export class DealService {
       },
     })
     if (!pipeline) throw new NotFoundError('Pipeline', pipelineId)
+    await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId)
     await this.ensureWhatsappChatsHaveLeads(workspaceId, pipeline)
+    await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId, { force: true })
     await this.ensurePipelineDealsHaveLeadNumbers(workspaceId, pipelineId)
 
     // Traer todos los deals abiertos del pipeline de una sola consulta

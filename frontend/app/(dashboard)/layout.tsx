@@ -1,29 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import {
-  Users, KanbanSquare, MessagesSquare,
+  Users, KanbanSquare,
   LogOut, LayoutDashboard, Layers, Package, Menu, X, Settings,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideProps } from 'lucide-react'
 import clsx from 'clsx'
 import { UserAvatar } from '@/components/UserAvatar'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 
 import type { Role } from '@/types'
 
 type NavItem = {
   href: string
   label: string
-  icon: LucideIcon
+  icon: ComponentType<LucideProps>
   roles?: Role[]
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/chats', label: 'WhatsApp', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
+  { href: '/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
   { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },

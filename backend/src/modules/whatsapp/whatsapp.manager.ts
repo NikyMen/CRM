@@ -139,6 +139,26 @@ function buildContactName(contact?: { firstName?: string | null; lastName?: stri
   return `${contact.firstName}${contact.lastName ? ` ${contact.lastName}` : ''}`
 }
 
+function asJsonObject(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function readJsonString(value: unknown, key: string) {
+  const item = asJsonObject(value)[key]
+  return typeof item === 'string' && item.trim() ? item.trim() : null
+}
+
+function readJsonBoolean(value: unknown, key: string) {
+  const item = asJsonObject(value)[key]
+  return typeof item === 'boolean' ? item : null
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.filter(Boolean))]
+}
+
 function buildHistoryContactMap(contacts: any[]): HistoryContactMap {
   const map: HistoryContactMap = new Map()
 
@@ -540,6 +560,8 @@ export class WhatsAppManager {
   private devMaintenancePromise: Promise<void> | null = null
   private lidAliases = new Map<string, Map<string, string>>()
   private profilePhotoCache = new Map<string, Map<string, ProfilePhotoCacheEntry>>()
+  private dedupeRuns = new Map<string, Promise<void>>()
+  private lastDedupeAt = new Map<string, number>()
 
   isRuntimeCompatible() {
     if (isServerlessRuntime()) {
@@ -770,15 +792,38 @@ export class WhatsAppManager {
     await this.devMaintenancePromise
   }
 
+  async dedupeWorkspace(
+    workspaceId: string,
+    pipelineId?: string | null,
+    options?: { force?: boolean }
+  ) {
+    const key = `${workspaceId}:${pipelineId ?? '*'}`
+    const now = Date.now()
+    const lastRun = this.lastDedupeAt.get(key) ?? 0
+
+    if (!options?.force && now - lastRun < 30_000) return
+
+    const running = this.dedupeRuns.get(key)
+    if (running) return running
+
+    const run = this.runWorkspaceDedupe(workspaceId, pipelineId).finally(() => {
+      this.lastDedupeAt.set(key, Date.now())
+      this.dedupeRuns.delete(key)
+    })
+
+    this.dedupeRuns.set(key, run)
+    return run
+  }
+
   async listChats(workspaceId: string, search?: string) {
     await this.ensureDevMaintenanceAppliedOnce()
-    await this.linkChatsToContacts(workspaceId)
-    await this.mergeDuplicateContactChats(workspaceId)
+    await this.dedupeWorkspace(workspaceId)
     const normalizedSearch = search?.trim()
 
     const chats = await prisma.whatsAppChat.findMany({
       where: {
         workspaceId,
+        isGroup: false,
         messages: {
           some: {},
         },
@@ -1324,6 +1369,8 @@ export class WhatsAppManager {
         // noop
       }
     }
+
+    await this.dedupeWorkspace(workspaceId)
   }
 
   private async persistMessages(workspaceId: string, messages: any[], options?: PersistMessageOptions) {
@@ -1334,6 +1381,8 @@ export class WhatsAppManager {
         // noop
       }
     }
+
+    await this.dedupeWorkspace(workspaceId)
   }
 
   private buildRecoveryCutoff(session: SessionRecord) {
@@ -1665,6 +1714,340 @@ export class WhatsAppManager {
       const bTime = (b.lastMessageAt ?? b.updatedAt ?? new Date(0)).getTime()
       return bTime - aTime
     })[0]
+  }
+
+  private async runWorkspaceDedupe(workspaceId: string, pipelineId?: string | null) {
+    await this.linkChatsToContacts(workspaceId)
+    await this.mergeDuplicateWhatsappContacts(workspaceId)
+    await this.mergeDuplicateContactChats(workspaceId)
+    await this.mergeDuplicateOpenWhatsappLeads(workspaceId, pipelineId)
+  }
+
+  private chooseCanonicalWhatsappContact<T extends {
+    id: string
+    firstName: string
+    lastName?: string | null
+    avatar?: string | null
+    createdAt: Date
+    lastContactedAt?: Date | null
+    whatsappChats?: Array<{ lastMessageAt?: Date | null }>
+  }>(contacts: T[]) {
+    return [...contacts].sort((a, b) => {
+      const chatDiff = (b.whatsappChats?.length ?? 0) - (a.whatsappChats?.length ?? 0)
+      if (chatDiff !== 0) return chatDiff
+
+      const aLastChat = Math.max(0, ...(a.whatsappChats ?? []).map((chat) => chat.lastMessageAt?.getTime() ?? 0))
+      const bLastChat = Math.max(0, ...(b.whatsappChats ?? []).map((chat) => chat.lastMessageAt?.getTime() ?? 0))
+      if (aLastChat !== bLastChat) return bLastChat - aLastChat
+
+      const avatarDiff = Number(Boolean(b.avatar)) - Number(Boolean(a.avatar))
+      if (avatarDiff !== 0) return avatarDiff
+
+      const nameDiff =
+        Number(Boolean(normalizeLabel(buildContactName(b)))) -
+        Number(Boolean(normalizeLabel(buildContactName(a))))
+      if (nameDiff !== 0) return nameDiff
+
+      const aTouched = a.lastContactedAt?.getTime() ?? 0
+      const bTouched = b.lastContactedAt?.getTime() ?? 0
+      if (aTouched !== bTouched) return bTouched - aTouched
+
+      return a.createdAt.getTime() - b.createdAt.getTime()
+    })[0]
+  }
+
+  private async mergeDuplicateWhatsappContacts(workspaceId: string) {
+    const contacts = await db.contact.findMany({
+      where: {
+        workspaceId,
+        isArchived: false,
+        phone: { not: null },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatar: true,
+        tags: true,
+        source: true,
+        email: true,
+        companyId: true,
+        createdAt: true,
+        lastContactedAt: true,
+        whatsappChats: {
+          select: { lastMessageAt: true },
+        },
+      },
+      take: 5000,
+    })
+
+    const byPhone = new Map<string, typeof contacts>()
+    for (const contact of contacts) {
+      const phone = normalizePhoneNumber(contact.phone)
+      if (!phone) continue
+      byPhone.set(phone, [...(byPhone.get(phone) ?? []), contact])
+    }
+
+    for (const group of byPhone.values()) {
+      if (group.length < 2) continue
+      if (!group.some((contact) =>
+        contact.source === 'WHATSAPP' ||
+        contact.tags.includes('whatsapp') ||
+        contact.whatsappChats.length > 0
+      )) continue
+
+      const winner = this.chooseCanonicalWhatsappContact(group)
+      if (!winner) continue
+
+      for (const loser of group) {
+        if (loser.id === winner.id) continue
+        await this.mergeContactAlias(workspaceId, winner, loser)
+      }
+
+      await this.mergeDuplicateContactChats(workspaceId, winner.id)
+    }
+  }
+
+  private async mergeContactAlias(
+    workspaceId: string,
+    winner: {
+      id: string
+      email?: string | null
+      phone?: string | null
+      avatar?: string | null
+      companyId?: string | null
+      tags: string[]
+      lastContactedAt?: Date | null
+    },
+    loser: {
+      id: string
+      email?: string | null
+      phone?: string | null
+      avatar?: string | null
+      companyId?: string | null
+      tags: string[]
+      lastContactedAt?: Date | null
+    }
+  ) {
+    await prisma.$transaction(async (tx: any) => {
+      await tx.$executeRawUnsafe(
+        `
+          INSERT INTO deal_contacts ("dealId", "contactId", role)
+          SELECT "dealId", $1, role
+          FROM deal_contacts
+          WHERE "contactId" = $2
+          ON CONFLICT ("dealId", "contactId") DO UPDATE
+          SET role = COALESCE(deal_contacts.role, EXCLUDED.role)
+        `,
+        winner.id,
+        loser.id
+      )
+
+      await tx.dealContact.deleteMany({ where: { contactId: loser.id } })
+      await tx.note.updateMany({ where: { contactId: loser.id }, data: { contactId: winner.id } })
+      await tx.activity.updateMany({ where: { contactId: loser.id }, data: { contactId: winner.id } })
+      await tx.whatsAppChat.updateMany({ where: { workspaceId, contactId: loser.id }, data: { contactId: winner.id } })
+      await tx.message.updateMany({ where: { workspaceId, contactId: loser.id }, data: { contactId: winner.id } })
+      await tx.contactIdentity.updateMany({ where: { workspaceId, contactId: loser.id }, data: { contactId: winner.id } })
+
+      const mergedTags = uniqueStrings([...winner.tags, ...loser.tags])
+      await tx.contact.update({
+        where: { id: winner.id, workspaceId },
+        data: {
+          ...(!winner.email && loser.email ? { email: loser.email } : {}),
+          ...(!winner.phone && loser.phone ? { phone: loser.phone } : {}),
+          ...(!winner.avatar && loser.avatar ? { avatar: loser.avatar } : {}),
+          ...(!winner.companyId && loser.companyId ? { companyId: loser.companyId } : {}),
+          ...(loser.lastContactedAt && (!winner.lastContactedAt || loser.lastContactedAt > winner.lastContactedAt)
+            ? { lastContactedAt: loser.lastContactedAt }
+            : {}),
+          tags: mergedTags,
+        },
+      })
+
+      await tx.contact.update({
+        where: { id: loser.id, workspaceId },
+        data: { isArchived: true, mergedInto: winner.id },
+      })
+    })
+  }
+
+  private chooseCanonicalWhatsappLead<T extends {
+    id: string
+    createdAt: Date
+    updatedAt: Date
+    stage?: { position?: number | null } | null
+    contacts: Array<{
+      contact: {
+        whatsappChats: Array<{ lastMessageAt?: Date | null }>
+      }
+    }>
+  }>(deals: T[]) {
+    return [...deals].sort((a, b) => {
+      const aStage = a.stage?.position ?? 0
+      const bStage = b.stage?.position ?? 0
+      if (aStage !== bStage) return bStage - aStage
+
+      const aLastChat = Math.max(0, ...a.contacts.flatMap((link) => link.contact.whatsappChats.map((chat) => chat.lastMessageAt?.getTime() ?? 0)))
+      const bLastChat = Math.max(0, ...b.contacts.flatMap((link) => link.contact.whatsappChats.map((chat) => chat.lastMessageAt?.getTime() ?? 0)))
+      if (aLastChat !== bLastChat) return bLastChat - aLastChat
+
+      return a.createdAt.getTime() - b.createdAt.getTime()
+    })[0]
+  }
+
+  private whatsappLeadKey(deal: {
+    pipelineId: string
+    customData: unknown
+    contacts: Array<{
+      contactId: string
+      contact: { phone?: string | null }
+    }>
+  }) {
+    const linkedJid = readJsonString(deal.customData, 'whatsAppChatJid')
+    const phone =
+      deal.contacts
+        .map((link) => normalizePhoneNumber(link.contact.phone))
+        .find((value): value is string => Boolean(value)) ??
+      (linkedJid ? extractPhoneNumberFromJid(linkedJid) : null)
+    const contactId = deal.contacts[0]?.contactId
+    const key = phone ?? contactId ?? linkedJid
+    return key ? `${deal.pipelineId}:${key}` : null
+  }
+
+  private async mergeDuplicateOpenWhatsappLeads(workspaceId: string, pipelineId?: string | null) {
+    const deals = await db.deal.findMany({
+      where: {
+        workspaceId,
+        ...(pipelineId ? { pipelineId } : {}),
+        status: 'OPEN',
+        isArchived: false,
+        contacts: { some: {} },
+      },
+      select: {
+        id: true,
+        title: true,
+        pipelineId: true,
+        stageId: true,
+        position: true,
+        customData: true,
+        createdAt: true,
+        updatedAt: true,
+        stage: { select: { position: true } },
+        contacts: {
+          select: {
+            contactId: true,
+            contact: {
+              select: {
+                phone: true,
+                whatsappChats: {
+                  where: { workspaceId },
+                  select: { jid: true, lastMessageAt: true },
+                  orderBy: { lastMessageAt: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+      take: 1000,
+    })
+
+    const whatsappDeals = deals.filter((deal) =>
+      readJsonString(deal.customData, 'sourceChannel') === 'whatsapp' ||
+      readJsonBoolean(deal.customData, 'autoCreated') === true ||
+      Boolean(readJsonString(deal.customData, 'whatsAppChatJid'))
+    )
+
+    const byKey = new Map<string, typeof whatsappDeals>()
+    for (const deal of whatsappDeals) {
+      const key = this.whatsappLeadKey(deal)
+      if (!key) continue
+      byKey.set(key, [...(byKey.get(key) ?? []), deal])
+    }
+
+    for (const group of byKey.values()) {
+      if (group.length < 2) continue
+
+      const winner = this.chooseCanonicalWhatsappLead(group)
+      if (!winner) continue
+
+      const stageIds = new Set(group.map((deal) => deal.stageId))
+      for (const loser of group) {
+        if (loser.id === winner.id) continue
+        await this.mergeLeadAlias(workspaceId, winner, loser)
+      }
+
+      for (const stageId of stageIds) {
+        await this.compactStagePositions(workspaceId, stageId)
+      }
+    }
+  }
+
+  private async mergeLeadAlias(
+    workspaceId: string,
+    winner: {
+      id: string
+      customData: unknown
+    },
+    loser: {
+      id: string
+      customData: unknown
+      contacts: Array<{ contactId: string }>
+    }
+  ) {
+    const winnerData = asJsonObject(winner.customData)
+    const loserData = asJsonObject(loser.customData)
+    const loserChatJid = readJsonString(loser.customData, 'whatsAppChatJid')
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.dealContact.createMany({
+        data: loser.contacts.map((link) => ({
+          dealId: winner.id,
+          contactId: link.contactId,
+        })),
+        skipDuplicates: true,
+      })
+
+      await tx.note.updateMany({ where: { workspaceId, dealId: loser.id }, data: { dealId: winner.id } })
+      await tx.activity.updateMany({ where: { workspaceId, dealId: loser.id }, data: { dealId: winner.id } })
+
+      await tx.deal.update({
+        where: { id: winner.id, workspaceId },
+        data: {
+          customData: {
+            ...loserData,
+            ...winnerData,
+            sourceChannel: winnerData.sourceChannel ?? loserData.sourceChannel ?? 'whatsapp',
+            autoCreated: winnerData.autoCreated ?? loserData.autoCreated ?? true,
+            whatsAppChatJid: winnerData.whatsAppChatJid ?? loserChatJid,
+          },
+        },
+      })
+
+      await tx.deal.update({
+        where: { id: loser.id, workspaceId },
+        data: { isArchived: true },
+      })
+    })
+  }
+
+  private async compactStagePositions(workspaceId: string, stageId: string) {
+    const deals = await db.deal.findMany({
+      where: { workspaceId, stageId, status: 'OPEN', isArchived: false },
+      select: { id: true },
+      orderBy: [{ position: 'asc' }, { updatedAt: 'desc' }],
+    })
+
+    await Promise.all(
+      deals.map((deal, position) =>
+        db.deal.update({
+          where: { id: deal.id, workspaceId },
+          data: { position },
+        })
+      )
+    )
   }
 
   private async mergeDuplicateContactChats(workspaceId: string, contactId?: string | null) {

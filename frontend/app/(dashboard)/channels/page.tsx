@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { MessageSquareText, QrCode, ShieldAlert } from 'lucide-react'
+import { QrCode, ShieldAlert } from 'lucide-react'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 
 export default function ChannelsPage() {
   return (
@@ -36,7 +37,7 @@ export default function ChannelsPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/45">
-            <MessageSquareText className="text-sky-600 dark:text-sky-300" size={24} />
+            <WhatsAppLogo className="text-sky-600 dark:text-sky-300" size={24} />
             <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Operacion en WhatsApp</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Una vez conectado, ahi mismo ves conversaciones, mensajes y envio desde el CRM.
@@ -45,7 +46,7 @@ export default function ChannelsPage() {
         </div>
 
         <div className="border-t border-slate-200 p-6 dark:border-slate-700">
-          <Link href="/chats" className="btn-primary inline-flex items-center gap-2">
+          <Link href="/whatsapp" className="btn-primary inline-flex items-center gap-2">
             <QrCode size={17} />
             Ir a WhatsApp y generar QR
           </Link>
