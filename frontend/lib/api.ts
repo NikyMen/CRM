@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { auth } from './auth'
 import type {
-  Contact, Deal, Webhook,
+  ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal, Webhook,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
@@ -386,4 +386,24 @@ export const inboxApi = {
   testConnection: (id: string) =>
     api.post(`/inbox/connections/${id}/test`),
 
+}
+
+export const chatwootApi = {
+  status: () =>
+    api.get<ChatwootStatus>('/chatwoot/status'),
+
+  listConversations: (params?: {
+    channel?: 'all' | 'messenger' | 'instagram'
+    status?: 'all' | 'open' | 'resolved' | 'pending' | 'snoozed'
+    q?: string
+    page?: number
+    limit?: number
+  }) =>
+    api.get<PaginatedResult<ChatwootConversation>>('/chatwoot/conversations', { params }),
+
+  listMessages: (conversationId: number, params?: { before?: number; after?: number }) =>
+    api.get<ChatwootMessage[]>(`/chatwoot/conversations/${conversationId}/messages`, { params }),
+
+  sendMessage: (conversationId: number, data: { content: string }) =>
+    api.post<ChatwootMessage>(`/chatwoot/conversations/${conversationId}/messages`, data),
 }

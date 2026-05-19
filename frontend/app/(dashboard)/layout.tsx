@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import {
   Users, KanbanSquare,
-  LogOut, LayoutDashboard, Layers, Package, Menu, X, Settings,
+  LogOut, LayoutDashboard, Layers, Package, Menu, X, Settings, MessagesSquare,
 } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 import clsx from 'clsx'
@@ -25,6 +25,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'] as Role[] },
+  { href: '/messenger-instagram', label: 'Messenger/Instagram', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
   { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
   { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },

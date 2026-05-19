@@ -584,3 +584,86 @@ export interface EmbeddedSignupCompletionResult extends ConnectionTestResult {
     expiresIn?: number
   }
 }
+
+export type ChatwootChannel = 'messenger' | 'instagram'
+
+export interface ChatwootInbox {
+  id: number
+  name: string
+  channel: ChatwootChannel
+  channelType?: string | null
+  provider?: string | null
+  webUrl: string
+}
+
+export interface ChatwootStatus {
+  configured: boolean
+  reachable: boolean
+  baseUrl?: string
+  accountId?: number
+  portalUrl?: string
+  missing: string[]
+  inboxes: ChatwootInbox[]
+  channels: Record<ChatwootChannel, boolean>
+  error?: string
+}
+
+export interface ChatwootConversation {
+  id: number
+  uuid?: string | null
+  inboxId: number
+  channel: ChatwootChannel
+  status: string
+  unreadCount: number
+  canReply: boolean
+  lastActivityAt?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  webUrl: string
+  contact: {
+    id?: number | null
+    name: string
+    email?: string | null
+    phoneNumber?: string | null
+    thumbnail?: string | null
+  }
+  assignee?: {
+    id?: number | null
+    name?: string | null
+    email?: string | null
+  } | null
+  inbox: ChatwootInbox
+  latestMessage?: {
+    id: number
+    content?: string | null
+    direction: 'inbound' | 'outbound' | 'activity'
+    createdAt?: string | null
+    status?: string | null
+  } | null
+}
+
+export interface ChatwootMessage {
+  id: number
+  conversationId: number
+  content?: string | null
+  direction: 'inbound' | 'outbound' | 'activity'
+  status?: string | null
+  private: boolean
+  contentType?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  sender?: {
+    id?: number | null
+    name?: string | null
+    email?: string | null
+    type?: string | null
+    thumbnail?: string | null
+  } | null
+  attachments: Array<{
+    id?: number | string
+    type?: string | null
+    url?: string | null
+    fileName?: string | null
+    thumbUrl?: string | null
+  }>
+}

@@ -80,10 +80,21 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
   }
 
   async inspectConnection(input: ConnectionInspectionInput): Promise<ConnectionInspectionResult> {
-    if (input.channel !== 'whatsapp') {
-      throw new ValidationError('Meta solo implementa prueba de conexion para WhatsApp en este paso')
+    switch (input.channel) {
+      case 'whatsapp':
+        return this.inspectWhatsAppConnection(input)
+      case 'messenger':
+        return this.inspectMessengerConnection(input)
+      case 'instagram':
+        return this.inspectInstagramConnection(input)
+      default:
+        throw new ValidationError(`Meta no implementa prueba de conexion para el canal ${input.channel}`)
     }
+  }
 
+  private async inspectWhatsAppConnection(
+    input: ConnectionInspectionInput
+  ): Promise<ConnectionInspectionResult> {
     const externalAccountId = this.asString(input.externalAccountId)
     if (!externalAccountId) {
       throw new ValidationError('La conexion de WhatsApp no tiene externalAccountId configurado')
@@ -120,6 +131,83 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
         qualityRating: this.asString(rawResponse.quality_rating),
         codeVerificationStatus: this.asString(rawResponse.code_verification_status),
         nameStatus: this.asString(rawResponse.name_status),
+      },
+      rawResponse,
+    }
+  }
+
+  private async inspectMessengerConnection(
+    input: ConnectionInspectionInput
+  ): Promise<ConnectionInspectionResult> {
+    const pageId = this.asString(input.externalAccountId)
+    if (!pageId) {
+      throw new ValidationError('La conexion de Messenger no tiene Page ID configurado')
+    }
+
+    const accessToken = this.readString(input.credentials, 'accessToken')
+    if (!accessToken) {
+      throw new ValidationError('La conexion de Messenger no tiene Page Access Token configurado')
+    }
+
+    const query = new URLSearchParams({
+      fields: 'id,name,category,username,link',
+    })
+
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${pageId}?${query.toString()}`
+    const rawResponse = await this.getJson(endpoint, accessToken)
+
+    const name = this.asString(rawResponse.name)
+    const username = this.asString(rawResponse.username)
+    const label = name && username ? `${name} (@${username})` : name ?? username
+
+    return {
+      status: 'connected',
+      externalAccountLabel: label,
+      metadata: {
+        pageId: this.asString(rawResponse.id) ?? pageId,
+        pageName: name,
+        pageUsername: username,
+        pageCategory: this.asString(rawResponse.category),
+        pageLink: this.asString(rawResponse.link),
+      },
+      rawResponse,
+    }
+  }
+
+  private async inspectInstagramConnection(
+    input: ConnectionInspectionInput
+  ): Promise<ConnectionInspectionResult> {
+    const igUserId = this.asString(input.externalAccountId)
+    if (!igUserId) {
+      throw new ValidationError('La conexion de Instagram no tiene IG User ID configurado')
+    }
+
+    const accessToken = this.readString(input.credentials, 'accessToken')
+    if (!accessToken) {
+      throw new ValidationError('La conexion de Instagram no tiene Page Access Token configurado')
+    }
+
+    const query = new URLSearchParams({
+      fields: 'id,username,name,profile_picture_url,followers_count,media_count',
+    })
+
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${igUserId}?${query.toString()}`
+    const rawResponse = await this.getJson(endpoint, accessToken)
+
+    const username = this.asString(rawResponse.username)
+    const name = this.asString(rawResponse.name)
+    const label = username ? `@${username}${name ? ` (${name})` : ''}` : name
+
+    return {
+      status: 'connected',
+      externalAccountLabel: label,
+      metadata: {
+        igUserId: this.asString(rawResponse.id) ?? igUserId,
+        username,
+        name,
+        profilePictureUrl: this.asString(rawResponse.profile_picture_url),
+        followersCount: this.asNumber(rawResponse.followers_count),
+        mediaCount: this.asNumber(rawResponse.media_count),
       },
       rawResponse,
     }
@@ -208,10 +296,18 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
     }
   }
   async sendMessage(input: OutboundMessageDraft): Promise<OutboundMessageResult> {
-    if (input.channel !== 'whatsapp') {
-      throw new ValidationError('Meta solo implementa envio saliente para WhatsApp en este paso')
+    switch (input.channel) {
+      case 'whatsapp':
+        return this.sendWhatsAppMessage(input)
+      case 'messenger':
+      case 'instagram':
+        return this.sendPageStyleMessage(input, input.channel)
+      default:
+        throw new ValidationError(`Meta no implementa envio saliente para el canal ${input.channel}`)
     }
+  }
 
+  private async sendWhatsAppMessage(input: OutboundMessageDraft): Promise<OutboundMessageResult> {
     if ((input.attachments?.length ?? 0) > 1) {
       throw new ValidationError('WhatsApp solo admite un adjunto saliente por mensaje en este paso')
     }
@@ -265,6 +361,110 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
       providerMessageId,
       acceptedAt: new Date(),
       rawResponse,
+    }
+  }
+
+  private async sendPageStyleMessage(
+    input: OutboundMessageDraft,
+    channel: 'messenger' | 'instagram'
+  ): Promise<OutboundMessageResult> {
+    const channelLabel = channel === 'messenger' ? 'Messenger' : 'Instagram'
+
+    if ((input.attachments?.length ?? 0) > 1) {
+      throw new ValidationError(`${channelLabel} solo admite un adjunto saliente por mensaje`)
+    }
+
+    const externalAccountId = this.asString(input.externalAccountId)
+    if (!externalAccountId) {
+      throw new ValidationError(`La conexion de ${channelLabel} no tiene externalAccountId configurado`)
+    }
+
+    const recipientId = this.asString(input.externalUserId)
+    if (!recipientId) {
+      throw new ValidationError(`La conversacion de ${channelLabel} no tiene externalUserId para enviar el mensaje`)
+    }
+
+    const text = this.asString(input.text)
+    const attachment = input.attachments?.[0]
+
+    if (!text && !attachment) {
+      throw new ValidationError(`${channelLabel} necesita texto o un adjunto para enviar el mensaje`)
+    }
+
+    const accessToken = this.readString(input.credentials, 'accessToken')
+    if (!accessToken) {
+      throw new ValidationError(`La conexion de ${channelLabel} no tiene accessToken configurado`)
+    }
+
+    const messageBody = attachment
+      ? this.buildPageStyleAttachmentPayload(attachment, channelLabel)
+      : { text: text! }
+
+    const payload: PlainObject = {
+      recipient: { id: recipientId },
+      message: messageBody,
+    }
+
+    if (channel === 'messenger') {
+      payload.messaging_type = this.readString(input.metadata, 'messagingType') ?? 'RESPONSE'
+      const tag = this.readString(input.metadata, 'tag')
+      if (tag) payload.tag = tag
+    }
+
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${externalAccountId}/messages`
+    const rawResponse = await this.postJson(endpoint, accessToken, payload)
+    const providerMessageId = this.asString(rawResponse.message_id) ?? this.asString(rawResponse.mid)
+
+    if (!providerMessageId) {
+      throw new Error(`Meta acepto el envio de ${channelLabel} pero no devolvio el id del mensaje`)
+    }
+
+    return {
+      providerMessageId,
+      acceptedAt: new Date(),
+      rawResponse,
+    }
+  }
+
+  private buildPageStyleAttachmentPayload(
+    attachment: NormalizedAttachment,
+    channelLabel: string
+  ): PlainObject {
+    const mediaType = this.mapOutboundPageStyleMediaType(attachment.type)
+    if (!mediaType) {
+      throw new ValidationError(`${channelLabel} no admite ese tipo de adjunto saliente`)
+    }
+
+    const url = this.asString(attachment.url)
+    if (!url) {
+      throw new ValidationError(`${channelLabel} requiere url publica para enviar adjuntos`)
+    }
+
+    return {
+      attachment: {
+        type: mediaType,
+        payload: {
+          url,
+          is_reusable: true,
+        },
+      },
+    }
+  }
+
+  private mapOutboundPageStyleMediaType(
+    type: NormalizedAttachment['type']
+  ): 'image' | 'audio' | 'video' | 'file' | null {
+    switch (type) {
+      case 'image':
+        return 'image'
+      case 'audio':
+        return 'audio'
+      case 'video':
+        return 'video'
+      case 'file':
+        return 'file'
+      default:
+        return null
     }
   }
 

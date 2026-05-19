@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+const optionalString = (schema: z.ZodString) =>
+  z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    schema.optional()
+  )
+
+const optionalPositiveInt = z.preprocess(
+  (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.coerce.number().int().positive().optional()
+)
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
@@ -14,6 +25,11 @@ const envSchema = z.object({
   META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.string().min(1).optional(),
   WHATSAPP_AUTH_DIR: z.string().optional(),
   WHATSAPP_MEDIA_DIR: z.string().optional(),
+  CHATWOOT_BASE_URL: optionalString(z.string().url()),
+  CHATWOOT_ACCOUNT_ID: optionalPositiveInt,
+  CHATWOOT_API_ACCESS_TOKEN: optionalString(z.string().min(1)),
+  CHATWOOT_MESSENGER_INBOX_ID: optionalPositiveInt,
+  CHATWOOT_INSTAGRAM_INBOX_ID: optionalPositiveInt,
 })
 
 const parsed = envSchema.safeParse(process.env)
