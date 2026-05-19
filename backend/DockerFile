@@ -19,4 +19,4 @@ RUN pnpm exec tsc --outDir dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/app.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/server.js"]
