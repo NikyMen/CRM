@@ -12,9 +12,11 @@ COPY backend/prisma ./prisma/
 RUN pnpm install --no-frozen-lockfile
 
 COPY backend/ .
+# Debug temporal
+RUN ls node_modules | grep typescript
 
 RUN pnpm exec tsc --outDir dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/app.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/app.js"]
