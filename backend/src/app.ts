@@ -112,8 +112,7 @@ export async function buildApp() {
     if (
       !isAppErrorLike(error) &&
       error.name !== 'ZodError' &&
-      error.code !== 'FST_JWT_NO_AUTHORIZATION_IN_HEADER' &&
-      error.code !== 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED'
+      !(typeof error.code === 'string' && error.code.startsWith('FST_JWT_'))
     ) {
       Sentry.captureException(error)
     }
@@ -135,10 +134,7 @@ export async function buildApp() {
     }
 
     // Errores de JWT
-    if (
-      error.code === 'FST_JWT_NO_AUTHORIZATION_IN_HEADER' ||
-      error.code === 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED'
-    ) {
+    if (typeof error.code === 'string' && error.code.startsWith('FST_JWT_')) {
       return reply.status(401).send({
         error: 'UNAUTHORIZED',
         message: error.message,
