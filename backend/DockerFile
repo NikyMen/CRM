@@ -12,8 +12,6 @@ COPY backend/prisma ./prisma/
 RUN pnpm install --no-frozen-lockfile
 
 COPY backend/ .
-# Debug temporal
-RUN ls node_modules | grep typescript
 
 RUN pnpm exec tsc --outDir dist
 
