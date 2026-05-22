@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 // ─── Paginación ──────────────────────────────────────────────────
 // Estos tipos los van a usar todos los módulos que devuelvan listas
 
@@ -133,11 +135,34 @@ export type EntityType = 'contact' | 'deal' | 'company' | 'task'
 // ─── Canal de Contacto ───────────────────────────────────────────
 // Estructura del JSON que guarda el campo "channels" en Contact
 
-export interface ContactChannel {
-  type: 'whatsapp' | 'facebook' | 'instagram' | 'email' | 'telegram' | 'phone'
-  identifier: string   // número, page_id, username, etc.
-  metadata?: Record<string, unknown>
-}
+export const customDataSchema = z.record(z.unknown())
+export type CustomData = z.infer<typeof customDataSchema>
+
+export const contactChannelSchema = z.object({
+  type: z.enum(['whatsapp', 'facebook', 'instagram', 'email', 'telegram', 'phone']),
+  identifier: z.string().min(1),
+  metadata: z.record(z.unknown()).optional(),
+})
+export const contactChannelsSchema = z.array(contactChannelSchema)
+export type ContactChannel = z.infer<typeof contactChannelSchema>
+
+// ─── Conexiones de Canal ─────────────────────────────────────────
+// Estructuras de JSON para credenciales y configuración
+
+export const channelCredentialsSchema = z.object({
+  accessToken: z.string().optional(),
+}).catchall(z.unknown())
+export type ChannelCredentials = z.infer<typeof channelCredentialsSchema>
+
+export const channelSettingsSchema = z.object({
+  onboardingSource: z.string().optional(),
+  metaBusinessId: z.string().optional(),
+  metaWabaId: z.string().optional(),
+  metaDisplayPhoneNumber: z.string().optional(),
+  metaVerifiedName: z.string().optional(),
+  metaQualityRating: z.string().optional(),
+}).catchall(z.unknown())
+export type ChannelSettings = z.infer<typeof channelSettingsSchema>
 
 // ─── Contexto de Workspace ───────────────────────────────────────
 // Lo que el middleware de autenticación inyecta en cada request

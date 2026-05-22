@@ -36,6 +36,8 @@ services:
       - DATABASE_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
       - DIRECT_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
       - REDIS_URL=redis://redis:6379
+      - WHATSAPP_AUTH_DIR=.data/whatsapp-auth
+      - WHATSAPP_MEDIA_DIR=.data/whatsapp-media
     ports:
       - "3000:3000"
     volumes:

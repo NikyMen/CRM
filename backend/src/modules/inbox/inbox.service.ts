@@ -8,6 +8,8 @@ import {
   paginate,
   type PaginatedResult,
   type PaginationQuery,
+  channelCredentialsSchema,
+  channelSettingsSchema,
 } from '../../types'
 import type { ChannelProviderAdapter } from './provider'
 import type {
@@ -144,6 +146,20 @@ export class InboxService {
     workspaceId: string,
     data: ChannelConnectionInput
   ): Promise<unknown> {
+    // 0. Validar credentials y settings
+    if (data.credentials !== undefined) {
+      const result = channelCredentialsSchema.safeParse(data.credentials)
+      if (!result.success) {
+        throw new ValidationError(`credentials inválido: ${result.error.message}`)
+      }
+    }
+    if (data.settings !== undefined) {
+      const result = channelSettingsSchema.safeParse(data.settings)
+      if (!result.success) {
+        throw new ValidationError(`settings inválido: ${result.error.message}`)
+      }
+    }
+
     try {
       const connection = await inboxDb.channelConnection.create({
         data: {
@@ -178,6 +194,20 @@ export class InboxService {
     data: ChannelConnectionUpdateInput
   ): Promise<unknown> {
     await this.requireConnection(workspaceId, connectionId)
+
+    // 0. Validar credentials y settings
+    if (data.credentials !== undefined) {
+      const result = channelCredentialsSchema.safeParse(data.credentials)
+      if (!result.success) {
+        throw new ValidationError(`credentials inválido: ${result.error.message}`)
+      }
+    }
+    if (data.settings !== undefined) {
+      const result = channelSettingsSchema.safeParse(data.settings)
+      if (!result.success) {
+        throw new ValidationError(`settings inválido: ${result.error.message}`)
+      }
+    }
 
     const connection = await inboxDb.channelConnection.update({
       where: { id: connectionId },

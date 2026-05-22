@@ -28,6 +28,7 @@ model Workspace {
   contacts Contact[]
   pipelines Pipeline[]
   deals     Deal[]
+  companies Company[]
   activities Activity[] 
   notes      Note[]
   webhooks   WebhookEndpoint[]  
@@ -61,6 +62,11 @@ model User {
   resetTokenExpiry DateTime?
 
   workspaces WorkspaceUser[]
+  ownedContacts  Contact[]       @relation("ContactOwner")
+  ownedDeals     Deal[]          @relation("DealOwner")
+  activities     Activity[]
+  notes          Note[]
+  stockMovements StockMovement[]
 
   @@map("users")
 }
@@ -92,7 +98,9 @@ model Contact {
   score       Int       @default(0)
   tags        String[]
   companyId   String?       
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ownerId     String?       
+  owner       User?    @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   channels    Json      @default("[]")
   customData  Json      @default("{}")
   isArchived  Boolean   @default(false)
@@ -162,7 +170,9 @@ model Deal {
   stageId     String
   position    Int       @default(0)
   companyId   String?                        
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ownerId     String?                        
+  owner       User?    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   status      String    @default("OPEN")
   expectedCloseDate DateTime?
   isArchived  Boolean  @default(false)
@@ -207,6 +217,7 @@ model Activity {
   contactId   String?
   dealId      String?
   userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   source      String?
   title       String
   description String?
@@ -231,6 +242,7 @@ model Note {
   contactId   String?
   dealId      String?
   userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   isPinned    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -340,6 +352,7 @@ model WebhookEndpoint {
   secret          String?
   events          String[]
   isActive        Boolean   @default(true)
+  successCount    Int       @default(0)
   failureCount    Int       @default(0)
   lastTriggeredAt DateTime?
   lastStatusCode  Int?
@@ -582,6 +595,7 @@ model StockMovement {
   note        String?
   batchCode   String?
   userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -608,4 +622,26 @@ model StockCashTransaction {
 
   @@index([workspaceId, occurredAt])
   @@map("stock_cash_transactions")
+}
+
+model Company {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  email       String?
+  phone       String?
+  website     String?
+  logo        String?
+  tags        String[]  @default([])
+  customData  Json      @default("{}")
+  isArchived  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  Contact[]
+  deals     Deal[]
+
+  @@index([workspaceId])
+  @@map("companies")
 }

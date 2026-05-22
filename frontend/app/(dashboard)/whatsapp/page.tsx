@@ -687,7 +687,6 @@ export default function ChatsPage() {
     sessionRuntimeReady &&
     session?.authAvailable &&
     !session?.hasActiveSocket &&
-    sessionStatus !== 'CONNECTED' &&
     !sessionIsBusy
   )
   const canDisconnectSession = Boolean(
