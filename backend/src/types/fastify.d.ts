@@ -13,7 +13,6 @@ declare module '@fastify/jwt' {
       sub: string
       userId: string 
       workspaceId: string
-      userId: string
       role: string
     }
   }

@@ -4,10 +4,14 @@ import { LeadScoringEngine } from './lead-scoring.engine'
 import {
   NotFoundError,
   ConflictError,
+  ValidationError,
   paginate,
   ActivityType,
   type PaginationQuery,
   type PaginatedResult,
+  customDataSchema,
+  contactChannelsSchema,
+  type ContactChannel,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
 
@@ -31,6 +35,7 @@ export interface CreateContactDto {
   companyId?: string
   ownerId?: string
   customData?: Record<string, unknown>
+  channels?: ContactChannel[]
 }
 
 export interface UpdateContactDto extends Partial<CreateContactDto> {}
@@ -59,6 +64,19 @@ export class ContactService {
     data: CreateContactDto,
     userId?: string
   ): Promise<Contact> {
+    // 0. Validar datos JSON
+    if (data.customData !== undefined) {
+      const result = customDataSchema.safeParse(data.customData)
+      if (!result.success) {
+        throw new ValidationError(`customData inválido: ${result.error.message}`)
+      }
+    }
+    if (data.channels !== undefined) {
+      const result = contactChannelsSchema.safeParse(data.channels)
+      if (!result.success) {
+        throw new ValidationError(`channels inválido: ${result.error.message}`)
+      }
+    }
 
     // 1. Deduplicación — evitar contactos duplicados por email o tel
     if (data.email || data.phone) {
@@ -88,6 +106,7 @@ export class ContactService {
         tags: data.tags ?? [],
         companyId: data.companyId,
         ownerId: data.ownerId,
+        channels: data.channels ? (data.channels as Prisma.InputJsonValue) : [],
         customData: (data.customData ?? {}) as Prisma.InputJsonValue,
       },
     })
@@ -162,6 +181,20 @@ export class ContactService {
     // Verificar que existe
     await this.findById(workspaceId, id)
 
+    // 0. Validar datos JSON
+    if (data.customData !== undefined) {
+      const result = customDataSchema.safeParse(data.customData)
+      if (!result.success) {
+        throw new ValidationError(`customData inválido: ${result.error.message}`)
+      }
+    }
+    if (data.channels !== undefined) {
+      const result = contactChannelsSchema.safeParse(data.channels)
+      if (!result.success) {
+        throw new ValidationError(`channels inválido: ${result.error.message}`)
+      }
+    }
+
     // Verificar duplicados si cambia email o phone
     if (data.email || data.phone) {
       const dup = await this.findDuplicate(
@@ -188,6 +221,9 @@ export class ContactService {
         ...(data.tags !== undefined && { tags: data.tags }),
         ...(data.companyId !== undefined && { companyId: data.companyId }),
         ...(data.ownerId !== undefined && { ownerId: data.ownerId }),
+        ...(data.channels !== undefined && {
+          channels: data.channels as Prisma.InputJsonValue,
+        }),
         ...(data.customData !== undefined && {
           customData: data.customData as Prisma.InputJsonValue,
         }),

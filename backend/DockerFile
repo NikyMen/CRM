@@ -1,6 +1,5 @@
 FROM node:20-alpine
 
-# Instalar OpenSSL para Prisma
 RUN apk add --no-cache openssl git
 
 WORKDIR /app
@@ -14,10 +13,8 @@ RUN pnpm install --no-frozen-lockfile
 
 COPY backend/ .
 
-RUN pnpm exec prisma generate
-
 RUN pnpm exec tsc --outDir dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/app.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/server.js"]

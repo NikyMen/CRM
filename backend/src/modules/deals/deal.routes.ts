@@ -76,8 +76,7 @@ export async function dealRoutes(
   // ─── GET /deals/:id ────────────────────────────────────────────
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
-    // findFirst con workspaceId para seguridad multi-tenant
-    const deal = await service.search(ctx.workspaceId, {})
+    const deal = await service.findById(ctx.workspaceId, req.params.id)
     return reply.send(deal)
   })
 

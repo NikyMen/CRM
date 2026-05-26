@@ -601,6 +601,17 @@ export class WhatsAppManager {
       }),
     ])
 
+    // Si la sesión debería estar conectada/viva, y tenemos credenciales, pero no hay socket activo en memoria (ej: por reinicio del servidor),
+    // iniciamos la reconexión de manera asíncrona en segundo plano para restaurar el servicio.
+    if (
+      authAvailable &&
+      !this.sockets.has(workspaceId) &&
+      !this.booting.has(workspaceId) &&
+      ['CONNECTED', 'CONNECTING', 'PAIRING'].includes(session.status)
+    ) {
+      void this.connect(workspaceId, { mode: 'qr' }).catch(() => {})
+    }
+
     return {
       ...session,
       packageInstalled: this.isPackageInstalled(),
@@ -3273,6 +3284,7 @@ export class WhatsAppManager {
     })
   }
 
+  // Verifica si el directorio de autenticacion existe
   private async hasAuthState(workspaceId: string) {
     return existsSync(this.getAuthDir(workspaceId))
   }

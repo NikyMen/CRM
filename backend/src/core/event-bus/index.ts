@@ -187,8 +187,9 @@ export class EventBus {
       data: {
         lastTriggeredAt: new Date(),
         lastStatusCode: res.status,
-        // Si respondió OK, resetear el contador de fallos
+        // Si respondió OK, resetear el contador de fallos e incrementar éxitos
         failureCount: res.ok ? 0 : { increment: 1 },
+        successCount: res.ok ? { increment: 1 } : undefined,
       },
     })
 

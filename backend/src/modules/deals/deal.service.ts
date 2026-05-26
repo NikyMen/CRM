@@ -3,10 +3,12 @@ import { EventBus } from '../../core/event-bus'
 import { whatsAppManager } from '../whatsapp/whatsapp.manager'
 import {
   NotFoundError,
+  ValidationError,
   paginate,
   ActivityType,
   type PaginationQuery,
   type PaginatedResult,
+  customDataSchema,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
 
@@ -155,6 +157,14 @@ export class DealService {
     data: CreateDealDto,
     userId?: string
   ): Promise<Deal> {
+    // 0. Validar datos JSON
+    if (data.customData !== undefined) {
+      const result = customDataSchema.safeParse(data.customData)
+      if (!result.success) {
+        throw new ValidationError(`customData inválido: ${result.error.message}`)
+      }
+    }
+
     // Verificar que la stage pertenece al pipeline y al workspace
     const stage = await db.stage.findFirst({
       where: {
@@ -486,6 +496,15 @@ export class DealService {
     return updated
   }
 
+  // ─── Buscar por ID ───────────────────────────────────────────────
+  async findById(workspaceId: string, id: string): Promise<Deal> {
+    const deal = await db.deal.findFirst({
+      where: { id, workspaceId, isArchived: false },
+    })
+    if (!deal) throw new NotFoundError('Deal', id)
+    return deal
+  }
+
   // ─── Buscar con filtros ──────────────────────────────────────────
   async search(
     workspaceId: string,
@@ -522,6 +541,14 @@ export class DealService {
     userId?: string
   ): Promise<Deal> {
     await db.deal.findFirstOrThrow({ where: { id, workspaceId } })
+
+    // 0. Validar datos JSON
+    if (data.customData !== undefined) {
+      const result = customDataSchema.safeParse(data.customData)
+      if (!result.success) {
+        throw new ValidationError(`customData inválido: ${result.error.message}`)
+      }
+    }
 
     const deal = await db.deal.update({
       where: { id, workspaceId },

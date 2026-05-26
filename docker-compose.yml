@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: crm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+      POSTGRES_DB: crm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/DockerFile
+    container_name: crm_backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - backend/.env
+    environment:
+      - DATABASE_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
+      - DIRECT_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
+      - REDIS_URL=redis://redis:6379
+      - WHATSAPP_AUTH_DIR=.data/whatsapp-auth
+      - WHATSAPP_MEDIA_DIR=.data/whatsapp-media
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./.data/whatsapp-auth:/app/.data/whatsapp-auth
+      - ./.data/whatsapp-media:/app/.data/whatsapp-media
+
+volumes:
+  postgres_data:
+  redis_data:
