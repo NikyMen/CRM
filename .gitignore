@@ -29,6 +29,7 @@ npm-debug.log*
 pnpm-debug.log*
 
 #data
+.data/
 .data/whatsapp-auth/
 .data/whatsapp-media/
 
