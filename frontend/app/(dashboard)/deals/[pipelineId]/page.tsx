@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Send, Trash2, X, Building2, MapPin } from 'lucide-react'
 import clsx from 'clsx'
 
 function chatTitle(deal: KanbanCard) {
@@ -406,8 +406,25 @@ function PipelineSwitchModal({
                   onClick={() => onSelect(pipeline)}
                   className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-slate-50"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold text-slate-950">{pipeline.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-extrabold text-slate-950">{pipeline.name}</p>
+                      {pipeline.branch && (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5 whitespace-nowrap">
+                          <Building2 size={10} className="text-slate-400" /> {pipeline.branch.name}
+                        </span>
+                      )}
+                      {!pipeline.branch && pipeline.region && (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5 whitespace-nowrap">
+                          <MapPin size={10} className="text-slate-400" /> {pipeline.region.name}
+                        </span>
+                      )}
+                      {!pipeline.branch && !pipeline.region && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 whitespace-nowrap">
+                          General
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 text-xs font-semibold text-slate-500">{pipeline.stages.length} etapas</p>
                   </div>
                   {isCurrent ? (
@@ -432,20 +449,10 @@ export default function KanbanPage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const storedAuth = auth.get()
-  const canDeleteLead = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
+  const canDeleteLead = storedAuth?.role === 'owner' || storedAuth?.role === 'regional_manager' || storedAuth?.role === 'branch_manager'
   const [activeId, setActiveId] = useState<string | null>(null)
   const [openDeal, setOpenDeal] = useState<KanbanCard | null>(null)
   const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
-
-  useEffect(() => {
-    if (pathname.startsWith('/deals/')) {
-      router.replace(`/leads/${pipelineId}`)
-    }
-  }, [pathname, pipelineId, router])
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
-  )
 
   const { data: board, isLoading } = useQuery<KanbanBoard>({
     queryKey: ['kanban', pipelineId],
@@ -456,6 +463,24 @@ export default function KanbanPage() {
     queryKey: ['pipelines'],
     queryFn: () => pipelinesApi.list().then((response) => response.data),
   })
+
+  useEffect(() => {
+    if (pathname.startsWith('/deals/')) {
+      router.replace(`/leads/${pipelineId}`)
+      return
+    }
+
+    if (pipelines.length > 0) {
+      const hasAccess = pipelines.some((p) => p.id === pipelineId)
+      if (!hasAccess) {
+        router.replace(`/leads/${pipelines[0].id}`)
+      }
+    }
+  }, [pathname, pipelineId, pipelines, router])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  )
 
   const moveMutation = useMutation({
     mutationFn: ({ dealId, stageId, position }: { dealId: string; stageId: string; position: number }) =>

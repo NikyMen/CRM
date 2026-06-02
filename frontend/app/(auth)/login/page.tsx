@@ -32,6 +32,8 @@ export default function LoginPage() {
         email:         data.user.email,
         workspaceName: data.workspace.name,
         avatar:        data.user.avatar,
+        branchId:      data.branchId,
+        regionId:      data.regionId,
       })
 
       router.push('/contacts')

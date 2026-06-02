@@ -24,11 +24,11 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'] as Role[] },
-  { href: '/messenger-instagram', label: 'Messenger/Instagram', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] as Role[] },
+  { href: '/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[] },
+  { href: '/messenger-instagram', label: 'Messenger/Instagram', icon: MessagesSquare, roles: ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare },
-  { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'] as Role[] },
-  { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'admin'] as Role[] },
+  { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[] },
+  { href: '/pipelines', label: 'Pipelines', icon: Layers, roles: ['owner', 'regional_manager', 'branch_manager'] as Role[] },
   { href: '/contacts', label: 'Contactos', icon: Users },
   { href: '/settings', label: 'Configuracion', icon: Settings },
 ]
@@ -62,13 +62,17 @@ function WorkspaceHeader({
           </span>
           <span
             className={clsx(
-              'mt-2 w-fit',
+              'mt-2 w-fit border px-2 py-0.5 rounded-full text-xs font-semibold',
               user?.role === 'owner' ? 'badge-owner' :
-              user?.role === 'admin' ? 'badge-admin' :
-              user?.role === 'member' ? 'badge-member' : 'badge-viewer'
+              user?.role === 'regional_manager' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+              user?.role === 'branch_manager' ? 'bg-primary-50 text-primary-600 border-primary-200' :
+              'bg-emerald-50 text-emerald-600 border-emerald-200'
             )}
           >
-            {user?.role || 'Viewer'}
+            {user?.role === 'owner' ? 'Owner' :
+             user?.role === 'regional_manager' ? 'Reg. Manager' :
+             user?.role === 'branch_manager' ? 'Branch Manager' :
+             user?.role === 'vendor' ? 'Vendor' : 'Viewer'}
           </span>
         </div>
       </div>

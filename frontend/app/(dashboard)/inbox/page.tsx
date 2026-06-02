@@ -30,7 +30,7 @@ import { inboxApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import { canDo, type InboxConversation, type InboxMessage, type InboxMessageAttachment, type PaginatedResult, type Role } from '@/types'
 
-const ALLOWED_ROLES: Role[] = ['owner', 'admin', 'member']
+const ALLOWED_ROLES: Role[] = ['owner', 'regional_manager', 'branch_manager', 'vendor']
 const CONVERSATION_LIMIT = 100
 const MESSAGE_LIMIT = 100
 const CONVERSATIONS_REFRESH_MS = 12_000

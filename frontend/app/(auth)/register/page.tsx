@@ -34,12 +34,14 @@ export default function RegisterPage() {
         token:         data.accessToken,
         userId:        data.user.id,
         workspaceId:   data.workspace.id,
-        role:          'owner',
+        role:          data.role || 'owner',
         firstName:     data.user.firstName,
         lastName:      data.user.lastName,
         email:         data.user.email,
         workspaceName: data.workspace.name,
         avatar:        data.user.avatar,
+        branchId:      data.branchId,
+        regionId:      data.regionId,
       })
 
       router.push('/contacts')

@@ -26,7 +26,7 @@ import { canDo, type ChatwootChannel, type ChatwootConversation, type ChatwootMe
 type ChannelFilter = 'all' | ChatwootChannel
 type StatusFilter = 'open' | 'pending' | 'resolved' | 'all'
 
-const ALLOWED_ROLES: Role[] = ['owner', 'admin', 'member']
+const ALLOWED_ROLES: Role[] = ['owner', 'regional_manager', 'branch_manager', 'vendor']
 const REFRESH_MS = 10000
 
 function toErrorMessage(error: any) {

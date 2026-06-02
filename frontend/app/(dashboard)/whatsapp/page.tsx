@@ -416,8 +416,8 @@ export default function ChatsPage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const storedAuth = auth.get()
-  const canManage = storedAuth?.role !== 'viewer'
-  const canDeleteChat = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
+  const canManage = storedAuth?.role !== 'vendor'
+  const canDeleteChat = storedAuth?.role === 'owner' || storedAuth?.role === 'regional_manager' || storedAuth?.role === 'branch_manager'
   const [requestedJid, setRequestedJid] = useState<string | null>(null)
   const [chatSearch, setChatSearch] = useState('')
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
