@@ -32,6 +32,8 @@ import { inboxRoutes } from './modules/inbox/inbox.routes'
 import { whatsappRoutes } from './modules/whatsapp/whatsapp.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
+import { regionRoutes } from './modules/regions/regions.routes'
+import { branchRoutes } from './modules/branches/branches.routes'
 
 export async function buildApp() {
   initSentry()
@@ -165,6 +167,8 @@ export async function buildApp() {
   await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
   await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
+  await app.register(regionRoutes, { prefix: `${API}/regions` })
+  await app.register(branchRoutes, { prefix: `${API}/branches` })
 
   // Health check — para verificar que el servidor está vivo
   app.get('/health', async () => ({

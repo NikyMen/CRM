@@ -28,3 +28,4 @@ async function startServer() {
 }
 
 startServer()
+// Trigger watcher reload
