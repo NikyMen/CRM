@@ -170,5 +170,8 @@ export type ChannelSettings = z.infer<typeof channelSettingsSchema>
 export interface WorkspaceContext {
   workspaceId: string
   userId: string
-  role: 'owner' | 'admin' | 'member' | 'viewer'
+  role: 'owner' | 'regional_manager' | 'branch_manager' | 'vendor'
+  branchId?: string | null
+  regionId?: string | null
+  scopeFilter?: any
 }

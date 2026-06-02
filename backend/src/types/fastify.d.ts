@@ -14,6 +14,9 @@ declare module '@fastify/jwt' {
       userId: string 
       workspaceId: string
       role: string
+      branchId?: string | null
+      regionId?: string | null
+      scopeFilter?: any
     }
   }
 }

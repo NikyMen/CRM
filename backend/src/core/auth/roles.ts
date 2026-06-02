@@ -1,43 +1,43 @@
 // ─── Roles del sistema ────────────────────────────────────────────
 // Cada workspace tiene usuarios con estos roles.
-// La jerarquía es: owner > admin > member > viewer
+// La jerarquía es: owner > regional_manager > branch_manager > vendor
 
-export const ROLES = ['owner', 'admin', 'member', 'viewer'] as const
+export const ROLES = ['owner', 'regional_manager', 'branch_manager', 'vendor'] as const
 export type Role = typeof ROLES[number]
 
 // Roles que pueden invitar a otros usuarios al workspace
-export const CAN_INVITE: Role[] = ['owner', 'admin']
+export const CAN_INVITE: Role[] = ['owner', 'regional_manager']
 
-// Roles que un admin puede asignar (no puede crear otros owners)
-export const INVITABLE_ROLES: Role[] = ['admin', 'member', 'viewer']
+// Roles que se pueden asignar (no se puede crear otro owner desde la invitación)
+export const INVITABLE_ROLES: Role[] = ['regional_manager', 'branch_manager', 'vendor']
 
 // Tabla de permisos por acción
 export const PERMISSIONS = {
   // Contactos
-  'contacts:read':   ['owner', 'admin', 'member', 'viewer'] as Role[],
-  'contacts:write':  ['owner', 'admin', 'member']           as Role[],
-  'contacts:delete': ['owner', 'admin']                     as Role[],
+  'contacts:read':   ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[],
+  'contacts:write':  ['owner', 'regional_manager', 'branch_manager']           as Role[], // vendor es de lectura estricta
+  'contacts:delete': ['owner', 'regional_manager', 'branch_manager']           as Role[],
 
   // Deals
-  'deals:read':      ['owner', 'admin', 'member', 'viewer'] as Role[],
-  'deals:write':     ['owner', 'admin', 'member']           as Role[],
-  'deals:delete':    ['owner', 'admin']                     as Role[],
+  'deals:read':      ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[],
+  'deals:write':     ['owner', 'regional_manager', 'branch_manager']           as Role[], // vendor es de lectura estricta
+  'deals:delete':    ['owner', 'regional_manager', 'branch_manager']           as Role[],
 
   // Webhooks
-  'webhooks:read':   ['owner', 'admin']                     as Role[],
-  'webhooks:write':  ['owner', 'admin']                     as Role[],
+  'webhooks:read':   ['owner'] as Role[],
+  'webhooks:write':  ['owner'] as Role[],
 
   // Pipelines
-  'pipelines:read':  ['owner', 'admin', 'member', 'viewer'] as Role[],
-  'pipelines:write': ['owner', 'admin']                     as Role[],
+  'pipelines:read':  ['owner', 'regional_manager', 'branch_manager', 'vendor'] as Role[],
+  'pipelines:write': ['owner']                                                 as Role[],
 
   // Equipo
-  'team:read':       ['owner', 'admin']                     as Role[],
-  'team:invite':     ['owner', 'admin']                     as Role[],
-  'team:remove':     ['owner']                              as Role[],
+  'team:read':       ['owner', 'regional_manager', 'branch_manager'] as Role[],
+  'team:invite':     ['owner', 'regional_manager']                   as Role[],
+  'team:remove':     ['owner']                                       as Role[],
 
   // API Keys
-  'apikeys:manage':  ['owner', 'admin']                     as Role[],
+  'apikeys:manage':  ['owner'] as Role[],
 } as const
 
 export type Permission = keyof typeof PERMISSIONS

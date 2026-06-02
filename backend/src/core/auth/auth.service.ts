@@ -10,6 +10,7 @@ import {
 } from '../../types'
 import { Prisma } from '@prisma/client'
 import type { Role } from './roles'
+import { getScopeFilter } from '../scope'
 
 
 export class AuthService {
@@ -149,6 +150,8 @@ export class AuthService {
         slug: workspaceUser.workspace.slug,
       },
       role: workspaceUser.role,
+      branchId: workspaceUser.branchId,
+      regionId: workspaceUser.regionId,
     }
   }
 
@@ -262,13 +265,25 @@ export class AuthService {
   async listMembers(workspaceId: string) {
     const members = await db.workspaceUser.findMany({
       where:   { workspaceId },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, avatar: true, createdAt: true } } },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true, avatar: true, createdAt: true } },
+        branch: {
+          include: {
+            region: true
+          }
+        },
+        region: true,
+      },
       orderBy: { createdAt: 'asc' },
     })
     return members.map((m) => ({
       id:        m.id,
       role:      m.role,
       joinedAt:  m.createdAt,
+      branchId:  m.branchId,
+      regionId:  m.regionId,
+      branch:    m.branch,
+      region:    m.region,
       user:      m.user,
     }))
   }
@@ -329,14 +344,55 @@ export class AuthService {
         sub:         'api-key',
         userId:      'api-key',
         workspaceId: result.workspaceId,
-        role:        'api',
+        role:        'owner',
         type:        'api-key',
+        branchId:    null,
+        regionId:    null,
+        scopeFilter: {},
       }
       return
     }
 
     // 2. Si no hay API Key, intentar JWT
     await req.jwtVerify()
+
+    // Cargar WorkspaceUser con sucursal para validar rol, sucursales y bloqueo por inactividad
+    const workspaceUser = await db.workspaceUser.findFirst({
+      where: {
+        userId: req.user.userId,
+        workspaceId: req.user.workspaceId,
+      },
+      include: {
+        branch: {
+          select: { isActive: true }
+        }
+      }
+    })
+
+    if (!workspaceUser) {
+      throw new ForbiddenError('El usuario no pertenece a este workspace')
+    }
+
+    // Bloqueo de acceso si la sucursal está inactiva (solo para vendor y branch_manager)
+    if (
+      workspaceUser.branchId &&
+      workspaceUser.branch?.isActive === false &&
+      ['vendor', 'branch_manager'].includes(workspaceUser.role)
+    ) {
+      throw new ForbiddenError('Sucursal desactivada. Acceso restringido.')
+    }
+
+    const scopeFilter = getScopeFilter({
+      role: workspaceUser.role,
+      userId: req.user.userId,
+      branchId: workspaceUser.branchId,
+      regionId: workspaceUser.regionId,
+    })
+
+    req.user.role = workspaceUser.role
+    req.user.branchId = workspaceUser.branchId
+    req.user.regionId = workspaceUser.regionId
+    req.user.scopeFilter = scopeFilter
   }
 }
 // Re-exportacion para compatibilidad con los modulos de rutas que
