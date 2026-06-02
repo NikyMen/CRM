@@ -25,6 +25,8 @@ model Workspace {
   updatedAt DateTime @updatedAt
 
   users WorkspaceUser[]
+  regions Region[]
+  branches Branch[]
   contacts Contact[]
   pipelines Pipeline[]
   deals     Deal[]
@@ -75,11 +77,17 @@ model WorkspaceUser {
   id          String   @id @default(cuid())
   workspaceId String
   userId      String
-  role        String   @default("member")
+  role        String   @default("vendor")
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  branchId    String?
+  regionId    String?
+
+  branch      Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  region      Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, userId])
   @@map("workspace_users")
@@ -101,6 +109,7 @@ model Contact {
   company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ownerId     String?       
   owner       User?    @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  branchId    String?
   channels    Json      @default("[]")
   customData  Json      @default("{}")
   isArchived  Boolean   @default(false)
@@ -110,6 +119,7 @@ model Contact {
   lastContactedAt DateTime?  
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  branch    Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
   deals     DealContact[]
   activities    Activity[] 
   notes      Note[]
@@ -137,6 +147,12 @@ model Pipeline {
   stages    Stage[]
   deals     Deal[]
 
+  regionId  String?
+  branchId  String?
+
+  region    Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  branch    Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
   @@index([workspaceId])
   @@map("pipelines")
 }
@@ -154,6 +170,12 @@ model Stage {
 
   pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   deals    Deal[]
+
+  targetBranchId  String?
+  targetRegionId  String?
+
+  targetBranch    Branch?   @relation("StageTargetBranch", fields: [targetBranchId], references: [id], onDelete: SetNull)
+  targetRegion    Region?   @relation("StageTargetRegion", fields: [targetRegionId], references: [id], onDelete: SetNull)
 
   @@index([pipelineId, position])
   @@map("stages")
@@ -173,6 +195,7 @@ model Deal {
   company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ownerId     String?                        
   owner       User?    @relation("DealOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  branchId    String?
   status      String    @default("OPEN")
   expectedCloseDate DateTime?
   isArchived  Boolean  @default(false)
@@ -186,6 +209,7 @@ model Deal {
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pipeline  Pipeline      @relation(fields: [pipelineId], references: [id])
   stage     Stage         @relation(fields: [stageId], references: [id])
+  branch    Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
   contacts  DealContact[]
   activities  Activity[]   
   notes       Note[]
@@ -644,4 +668,44 @@ model Company {
 
   @@index([workspaceId])
   @@map("companies")
+}
+
+model Region {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  branches    Branch[]
+  users       WorkspaceUser[]
+  pipelines   Pipeline[]
+  targetStages Stage[]        @relation("StageTargetRegion")
+
+  @@index([workspaceId])
+  @@map("regions")
+}
+
+model Branch {
+  id          String          @id @default(cuid())
+  workspaceId String
+  regionId    String
+  name        String
+  address     String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  region      Region          @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  users       WorkspaceUser[]
+  deals       Deal[]
+  contacts    Contact[]
+  pipelines   Pipeline[]
+  targetStages Stage[]        @relation("StageTargetBranch")
+
+  @@index([workspaceId])
+  @@index([regionId])
+  @@map("branches")
 }
