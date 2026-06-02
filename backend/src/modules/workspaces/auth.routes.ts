@@ -5,6 +5,7 @@ import { AuthService } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { INVITABLE_ROLES } from '../../core/auth/roles'
 import { authenticate } from '../../core/auth/auth.service'
+import { NotFoundError, ForbiddenError } from '../../types'
 
 const authService = new AuthService()
 
@@ -53,6 +54,9 @@ export async function authRoutes(app: FastifyInstance) {
         name: workspace.name,
         slug: workspace.slug,
       },
+      role:        'owner',
+      branchId:    null,
+      regionId:    null,
       accessToken: token,
     })
   })
@@ -86,28 +90,29 @@ export async function authRoutes(app: FastifyInstance) {
       user:        result.user,
       workspace:   result.workspace,
       role:        result.role,
+      branchId:    result.branchId,
+      regionId:    result.regionId,
       accessToken: token,
     })
   })
 
   // ─── GET /auth/me ──────────────────────────────────────────────
   // Verificar token y obtener datos del usuario actual
-  app.get('/me', async (req, reply) => {
-    await req.jwtVerify()
-    const ctx = req.user as {
-      sub: string
-      workspaceId: string
-      role: string
-    }
+  app.get('/me', {
+    preHandler: [authenticate]
+  }, async (req, reply) => {
+    const ctx = req.user as any
     const user = await db.user.findUnique({
-      where: { id: ctx.sub },
+      where: { id: ctx.userId },
       select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
     })
 
     return reply.send({
-      userId:      ctx.sub,
+      userId:      ctx.userId,
       workspaceId: ctx.workspaceId,
       role:        ctx.role,
+      branchId:    ctx.branchId,
+      regionId:    ctx.regionId,
       user,
     })
   })
@@ -195,25 +200,24 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ─── POST /auth/invite ─────────────────────────────────────────
   // Invita a un usuario al workspace con un rol específico.
-  // Solo owner y admin pueden invitar.
+  // Solo owner y regional_manager pueden invitar.
   app.post('/invite', {
-    preHandler: [authenticate, requireRole('owner', 'admin')],
+    preHandler: [authenticate, requireRole('owner', 'regional_manager')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; role: string }
+    const ctx = req.user as any
 
     const schema = z.object({
       email:     z.string().email(),
       firstName: z.string().min(1),
       lastName:  z.string().optional(),
       password:  z.string().min(8),
-      // Admin solo puede invitar member/viewer, no otros admins
-      role: z.enum(['admin', 'member', 'viewer']).refine(
-        (r) => ctx.role === 'owner' || r !== 'admin',
-        { message: 'Solo el owner puede invitar admins' }
+      role: z.enum(['regional_manager', 'branch_manager', 'vendor']).refine(
+        (r) => ctx.role === 'owner' || r !== 'regional_manager',
+        { message: 'Solo el owner puede invitar regional managers' }
       ),
     })
 
-    const body = schema.parse(req.body) as Omit<Parameters<typeof authService.inviteUser>[0], 'workspaceId'>
+    const body = schema.parse(req.body) as any
     const result = await authService.inviteUser({
       workspaceId: ctx.workspaceId,
       ...body,
@@ -225,24 +229,96 @@ export async function authRoutes(app: FastifyInstance) {
   // ─── GET /auth/team ─────────────────────────────────────────────
   // Lista todos los miembros del workspace
   app.get('/team', {
-    preHandler: [authenticate, requireRole('owner', 'admin')],
+    preHandler: [authenticate, requireRole('owner', 'regional_manager', 'branch_manager', 'vendor')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as { workspaceId: string; role: string; branchId?: string | null; regionId?: string | null }
     const members = await authService.listMembers(ctx.workspaceId)
+
+    if (ctx.role === 'vendor') {
+      // Filtrar: compañeros de sucursal + gerente regional de su región
+      const filtered = members.filter((m) => {
+        const isTeammate = m.branchId && m.branchId === ctx.branchId
+        const isMyRegionalManager = m.role === 'regional_manager' && m.regionId && m.regionId === ctx.regionId
+        return isTeammate || isMyRegionalManager
+      })
+      return reply.send(filtered)
+    }
+
     return reply.send(members)
   })
 
-  // Cambia el rol de un miembro (no se puede cambiar el del owner)
+  // Cambia el rol y opcionalmente sucursal/región de un miembro
   app.patch('/team/:id/role', {
-    preHandler: [authenticate, requireRole('owner', 'admin')],
+    preHandler: [authenticate, requireRole('owner', 'branch_manager')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as any
     const { id } = req.params as { id: string }
-    const { role } = z.object({
-      role: z.enum(['admin', 'member', 'viewer']),
+    
+    // El body puede recibir role, branchId y regionId
+    const { role, branchId, regionId } = z.object({
+      role: z.enum(['regional_manager', 'branch_manager', 'vendor']).optional(),
+      branchId: z.string().nullable().optional(),
+      regionId: z.string().nullable().optional(),
     }).parse(req.body)
 
-    const updated = await authService.updateMemberRole(ctx.workspaceId, id, role)
+    const targetUser = await db.workspaceUser.findFirst({
+      where: { id, workspaceId: ctx.workspaceId },
+    })
+    if (!targetUser) throw new NotFoundError('WorkspaceMember', id)
+    if (targetUser.role === 'owner') {
+      throw new ForbiddenError('No se puede modificar la asignación del owner')
+    }
+
+    if (ctx.role === 'branch_manager') {
+      if (!ctx.branchId) {
+        throw new ForbiddenError('No tienes sucursal asignada')
+      }
+      if (branchId !== undefined && branchId !== ctx.branchId) {
+        throw new ForbiddenError('Solo puedes asignar usuarios a tu propia sucursal')
+      }
+      if (targetUser.branchId && targetUser.branchId !== ctx.branchId) {
+        throw new ForbiddenError('No puedes modificar usuarios de otras sucursales')
+      }
+      if (role && ['owner', 'regional_manager'].includes(role)) {
+        throw new ForbiddenError('No tienes permisos para asignar este rol')
+      }
+      if (regionId !== undefined) {
+        throw new ForbiddenError('Solo el owner puede asignar regiones directamente')
+      }
+    }
+
+    // Si se pasa regionId directamente, validar que exista
+    if (regionId) {
+      const regionExists = await db.region.findFirst({
+        where: { id: regionId, workspaceId: ctx.workspaceId },
+      })
+      if (!regionExists) throw new NotFoundError('Region', regionId)
+    }
+
+    // Resolve regionId automatically if branchId is supplied
+    let resolvedRegionId = regionId
+    if (branchId) {
+      const branch = await db.branch.findFirst({
+        where: { id: branchId, workspaceId: ctx.workspaceId },
+      })
+      if (!branch) throw new NotFoundError('Branch', branchId)
+      resolvedRegionId = branch.regionId
+    } else if (branchId === null) {
+      // Si se remueve la sucursal, también se remueve la región de manera implícita, a menos que se asigne otra
+      if (regionId === undefined) {
+        resolvedRegionId = null
+      }
+    }
+
+    const updated = await db.workspaceUser.update({
+      where: { id },
+      data: {
+        ...(role !== undefined && { role }),
+        ...(branchId !== undefined && { branchId }),
+        ...(resolvedRegionId !== undefined && { regionId: resolvedRegionId }),
+      },
+    })
+
     return reply.send(updated)
   })
 
