@@ -11,6 +11,8 @@ export interface StoredAuth {
   email: string
   workspaceName: string
   avatar?: string | null
+  branchId?: string | null
+  regionId?: string | null
 }
 
 export const auth = {

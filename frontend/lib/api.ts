@@ -4,7 +4,7 @@ import type {
   ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal, Webhook,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
-  StockMovement, StockMovementType, StockProduct, WhatsAppChat,
+  StockMovement, StockMovementType, StockProduct, WhatsAppChat, Role, Region, Branch
 } from '@/types'
 
 // Apunta al backend que ya tenemos corriendo
@@ -164,12 +164,12 @@ export const webhooksApi = {
 // Pipelines
 export const pipelinesApi = {
   list:        ()                                                            => api.get('/pipelines'),
-  create:      (data: Pick<Pipeline, 'name'>)                                => api.post('/pipelines', data),
-  update:      (id: string, data: Pick<Pipeline, 'name'>)                    => api.patch(`/pipelines/${id}`, data),
+  create:      (data: { name: string; regionId?: string | null; branchId?: string | null }) => api.post('/pipelines', data),
+  update:      (id: string, data: { name?: string; regionId?: string | null; branchId?: string | null }) => api.patch(`/pipelines/${id}`, data),
   delete:      (id: string)                                                  => api.delete(`/pipelines/${id}`),
-  createStage: (pipelineId: string, data: Pick<Stage, 'name' | 'color'>)    =>
+  createStage: (pipelineId: string, data: Pick<Stage, 'name' | 'color'> & { targetBranchId?: string | null; targetRegionId?: string | null }) =>
     api.post(`/pipelines/${pipelineId}/stages`, data),
-  updateStage: (pipelineId: string, stageId: string, data: Partial<Pick<Stage, 'name' | 'color'>>) =>
+  updateStage: (pipelineId: string, stageId: string, data: Partial<Pick<Stage, 'name' | 'color'>> & { targetBranchId?: string | null; targetRegionId?: string | null }) =>
     api.patch(`/pipelines/${pipelineId}/stages/${stageId}`, data),
   deleteStage: (pipelineId: string, stageId: string)                        =>
     api.delete(`/pipelines/${pipelineId}/stages/${stageId}`),
@@ -346,14 +346,38 @@ export const teamApi = {
   list: () =>
     api.get('/auth/team'),
 
-  invite: (data: { email: string; firstName: string; lastName?: string; password: string; role: 'admin' | 'member' | 'viewer' }) =>
+  invite: (data: { email: string; firstName: string; lastName?: string; password: string; role: Role; branchId?: string | null }) =>
     api.post('/auth/invite', data),
 
-  updateRole: (memberId: string, role: 'admin' | 'member' | 'viewer') =>
-    api.patch(`/auth/team/${memberId}/role`, { role }),
+  updateRole: (memberId: string, data: { role?: Role; branchId?: string | null; regionId?: string | null }) =>
+    api.patch(`/auth/team/${memberId}/role`, data),
 
   remove: (memberId: string) =>
     api.delete(`/auth/team/${memberId}`),
+}
+
+// Regiones
+export const regionsApi = {
+  list: () =>
+    api.get<Region[]>('/regions'),
+  create: (data: { name: string }) =>
+    api.post<Region>('/regions', data),
+  update: (id: string, data: { name: string }) =>
+    api.patch<Region>(`/regions/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/regions/${id}`),
+}
+
+// Sucursales
+export const branchesApi = {
+  list: (params?: { regionId?: string }) =>
+    api.get<Branch[]>('/branches', { params }),
+  create: (data: { regionId: string; name: string; address?: string | null }) =>
+    api.post<Branch>('/branches', data),
+  update: (id: string, data: { regionId?: string; name?: string; address?: string | null; isActive?: boolean }) =>
+    api.patch<Branch>(`/branches/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/branches/${id}`),
 }
 
 

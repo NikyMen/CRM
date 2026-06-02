@@ -1,5 +1,5 @@
 // Roles
-export type Role = 'owner' | 'admin' | 'member' | 'viewer'
+export type Role = 'owner' | 'regional_manager' | 'branch_manager' | 'vendor'
 
 /** Helper para verificar si un rol tiene acceso a una accion */
 export function canDo(userRole: Role | string | undefined, allowedRoles: Role[]): boolean {
@@ -14,6 +14,27 @@ export interface User {
   firstName: string
   lastName?: string | null
   avatar?: string | null
+}
+
+export interface Region {
+  id: string
+  workspaceId: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  branches?: Branch[]
+}
+
+export interface Branch {
+  id: string
+  workspaceId: string
+  regionId: string
+  name: string
+  address?: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  region?: Region
 }
 
 export interface Workspace {
@@ -98,6 +119,8 @@ export interface KanbanStage {
   isWon: boolean
   isLost: boolean
   rottenAfterDays?: number
+  targetBranchId?: string | null
+  targetRegionId?: string | null
 }
 
 export interface KanbanCard {
@@ -409,11 +432,15 @@ export interface WhatsAppMessagesPayload {
 
 // Pipelines
 export interface Stage {
-  id:         string
-  pipelineId: string
-  name:       string
-  color:      string
-  position:   number
+  id:              string
+  pipelineId:      string
+  name:            string
+  color:           string
+  position:        number
+  targetBranchId?: string | null
+  targetRegionId?: string | null
+  targetBranch?:   Branch | null
+  targetRegion?:   Region | null
 }
 
 export interface Pipeline {
@@ -422,6 +449,10 @@ export interface Pipeline {
   name:        string
   stages:      Stage[]
   createdAt:   string
+  regionId?:   string | null
+  branchId?:   string | null
+  region?:     Region
+  branch?:     Branch
 }
 export interface InboxConversationPreviewAttachment {
   type: string
