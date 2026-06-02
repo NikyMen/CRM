@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check, ImagePlus, Key, Loader2, Save, Settings, Shield, SlidersHorizontal,
-  Users, Webhook,
+  Users, Webhook, MapPin, Building2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { auth, type StoredAuth } from '@/lib/auth'
@@ -12,8 +12,10 @@ import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
 import TeamPage from '../team/page'
+import RegionsSettingsPanel from './RegionsSettingsPanel'
+import BranchesSettingsPanel from './BranchesSettingsPanel'
 
-type SettingsTab = 'profile' | 'webhooks' | 'api-keys' | 'team'
+type SettingsTab = 'profile' | 'webhooks' | 'api-keys' | 'team' | 'regions' | 'branches'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -23,11 +25,14 @@ const TAB_ITEMS: {
   label: string
   icon: typeof Settings
   adminOnly?: boolean
+  ownerOnly?: boolean
 }[] = [
   { id: 'profile', label: 'Avatar', icon: Settings },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
-  { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, ownerOnly: true },
+  { id: 'api-keys', label: 'API Keys', icon: Key, ownerOnly: true },
   { id: 'team', label: 'Equipo', icon: Users, adminOnly: true },
+  { id: 'regions', label: 'Regiones', icon: MapPin, ownerOnly: true },
+  { id: 'branches', label: 'Sucursales', icon: Building2, ownerOnly: true },
 ]
 
 type EditorState = {
@@ -372,26 +377,32 @@ export default function SettingsPage() {
     setUser(auth.get())
   }, [])
 
-  const canManageSettings = user?.role === 'owner' || user?.role === 'admin'
+  const isOwner = user?.role === 'owner'
+  const canManageSettings = isOwner || user?.role === 'regional_manager' || user?.role === 'branch_manager'
 
   useEffect(() => {
-    if (!canManageSettings && activeTab !== 'profile') {
-      setActiveTab('profile')
+    if (activeTab === 'regions' || activeTab === 'branches' || activeTab === 'webhooks' || activeTab === 'api-keys') {
+      if (!isOwner) setActiveTab('profile')
+    } else if (activeTab === 'team') {
+      if (!canManageSettings) setActiveTab('profile')
     }
-  }, [activeTab, canManageSettings])
+  }, [activeTab, isOwner, canManageSettings])
 
-  const visibleTabs = useMemo(
-    () => TAB_ITEMS.filter((item) => !item.adminOnly || canManageSettings),
-    [canManageSettings]
-  )
+  const visibleTabs = useMemo(() => {
+    return TAB_ITEMS.filter((item) => {
+      if (item.ownerOnly) return isOwner
+      if (item.adminOnly) return canManageSettings
+      return true
+    })
+  }, [isOwner, canManageSettings])
 
   return (
     <div className="min-h-full">
       <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[var(--background)]/90 px-4 py-3 backdrop-blur-xl md:top-0">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuracion</h1>
-            <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del workspace.</p>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-950">Configuración</h1>
+            <p className="text-sm font-medium text-slate-500">Perfil, sucursales y acceso de la sucursal.</p>
           </div>
 
           <div className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
@@ -421,14 +432,16 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
-      {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
-      {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
+      {isOwner && activeTab === 'webhooks' && <WebhooksPage />}
+      {isOwner && activeTab === 'api-keys' && <ApiKeysPage />}
       {canManageSettings && activeTab === 'team' && <TeamPage />}
-      {!canManageSettings && (
+      {isOwner && activeTab === 'regions' && <RegionsSettingsPanel />}
+      {isOwner && activeTab === 'branches' && <BranchesSettingsPanel />}
+      {!canManageSettings && activeTab !== 'profile' && (
         <div className="mx-auto mt-6 max-w-5xl px-6">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
             <Shield size={16} className="mr-2 inline" />
-            Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
+            La gestión del equipo e integraciones solo está disponible para administradores o gerentes.
           </div>
         </div>
       )}
