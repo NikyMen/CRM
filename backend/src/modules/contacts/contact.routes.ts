@@ -56,54 +56,50 @@ export async function contactRoutes(
   // ─── GET /contacts ─────────────────────────────────────────────
   // Todos los roles pueden leer contactos
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as any
     const filters = filtersSchema.parse(req.query)
-    const result = await service.search(ctx.workspaceId, filters)
+    const result = await service.search(ctx.workspaceId, filters, ctx.scopeFilter)
     return reply.send(result)
   })
 
   // ─── POST /contacts ────────────────────────────────────────────
-  // viewer no puede crear contactos
-  app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+  app.post('/', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
+    const ctx = req.user as any
     const body = createContactSchema.parse(req.body) as Parameters<typeof service.create>[1]
-    const contact = await service.create(ctx.workspaceId, body, ctx.userId)
+    const contact = await service.create(ctx.workspaceId, body, ctx)
     return reply.status(201).send(contact)
   })
 
   // ─── GET /contacts/:id ─────────────────────────────────────────
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
-    const contact = await service.findById(ctx.workspaceId, req.params.id)
+    const ctx = req.user as any
+    const contact = await service.findById(ctx.workspaceId, req.params.id, ctx)
     return reply.send(contact)
   })
 
   // ─── PATCH /contacts/:id ───────────────────────────────────────
-  // viewer no puede editar contactos
-  app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+  app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
+    const ctx = req.user as any
     const body = updateContactSchema.parse(req.body)
     const contact = await service.update(
       ctx.workspaceId,
       req.params.id,
       body,
-      ctx.userId
+      ctx
     )
     return reply.send(contact)
   })
 
   // ─── DELETE /contacts/:id ──────────────────────────────────────
-  // Solo owner y admin pueden borrar contactos
-  app.delete<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
-    await service.delete(ctx.workspaceId, req.params.id, ctx.userId)
+  app.delete<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
+    const ctx = req.user as any
+    await service.delete(ctx.workspaceId, req.params.id, ctx)
     return reply.status(204).send()
   })
 
   // ─── POST /contacts/:id/merge ──────────────────────────────────
-  // Solo owner y admin pueden mergear contactos
-  app.post<{ Params: { id: string } }>('/:id/merge', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+  app.post<{ Params: { id: string } }>('/:id/merge', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
+    const ctx = req.user as any
     const { loserId } = z.object({
       loserId: z.string()
     }).parse(req.body)
@@ -112,7 +108,7 @@ export async function contactRoutes(
       ctx.workspaceId,
       req.params.id,
       loserId,
-      ctx.userId
+      ctx
     )
     return reply.send(merged)
   })

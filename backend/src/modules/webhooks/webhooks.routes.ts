@@ -40,8 +40,8 @@ export async function webhookRoutes(app: FastifyInstance) {
     await authenticate(req)
   })
 
-  // Todos los endpoints de webhooks son solo para owner y admin
-  app.addHook('preHandler', requireRole('owner', 'admin'))
+  // Todos los endpoints de webhooks son solo para el owner
+  app.addHook('preHandler', requireRole('owner'))
 
   // ─── GET /webhooks/events ──────────────────────────────────────
   // Lista todos los eventos disponibles — útil para el frontend

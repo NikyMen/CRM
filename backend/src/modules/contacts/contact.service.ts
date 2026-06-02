@@ -5,6 +5,7 @@ import {
   NotFoundError,
   ConflictError,
   ValidationError,
+  ForbiddenError,
   paginate,
   ActivityType,
   type PaginationQuery,
@@ -14,6 +15,7 @@ import {
   type ContactChannel,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
+import { permissions } from '../../core/permissions'
 
 type Contact = Prisma.ContactGetPayload<object>
 
@@ -34,6 +36,7 @@ export interface CreateContactDto {
   tags?: string[]
   companyId?: string
   ownerId?: string
+  branchId?: string
   customData?: Record<string, unknown>
   channels?: ContactChannel[]
 }
@@ -62,8 +65,14 @@ export class ContactService {
   async create(
     workspaceId: string,
     data: CreateContactDto,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Contact> {
+    const creatorUserId = user?.userId ?? 'system'
+
+    if (user && !permissions.contact.canCreate(user)) {
+      throw new ForbiddenError('No tienes permiso para crear contactos')
+    }
+
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
       const result = customDataSchema.safeParse(data.customData)
@@ -106,6 +115,7 @@ export class ContactService {
         tags: data.tags ?? [],
         companyId: data.companyId,
         ownerId: data.ownerId,
+        branchId: data.branchId ?? user?.branchId ?? null,
         channels: data.channels ? (data.channels as Prisma.InputJsonValue) : [],
         customData: (data.customData ?? {}) as Prisma.InputJsonValue,
       },
@@ -126,37 +136,48 @@ export class ContactService {
       workspaceId,
       contact.id,
       ActivityType.CONTACT_CREATED,
-      userId
+      creatorUserId
     )
 
     // 5. Emitir evento — esto dispara los webhooks hacia n8n
     await this.eventBus.emit('contact.created', {
       workspaceId,
       contact: this.sanitize(contact),
-      createdBy: userId ?? 'system',
+      createdBy: creatorUserId,
     })
 
     return contact
   }
 
   // ─── Buscar por ID ───────────────────────────────────────────────
-  async findById(workspaceId: string, id: string): Promise<Contact> {
+  async findById(
+    workspaceId: string,
+    id: string,
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
+  ): Promise<Contact> {
     const contact = await db.contact.findFirst({
       where: { id, workspaceId, isArchived: false },
+      include: { branch: true },
     })
     if (!contact) throw new NotFoundError('Contact', id)
+
+    if (user && !permissions.contact.canRead(user, contact)) {
+      throw new ForbiddenError('No tienes permiso para ver este contacto')
+    }
+
     return contact
   }
 
   // ─── Buscar con filtros ──────────────────────────────────────────
   async search(
     workspaceId: string,
-    filters: ContactFilters
+    filters: ContactFilters,
+    scopeFilter: any = {}
   ): Promise<PaginatedResult<Contact>> {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
 
-    const where = this.buildWhereClause(workspaceId, filters)
+    const where = this.buildWhereClause(workspaceId, filters, scopeFilter)
 
     const [items, total] = await Promise.all([
       db.contact.findMany({
@@ -176,10 +197,16 @@ export class ContactService {
     workspaceId: string,
     id: string,
     data: UpdateContactDto,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Contact> {
-    // Verificar que existe
-    await this.findById(workspaceId, id)
+    // Verificar que existe y verificar permisos
+    const existing = await this.findById(workspaceId, id, user)
+
+    if (user && !permissions.contact.canUpdate(user, existing, data)) {
+      throw new ForbiddenError('No tienes permiso para actualizar este contacto')
+    }
+
+    const updaterUserId = user?.userId ?? 'system'
 
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
@@ -221,6 +248,7 @@ export class ContactService {
         ...(data.tags !== undefined && { tags: data.tags }),
         ...(data.companyId !== undefined && { companyId: data.companyId }),
         ...(data.ownerId !== undefined && { ownerId: data.ownerId }),
+        ...(data.branchId !== undefined && { branchId: data.branchId }),
         ...(data.channels !== undefined && {
           channels: data.channels as Prisma.InputJsonValue,
         }),
@@ -241,13 +269,13 @@ export class ContactService {
       workspaceId,
       id,
       ActivityType.CONTACT_UPDATED,
-      userId
+      updaterUserId
     )
 
     await this.eventBus.emit('contact.updated', {
       workspaceId,
       contact: this.sanitize(contact),
-      updatedBy: userId ?? 'system',
+      updatedBy: updaterUserId,
     })
 
     return contact
@@ -257,9 +285,15 @@ export class ContactService {
   async delete(
     workspaceId: string,
     id: string,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<void> {
-    await this.findById(workspaceId, id)
+    const existing = await this.findById(workspaceId, id, user)
+
+    if (user && !permissions.contact.canDelete(user, existing)) {
+      throw new ForbiddenError('No tienes permiso para eliminar este contacto')
+    }
+
+    const deleterUserId = user?.userId ?? 'system'
 
     // Soft delete — no borramos el registro, solo lo marcamos
     // como archivado. Los datos históricos se preservan.
@@ -271,7 +305,7 @@ export class ContactService {
     await this.eventBus.emit('contact.deleted', {
       workspaceId,
       contactId: id,
-      deletedBy: userId ?? 'system',
+      deletedBy: deleterUserId,
     })
   }
 
@@ -280,12 +314,21 @@ export class ContactService {
     workspaceId: string,
     winnerId: string,
     loserId: string,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Contact> {
     const [winner, loser] = await Promise.all([
-      this.findById(workspaceId, winnerId),
-      this.findById(workspaceId, loserId),
+      this.findById(workspaceId, winnerId, user),
+      this.findById(workspaceId, loserId, user),
     ])
+
+    // Verificar permisos sobre ambos contactos
+    if (user) {
+      if (!permissions.contact.canUpdate(user, winner) || !permissions.contact.canUpdate(user, loser)) {
+        throw new ForbiddenError('No tienes permiso para fusionar estos contactos')
+      }
+    }
+
+    const mergerUserId = user?.userId ?? 'system'
 
     await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reasignar deals y notas del perdedor al ganador
@@ -326,13 +369,13 @@ export class ContactService {
       })
     })
 
-    const merged = await this.findById(workspaceId, winnerId)
+    const merged = await this.findById(workspaceId, winnerId, user)
 
     await this.logActivity(
       workspaceId,
       winnerId,
       ActivityType.CONTACT_MERGED,
-      userId,
+      mergerUserId,
       { mergedFrom: loserId }
     )
 
@@ -340,7 +383,7 @@ export class ContactService {
       workspaceId,
       winnerId,
       loserId,
-      mergedBy: userId ?? 'system',
+      mergedBy: mergerUserId,
     })
 
     return merged
@@ -371,11 +414,13 @@ export class ContactService {
 
   private buildWhereClause(
     workspaceId: string,
-    f: ContactFilters
+    f: ContactFilters,
+    scopeFilter: any = {}
   ): Prisma.ContactWhereInput {
     const where: Prisma.ContactWhereInput = {
       workspaceId,
       isArchived: false,
+      ...scopeFilter,
     }
 
     if (f.search) {

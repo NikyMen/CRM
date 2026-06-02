@@ -4,6 +4,7 @@ import { whatsAppManager } from '../whatsapp/whatsapp.manager'
 import {
   NotFoundError,
   ValidationError,
+  ForbiddenError,
   paginate,
   ActivityType,
   type PaginationQuery,
@@ -11,6 +12,8 @@ import {
   customDataSchema,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
+import { permissions } from '../../core/permissions'
+import { getPipelineScopeFilter } from '../../core/scope'
 
 type Deal = Prisma.DealGetPayload<object>
 
@@ -73,6 +76,7 @@ export interface CreateDealDto {
   stageId: string
   companyId?: string
   ownerId?: string
+  branchId?: string
   contactIds?: string[]
   expectedCloseDate?: Date
   customData?: Record<string, unknown>
@@ -155,8 +159,14 @@ export class DealService {
   async create(
     workspaceId: string,
     data: CreateDealDto,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Deal> {
+    const creatorUserId = user?.userId ?? 'system'
+
+    if (user && !permissions.deal.canCreate(user)) {
+      throw new ForbiddenError('No tienes permiso para crear deals')
+    }
+
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
       const result = customDataSchema.safeParse(data.customData)
@@ -165,11 +175,24 @@ export class DealService {
       }
     }
 
+    const pipelineScopeFilter = user ? getPipelineScopeFilter({
+      role: user.role,
+      branchId: user.branchId,
+      regionId: user.regionId,
+    }) : {}
+
     // Verificar que la stage pertenece al pipeline y al workspace
     const stage = await db.stage.findFirst({
       where: {
         id: data.stageId,
-        pipeline: { id: data.pipelineId, workspaceId },
+        pipeline: {
+          id: data.pipelineId,
+          workspaceId,
+          ...pipelineScopeFilter,
+        },
+      },
+      include: {
+        pipeline: true,
       },
     })
     if (!stage) throw new NotFoundError('Stage', data.stageId)
@@ -180,6 +203,8 @@ export class DealService {
       orderBy: { position: 'desc' },
     })
     const position = (lastDeal?.position ?? -1) + 1
+
+    const finalBranchId = stage.pipeline.branchId ?? data.branchId ?? user?.branchId ?? null
 
     const deal = await db.$transaction(async (tx) => {
       const newDeal = await tx.deal.create({
@@ -194,6 +219,7 @@ export class DealService {
           position,
           companyId: data.companyId,
           ownerId: data.ownerId,
+          branchId: finalBranchId,
           expectedCloseDate: data.expectedCloseDate,
           customData: (data.customData ?? {}) as Prisma.InputJsonValue,
         },
@@ -213,12 +239,12 @@ export class DealService {
       return newDeal
     })
 
-    await this.logActivity(workspaceId, deal.id, ActivityType.DEAL_CREATED, userId)
+    await this.logActivity(workspaceId, deal.id, ActivityType.DEAL_CREATED, creatorUserId)
 
     await this.eventBus.emit('deal.created', {
       workspaceId,
       deal: this.sanitize(deal),
-      createdBy: userId ?? 'system',
+      createdBy: creatorUserId,
     })
 
     return deal
@@ -227,9 +253,18 @@ export class DealService {
   // ─── Obtener Kanban completo ─────────────────────────────────────
   // Este es el endpoint principal del frontend
   // Devuelve todas las columnas con sus deals ordenados
-  async getKanban(workspaceId: string, pipelineId: string): Promise<KanbanBoard> {
+  async getKanban(
+    workspaceId: string,
+    pipelineId: string,
+    scopeFilter: any = {},
+    pipelineScopeFilter: any = {}
+  ): Promise<KanbanBoard> {
     const pipeline = await db.pipeline.findFirst({
-      where: { id: pipelineId, workspaceId },
+      where: {
+        id: pipelineId,
+        workspaceId,
+        ...pipelineScopeFilter,
+      },
       include: {
         stages: { orderBy: { position: 'asc' } },
       },
@@ -240,9 +275,55 @@ export class DealService {
     await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId, { force: true })
     await this.ensurePipelineDealsHaveLeadNumbers(workspaceId, pipelineId)
 
-    // Traer todos los deals abiertos del pipeline de una sola consulta
+    // Si el usuario es regional_manager y el pipeline es regional, relajamos el filtro
+    let finalScopeFilter = { ...scopeFilter }
+    if (pipeline.regionId && !pipeline.branchId) {
+      if (scopeFilter.branch && scopeFilter.branch.regionId) {
+        finalScopeFilter = {
+          OR: [
+            scopeFilter,
+            { pipelineId: pipeline.id }
+          ]
+        }
+      }
+    }
+
+    // Construir el filtro para traer todos los deals relevantes (etapas del pipeline + etapas vinculadas a sucursales/regiones)
+    const orFilters: Prisma.DealWhereInput[] = []
+
+    for (const stage of pipeline.stages) {
+      if (stage.targetBranchId) {
+        orFilters.push({
+          branchId: stage.targetBranchId,
+          status: 'OPEN',
+          isArchived: false,
+        })
+      } else if (stage.targetRegionId) {
+        orFilters.push({
+          OR: [
+            { pipeline: { regionId: stage.targetRegionId } },
+            { branch: { regionId: stage.targetRegionId } }
+          ],
+          status: 'OPEN',
+          isArchived: false,
+        })
+      } else {
+        orFilters.push({
+          pipelineId: pipeline.id,
+          stageId: stage.id,
+          status: 'OPEN',
+          isArchived: false,
+        })
+      }
+    }
+
+    // Traer todos los deals abiertos relevantes de una sola consulta
     const deals = await db.deal.findMany({
-      where: { workspaceId, pipelineId, status: 'OPEN', isArchived: false},
+      where: {
+        workspaceId,
+        ...finalScopeFilter,
+        OR: orFilters.length > 0 ? orFilters : [{ id: 'none' }]
+      },
       select: {
         id: true,
         title: true,
@@ -256,6 +337,18 @@ export class DealService {
         expectedCloseDate: true,
         stageEnteredAt: true,
         stageId: true,
+        branchId: true,
+        pipelineId: true,
+        pipeline: {
+          select: {
+            regionId: true,
+          }
+        },
+        branch: {
+          select: {
+            regionId: true,
+          }
+        },
         customData: true,
         createdAt: true,
         updatedAt: true,
@@ -290,9 +383,16 @@ export class DealService {
 
     const now = new Date()
 
-    // Agrupar deals por stage
+    // Agrupar deals por stage (o por sucursal/región si está vinculada)
     const columns: KanbanColumn[] = await Promise.all(pipeline.stages.map(async (stage) => {
-      const stageDeals = deals.filter((d) => d.stageId === stage.id)
+      let stageDeals: any[] = []
+      if (stage.targetBranchId) {
+        stageDeals = deals.filter((d) => d.branchId === stage.targetBranchId)
+      } else if (stage.targetRegionId) {
+        stageDeals = deals.filter((d) => d.pipeline?.regionId === stage.targetRegionId || d.branch?.regionId === stage.targetRegionId)
+      } else {
+        stageDeals = deals.filter((d) => d.pipelineId === pipeline.id && d.stageId === stage.id)
+      }
 
       const cards = await Promise.all(stageDeals.map(async (d) => {
         const linkedChatJid = this.readWhatsAppChatJid(d.customData)
@@ -382,30 +482,124 @@ export class DealService {
     workspaceId: string,
     dealId: string,
     dto: MoveDealDto,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Deal> {
-    const deal = await db.deal.findFirst({ where: { id: dealId, workspaceId } })
+    const deal = await db.deal.findFirst({
+      where: { id: dealId, workspaceId },
+      include: { branch: true },
+    })
     if (!deal) throw new NotFoundError('Deal', dealId)
 
+    if (user && !permissions.deal.canUpdate(user, deal)) {
+      throw new ForbiddenError('No tienes permiso para mover este deal')
+    }
+
+    const creatorUserId = user?.userId ?? 'system'
     const prevStageId = deal.stageId
     const newStageId = dto.stageId
     const stageChanged = prevStageId !== newStageId
 
-    // Verificar que la nueva stage existe en el workspace
+    const pipelineScopeFilter = user ? getPipelineScopeFilter({
+      role: user.role,
+      branchId: user.branchId,
+      regionId: user.regionId,
+    }) : {}
+
+    // Verificar que la nueva stage existe en el workspace y en el scope del usuario
     const newStage = await db.stage.findFirst({
-      where: { id: newStageId, pipeline: { workspaceId } },
+      where: {
+        id: newStageId,
+        pipeline: {
+          workspaceId,
+          ...pipelineScopeFilter,
+        },
+      },
     })
     if (!newStage) throw new NotFoundError('Stage', newStageId)
 
     await db.$transaction(async (tx) => {
       const targetPosition = dto.position ?? 9999
 
+      let targetBranchId = newStage.targetBranchId
+      let targetRegionId = newStage.targetRegionId
+      let finalStageId = newStageId
+      let finalPipelineId = deal.pipelineId
+
+      if (targetBranchId) {
+        // Encontrar o crear pipeline para la sucursal
+        let branchPipeline = await tx.pipeline.findFirst({
+          where: { branchId: targetBranchId, workspaceId },
+          include: { stages: { orderBy: { position: 'asc' } } }
+        })
+
+        if (!branchPipeline) {
+          const branchObj = await tx.branch.findUniqueOrThrow({
+            where: { id: targetBranchId }
+          })
+          branchPipeline = await tx.pipeline.create({
+            data: {
+              workspaceId,
+              name: `Embudo ${branchObj.name}`,
+              branchId: targetBranchId,
+              regionId: branchObj.regionId,
+              stages: {
+                create: [
+                  { name: 'Contacto', position: 0, color: '#3b82f6' },
+                  { name: 'Propuesta', position: 1, color: '#a855f7' },
+                  { name: 'Cierre', position: 2, color: '#22c55e' }
+                ]
+              }
+            },
+            include: { stages: { orderBy: { position: 'asc' } } }
+          })
+        }
+
+        finalPipelineId = branchPipeline.id
+        finalStageId = branchPipeline.stages[0].id
+        targetRegionId = branchPipeline.regionId
+      } else if (targetRegionId) {
+        // Encontrar o crear pipeline para la región
+        let regionPipeline = await tx.pipeline.findFirst({
+          where: { regionId: targetRegionId, branchId: null, workspaceId },
+          include: { stages: { orderBy: { position: 'asc' } } }
+        })
+
+        if (!regionPipeline) {
+          const regionObj = await tx.region.findUniqueOrThrow({
+            where: { id: targetRegionId }
+          })
+          regionPipeline = await tx.pipeline.create({
+            data: {
+              workspaceId,
+              name: `Embudo Región ${regionObj.name}`,
+              regionId: targetRegionId,
+              stages: {
+                create: [
+                  { name: 'Contacto', position: 0, color: '#3b82f6' },
+                  { name: 'Propuesta', position: 1, color: '#a855f7' },
+                  { name: 'Cierre', position: 2, color: '#22c55e' }
+                ]
+              }
+            },
+            include: { stages: { orderBy: { position: 'asc' } } }
+          })
+        }
+
+        finalPipelineId = regionPipeline.id
+        finalStageId = regionPipeline.stages[0].id
+        targetBranchId = null
+      } else {
+        // Si se mueve a una etapa general/normal en el pipeline actual,
+        // removemos la asignación de sucursal/región del deal.
+        targetBranchId = null
+        targetRegionId = null
+      }
+
       // Hacer hueco en la columna destino
-      // Si insertamos en posición 2, los deals con position >= 2 suben uno
       await tx.deal.updateMany({
         where: {
           workspaceId,
-          stageId: newStageId,
+          stageId: finalStageId,
           position: { gte: targetPosition },
           id: { not: dealId },
         },
@@ -422,7 +616,9 @@ export class DealService {
       await tx.deal.update({
         where: { id: dealId, workspaceId },
         data: {
-          stageId: newStageId,
+          stageId: finalStageId,
+          pipelineId: finalPipelineId,
+          branchId: targetBranchId,
           position: targetPosition,
           probability: newStage.probability ?? deal.probability,
           status: newStatus,
@@ -433,26 +629,24 @@ export class DealService {
         },
       })
 
-      // Compactar posiciones para que siempre sean 0, 1, 2, 3…
-      // Se compacta SIEMPRE (no solo al cambiar columna) para evitar que
-      // los movimientos dentro de la misma columna acumulen huecos y
-      // duplicados que desincronicen el orden del Kanban.
-      if (stageChanged) {
-        // Si cambió de columna: compactar la columna ORIGEN (quedó con un hueco)
+      const actualStageChanged = prevStageId !== finalStageId
+
+      if (actualStageChanged) {
+        // Si cambió de columna: compactar la columna ORIGEN
         const remainingInOrigin = await tx.deal.findMany({
           where: { workspaceId, stageId: prevStageId },
           orderBy: { position: 'asc' },
         })
         await Promise.all(
           remainingInOrigin.map((d, i) =>
-            tx.deal.update({ where: { id: d.id, workspaceId}, data: { position: i } })
+            tx.deal.update({ where: { id: d.id, workspaceId }, data: { position: i } })
           )
         )
       }
 
-      // Compactar siempre la columna DESTINO (misma o distinta)
+      // Compactar siempre la columna DESTINO
       const remainingInDest = await tx.deal.findMany({
-        where: { workspaceId, stageId: newStageId },
+        where: { workspaceId, stageId: finalStageId },
         orderBy: { position: 'asc' },
       })
       await Promise.all(
@@ -467,7 +661,7 @@ export class DealService {
     // Emitir eventos específicos según lo que pasó
     if (stageChanged) {
       await this.logActivity(
-        workspaceId, dealId, ActivityType.DEAL_STAGE_CHANGED, userId,
+        workspaceId, dealId, ActivityType.DEAL_STAGE_CHANGED, creatorUserId,
         { fromStageId: prevStageId, toStageId: newStageId }
       )
       await this.eventBus.emit('deal.stage_changed', {
@@ -475,18 +669,18 @@ export class DealService {
         deal: this.sanitize(updated),
         previousStageId: prevStageId,
         newStageId,
-        movedBy: userId ?? 'system',
+        movedBy: creatorUserId,
       })
     }
 
     if (newStage.isWon) {
-      await this.logActivity(workspaceId, dealId, ActivityType.DEAL_WON, userId)
+      await this.logActivity(workspaceId, dealId, ActivityType.DEAL_WON, creatorUserId)
       await this.eventBus.emit('deal.won', {
         workspaceId,
         deal: this.sanitize(updated),
       })
     } else if (newStage.isLost) {
-      await this.logActivity(workspaceId, dealId, ActivityType.DEAL_LOST, userId)
+      await this.logActivity(workspaceId, dealId, ActivityType.DEAL_LOST, creatorUserId)
       await this.eventBus.emit('deal.lost', {
         workspaceId,
         deal: this.sanitize(updated),
@@ -497,23 +691,38 @@ export class DealService {
   }
 
   // ─── Buscar por ID ───────────────────────────────────────────────
-  async findById(workspaceId: string, id: string): Promise<Deal> {
+  async findById(
+    workspaceId: string,
+    id: string,
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
+  ): Promise<Deal> {
     const deal = await db.deal.findFirst({
       where: { id, workspaceId, isArchived: false },
+      include: { branch: true },
     })
     if (!deal) throw new NotFoundError('Deal', id)
+
+    if (user && !permissions.deal.canRead(user, deal)) {
+      throw new ForbiddenError('No tienes permiso para ver este deal')
+    }
+
     return deal
   }
 
   // ─── Buscar con filtros ──────────────────────────────────────────
   async search(
     workspaceId: string,
-    filters: DealFilters
+    filters: DealFilters,
+    scopeFilter: any = {}
   ): Promise<PaginatedResult<Deal>> {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
 
-    const where: Prisma.DealWhereInput = { workspaceId, isArchived: false}
+    const where: Prisma.DealWhereInput = {
+      workspaceId,
+      isArchived: false,
+      ...scopeFilter,
+    }
     if (filters.pipelineId) where.pipelineId = filters.pipelineId
     if (filters.stageId)    where.stageId    = filters.stageId
     if (filters.status)     where.status     = filters.status
@@ -538,9 +747,34 @@ export class DealService {
     workspaceId: string,
     id: string,
     data: UpdateDealDto,
-    userId?: string
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
   ): Promise<Deal> {
-    await db.deal.findFirstOrThrow({ where: { id, workspaceId } })
+    const existing = await db.deal.findFirst({
+      where: { id, workspaceId },
+      include: { branch: true },
+    })
+    if (!existing) throw new NotFoundError('Deal', id)
+
+    if (user && !permissions.deal.canUpdate(user, existing, data)) {
+      throw new ForbiddenError('No tienes permiso para actualizar este deal')
+    }
+
+    // Si se está modificando la sucursal, validar acceso
+    if (data.branchId !== undefined && user) {
+      if (user.role === 'branch_manager' && data.branchId !== user.branchId) {
+        throw new ForbiddenError('No puedes cambiar la sucursal a otra diferente de la tuya')
+      }
+      if (user.role === 'regional_manager' && data.branchId) {
+        const branch = await db.branch.findFirst({
+          where: { id: data.branchId, regionId: user.regionId, workspaceId },
+        })
+        if (!branch) {
+          throw new ForbiddenError('No puedes asignar el deal a una sucursal fuera de tu región')
+        }
+      }
+    }
+
+    const updaterUserId = user?.userId ?? 'system'
 
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
@@ -559,6 +793,7 @@ export class DealService {
         ...(data.probability !== undefined && { probability: data.probability }),
         ...(data.companyId !== undefined && { companyId: data.companyId }),
         ...(data.ownerId !== undefined && { ownerId: data.ownerId }),
+        ...(data.branchId !== undefined && { branchId: data.branchId }),
         ...(data.expectedCloseDate !== undefined && {
           expectedCloseDate: data.expectedCloseDate,
         }),
@@ -568,7 +803,7 @@ export class DealService {
       },
     })
 
-    await this.logActivity(workspaceId, id, ActivityType.DEAL_UPDATED, userId)
+    await this.logActivity(workspaceId, id, ActivityType.DEAL_UPDATED, updaterUserId)
     await this.eventBus.emit('deal.updated', {
       workspaceId,
       deal: this.sanitize(deal),
@@ -578,8 +813,22 @@ export class DealService {
   }
 
   // ─── Eliminar ────────────────────────────────────────────────────
-  async delete(workspaceId: string, id: string, userId?: string): Promise<void> {
-    await db.deal.findFirstOrThrow({ where: { id, workspaceId } })
+  async delete(
+    workspaceId: string,
+    id: string,
+    user?: { userId: string; role: string; branchId?: string | null; regionId?: string | null }
+  ): Promise<void> {
+    const existing = await db.deal.findFirst({
+      where: { id, workspaceId },
+      include: { branch: true },
+    })
+    if (!existing) throw new NotFoundError('Deal', id)
+
+    if (user && !permissions.deal.canDelete(user, existing)) {
+      throw new ForbiddenError('No tienes permiso para eliminar este deal')
+    }
+
+    const deleterUserId = user?.userId ?? 'system'
 
     // Soft delete — igual que contacts, preserva el historial
     await db.deal.update({
@@ -590,7 +839,7 @@ export class DealService {
     await this.eventBus.emit('deal.deleted', {
       workspaceId,
       dealId: id,
-      deletedBy: userId ?? 'system',
+      deletedBy: deleterUserId,
     })
   }
 

@@ -97,7 +97,7 @@ export async function stockRoutes(app: FastifyInstance) {
     return reply.send(await service.listCategories(ctx.workspaceId))
   })
 
-  app.post('/categories', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/categories', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const body = createCategorySchema.parse(req.body) as { name: string; description?: string }
     const category = await service.createCategory(ctx.workspaceId, body)
@@ -110,28 +110,28 @@ export async function stockRoutes(app: FastifyInstance) {
     return reply.send(await service.listProducts(ctx.workspaceId, filters))
   })
 
-  app.post('/products', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/products', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string }
     const body = createProductSchema.parse(req.body) as CreateProductDto
     const product = await service.createProduct(ctx.workspaceId, body, ctx.userId)
     return reply.status(201).send(product)
   })
 
-  app.patch('/products/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.patch('/products/:id', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const { id } = req.params as { id: string }
     const body = updateProductSchema.parse(req.body)
     return reply.send(await service.updateProduct(ctx.workspaceId, id, body))
   })
 
-  app.delete('/products/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+  app.delete('/products/:id', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const { id } = req.params as { id: string }
     await service.archiveProduct(ctx.workspaceId, id)
     return reply.status(204).send()
   })
 
-  app.post('/products/:id/quick-sale', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/products/:id/quick-sale', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string }
     const { id } = req.params as { id: string }
     const body = quickSaleSchema.parse(req.body) as { quantity: number; paymentMethod?: string; reference?: string; note?: string }
@@ -144,7 +144,7 @@ export async function stockRoutes(app: FastifyInstance) {
     return reply.send(await service.listMovements(ctx.workspaceId, filters))
   })
 
-  app.post('/movements', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/movements', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string }
     const body = createMovementSchema.parse(req.body) as CreateMovementDto
     const movement = await service.createMovement(ctx.workspaceId, body, ctx.userId)
@@ -157,14 +157,14 @@ export async function stockRoutes(app: FastifyInstance) {
     return reply.send(await service.listCashTransactions(ctx.workspaceId, filters))
   })
 
-  app.post('/cash', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/cash', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const body = createCashTransactionSchema.parse(req.body) as CreateCashTransactionDto
     const transaction = await service.createCashTransaction(ctx.workspaceId, body)
     return reply.status(201).send(transaction)
   })
 
-  app.delete('/cash/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+  app.delete('/cash/:id', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const { id } = req.params as { id: string }
     await service.deleteCashTransaction(ctx.workspaceId, id)

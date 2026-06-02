@@ -148,7 +148,7 @@ export async function inboxRoutes(
     })
 
     privateApp.get('/connections', {
-      preHandler: requireRole('owner', 'admin'),
+      preHandler: requireRole('owner', 'regional_manager'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const connections = await service.listConnections(ctx.workspaceId)
@@ -156,7 +156,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post('/connections', {
-      preHandler: requireRole('owner', 'admin'),
+      preHandler: requireRole('owner', 'regional_manager'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const body = createConnectionSchema.parse(req.body) as Parameters<typeof service.createConnection>[1]
@@ -165,7 +165,7 @@ export async function inboxRoutes(
     })
 
     privateApp.patch<{ Params: { id: string } }>('/connections/:id', {
-      preHandler: requireRole('owner', 'admin'),
+      preHandler: requireRole('owner', 'regional_manager'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const body = updateConnectionSchema.parse(req.body)
@@ -174,7 +174,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post<{ Params: { id: string } }>('/connections/:id/test', {
-      preHandler: requireRole('owner', 'admin'),
+      preHandler: requireRole('owner', 'regional_manager'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const result = await service.testConnection(ctx.workspaceId, req.params.id)
@@ -182,7 +182,7 @@ export async function inboxRoutes(
     })
 
     privateApp.delete<{ Params: { id: string } }>('/connections/:id', {
-      preHandler: requireRole('owner', 'admin'),
+      preHandler: requireRole('owner', 'regional_manager'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       await service.deleteConnection(ctx.workspaceId, req.params.id)
@@ -190,7 +190,7 @@ export async function inboxRoutes(
     })
 
     privateApp.get('/conversations', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const filters = z.object({
@@ -205,7 +205,7 @@ export async function inboxRoutes(
     })
 
     privateApp.get<{ Params: { id: string } }>('/conversations/:id/messages', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const filters = z.object({
@@ -218,7 +218,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post<{ Params: { id: string } }>('/conversations/:id/read', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       await service.markConversationAsRead(ctx.workspaceId, req.params.id)
@@ -226,7 +226,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post<{ Params: { id: string } }>('/conversations/:id/messages', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const body = sendConversationMessageSchema.parse(req.body) as Parameters<typeof service.sendConversationMessage>[2]

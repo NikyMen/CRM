@@ -109,7 +109,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     return reply.send(await whatsAppManager.getSessionSnapshot(ctx.workspaceId))
   })
 
-  app.post('/connect', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/connect', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const body = connectSchema.parse(req.body)
     return reply.send(await whatsAppManager.connect(ctx.workspaceId, {
@@ -117,7 +117,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     }))
   })
 
-  app.post('/disconnect', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/disconnect', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     await whatsAppManager.disconnect(ctx.workspaceId)
     return reply.status(204).send()
@@ -136,14 +136,14 @@ export async function whatsappRoutes(app: FastifyInstance) {
     return reply.send(await whatsAppManager.listMessages(ctx.workspaceId, jid, query.limit))
   })
 
-  app.patch<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.patch<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const jid = decodeURIComponent(req.params.jid)
     const body = updateChatSchema.parse(req.body) as { displayName: string }
     return reply.send(await whatsAppManager.updateChat(ctx.workspaceId, jid, body))
   })
 
-  app.delete<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+  app.delete<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const jid = decodeURIComponent(req.params.jid)
     await whatsAppManager.deleteChat(ctx.workspaceId, jid)
@@ -158,7 +158,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     return reply.type(media.mimeType).send(media.buffer)
   })
 
-  app.post<{ Params: { jid: string } }>('/chats/:jid/history', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post<{ Params: { jid: string } }>('/chats/:jid/history', { preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const query = historyQuerySchema.parse(req.query)
     const jid = decodeURIComponent(req.params.jid)
@@ -166,7 +166,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
   })
 
   app.post<{ Params: { jid: string } }>('/chats/:jid/messages', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
     bodyLimit: Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.5),
   }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }

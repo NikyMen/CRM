@@ -15,21 +15,21 @@ export async function chatwootRoutes(app: FastifyInstance) {
   })
 
   app.get('/status', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
   }, async (_req, reply) => {
     const status = await service.getStatus()
     return reply.send(status)
   })
 
   app.get('/inboxes', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
   }, async (_req, reply) => {
     const inboxes = await service.listInboxes()
     return reply.send(inboxes)
   })
 
   app.get('/conversations', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
   }, async (req, reply) => {
     const filters = z.object({
       channel: channelSchema,
@@ -44,7 +44,7 @@ export async function chatwootRoutes(app: FastifyInstance) {
   })
 
   app.get<{ Params: { id: string } }>('/conversations/:id/messages', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
   }, async (req, reply) => {
     const conversationId = z.coerce.number().int().positive().parse(req.params.id)
     const filters = z.object({
@@ -57,7 +57,7 @@ export async function chatwootRoutes(app: FastifyInstance) {
   })
 
   app.post<{ Params: { id: string } }>('/conversations/:id/messages', {
-    preHandler: requireRole('owner', 'admin', 'member'),
+    preHandler: requireRole('owner', 'regional_manager', 'branch_manager', 'vendor'),
   }, async (req, reply) => {
     const conversationId = z.coerce.number().int().positive().parse(req.params.id)
     const body = z.object({
