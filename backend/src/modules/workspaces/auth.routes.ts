@@ -10,6 +10,37 @@ const authService = new AuthService()
 
 export async function authRoutes(app: FastifyInstance) {
 
+  app.get('/workspace-settings', { preHandler: authenticate }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string }
+    const workspace = await db.workspace.findUnique({
+      where: { id: ctx.workspaceId },
+      select: { settings: true },
+    })
+    const settings = workspace?.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
+      ? workspace.settings as Record<string, unknown>
+      : {}
+    return reply.send({ stockVisible: settings.stockVisible !== false })
+  })
+
+  app.patch('/workspace-settings', {
+    preHandler: [authenticate, requireRole('owner', 'admin')],
+  }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string }
+    const body = z.object({ stockVisible: z.boolean() }).parse(req.body)
+    const workspace = await db.workspace.findUnique({
+      where: { id: ctx.workspaceId },
+      select: { settings: true },
+    })
+    const current = workspace?.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
+      ? workspace.settings as Record<string, unknown>
+      : {}
+    await db.workspace.update({
+      where: { id: ctx.workspaceId },
+      data: { settings: { ...current, stockVisible: body.stockVisible } },
+    })
+    return reply.send(body)
+  })
+
   // ─── POST /auth/register ───────────────────────────────────────
   // Crea usuario + workspace + pipeline por defecto
   app.post('/register', {

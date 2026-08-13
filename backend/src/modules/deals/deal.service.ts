@@ -11,6 +11,7 @@ import {
   customDataSchema,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
+import { createWithUniqueLeadNumber } from './lead-number'
 
 type Deal = Prisma.DealGetPayload<object>
 
@@ -42,24 +43,6 @@ function splitContactName(value?: string | null) {
     firstName: parts[0] ?? 'Chat WhatsApp',
     lastName: parts.length > 1 ? parts.slice(1).join(' ') : null,
   }
-}
-
-function padLeadPart(value: number | string, size: number) {
-  return String(value).padStart(size, '0')
-}
-
-function buildLeadNumberBase(phoneNumber: string | null, createdAt: Date) {
-  const fallback = String(createdAt.getTime()).slice(-6)
-  const lastDigits = (phoneNumber ?? fallback).slice(-6).padStart(6, '0')
-  return [
-    padLeadPart(createdAt.getFullYear() % 100, 2),
-    padLeadPart(createdAt.getMonth() + 1, 2),
-    padLeadPart(createdAt.getDate(), 2),
-    padLeadPart(createdAt.getHours(), 2),
-    padLeadPart(createdAt.getMinutes(), 2),
-    padLeadPart(createdAt.getSeconds(), 2),
-    lastDigits,
-  ].join('')
 }
 
 // ─── DTOs ─────────────────────────────────────────────────────────
@@ -135,6 +118,15 @@ export interface KanbanCard {
     jid: string
     displayName: string | null
     phoneNumber: string | null
+    lidJid: string | null
+    assignedToUserId: string | null
+    assignee: {
+      id: string
+      firstName: string
+      lastName: string | null
+      email: string
+      avatar: string | null
+    } | null
     profileImageUrl: string | null
     unreadCount: number
     lastMessageAt: Date | null
@@ -180,11 +172,11 @@ export class DealService {
       orderBy: { position: 'desc' },
     })
     const position = (lastDeal?.position ?? -1) + 1
-
-    const deal = await db.$transaction(async (tx) => {
+    const deal = await createWithUniqueLeadNumber(workspaceId, (leadNumber) => db.$transaction(async (tx) => {
       const newDeal = await tx.deal.create({
         data: {
           workspaceId,
+          leadNumber,
           title: data.title,
           value: data.value,
           currency: data.currency ?? 'USD',
@@ -211,7 +203,7 @@ export class DealService {
       }
 
       return newDeal
-    })
+    }))
 
     await this.logActivity(workspaceId, deal.id, ActivityType.DEAL_CREATED, userId)
 
@@ -227,7 +219,11 @@ export class DealService {
   // ─── Obtener Kanban completo ─────────────────────────────────────
   // Este es el endpoint principal del frontend
   // Devuelve todas las columnas con sus deals ordenados
-  async getKanban(workspaceId: string, pipelineId: string): Promise<KanbanBoard> {
+  async getKanban(
+    workspaceId: string,
+    pipelineId: string,
+    actor: { userId: string; role: string }
+  ): Promise<KanbanBoard> {
     const pipeline = await db.pipeline.findFirst({
       where: { id: pipelineId, workspaceId },
       include: {
@@ -238,13 +234,30 @@ export class DealService {
     await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId)
     await this.ensureWhatsappChatsHaveLeads(workspaceId, pipeline)
     await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId, { force: true })
-    await this.ensurePipelineDealsHaveLeadNumbers(workspaceId, pipelineId)
+    const assignmentScope = actor.role === 'owner'
+      ? undefined
+      : { OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }] }
 
     // Traer todos los deals abiertos del pipeline de una sola consulta
     const deals = await db.deal.findMany({
-      where: { workspaceId, pipelineId, status: 'OPEN', isArchived: false},
+      where: {
+        workspaceId,
+        pipelineId,
+        status: 'OPEN',
+        isArchived: false,
+        ...(assignmentScope ? {
+          contacts: {
+            some: {
+              contact: {
+                whatsappChats: { some: { workspaceId, ...assignmentScope } },
+              },
+            },
+          },
+        } : {}),
+      },
       select: {
         id: true,
+        leadNumber: true,
         title: true,
         value: true,
         currency: true,
@@ -267,13 +280,18 @@ export class DealService {
                 firstName: true,
                 lastName: true,
                 whatsappChats: {
-                  where: { workspaceId },
+                  where: { workspaceId, ...(assignmentScope ?? {}) },
                   orderBy: { lastMessageAt: 'desc' },
                   select: {
                     id: true,
                     jid: true,
+                    lidJid: true,
                     displayName: true,
                     phoneNumber: true,
+                    assignedToUserId: true,
+                    assignedTo: {
+                      select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+                    },
                     unreadCount: true,
                     lastMessageAt: true,
                     lastMessagePreview: true,
@@ -320,7 +338,7 @@ export class DealService {
 
         return {
           id: d.id,
-          leadNumber: this.readLeadNumber(d.customData) ?? d.id.slice(-8),
+          leadNumber: d.leadNumber,
           title: d.title,
           value: d.value ? Number(d.value) : null,
           currency: d.currency,
@@ -336,8 +354,11 @@ export class DealService {
           chat: {
             id: chat.id,
             jid: chat.jid,
+            lidJid: chat.lidJid,
             displayName: chat.displayName,
             phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(chat.jid),
+            assignedToUserId: chat.assignedToUserId,
+            assignee: chat.assignedTo,
             profileImageUrl: await whatsAppManager.getChatProfileImageUrl(workspaceId, chat.jid),
             unreadCount: chat.unreadCount,
             lastMessageAt: chat.lastMessageAt,
@@ -382,9 +403,24 @@ export class DealService {
     workspaceId: string,
     dealId: string,
     dto: MoveDealDto,
-    userId?: string
+    userId?: string,
+    role = 'viewer'
   ): Promise<Deal> {
-    const deal = await db.deal.findFirst({ where: { id: dealId, workspaceId } })
+    const deal = await db.deal.findFirst({
+      where: {
+        id: dealId,
+        workspaceId,
+        ...(role === 'owner' ? {} : {
+          contacts: {
+            some: {
+              contact: {
+                whatsappChats: { some: { OR: [{ assignedToUserId: null }, { assignedToUserId: userId }] } },
+              },
+            },
+          },
+        }),
+      },
+    })
     if (!deal) throw new NotFoundError('Deal', dealId)
 
     const prevStageId = deal.stageId
@@ -749,11 +785,11 @@ export class DealService {
       })
 
       const title = normalizeLabel(chat.displayName) ?? phoneNumber ?? chat.jid
-      const leadNumber = await this.generateUniqueLeadNumber(workspaceId, phoneNumber, chat.lastMessageAt ?? new Date())
-      await db.$transaction(async (tx) => {
+      await createWithUniqueLeadNumber(workspaceId, (leadNumber) => db.$transaction(async (tx) => {
         const lead = await tx.deal.create({
           data: {
             workspaceId,
+            leadNumber,
             title,
             pipelineId: pipeline.id,
             stageId: targetStage.id,
@@ -775,7 +811,7 @@ export class DealService {
             contactId,
           },
         })
-      })
+      }))
     }
   }
 
@@ -796,84 +832,16 @@ export class DealService {
     }) ?? null
   }
 
-  private readLeadNumber(customData: Prisma.JsonValue | null | undefined) {
-    if (!customData || typeof customData !== 'object' || Array.isArray(customData)) return null
-    const value = (customData as Record<string, unknown>).leadNumber
-    return typeof value === 'string' && value.trim() ? value.trim() : null
-  }
-
   private readWhatsAppChatJid(customData: Prisma.JsonValue | null | undefined) {
     if (!customData || typeof customData !== 'object' || Array.isArray(customData)) return null
     const value = (customData as Record<string, unknown>).whatsAppChatJid
     return typeof value === 'string' && value.trim() ? value.trim() : null
   }
 
-  private async ensurePipelineDealsHaveLeadNumbers(workspaceId: string, pipelineId: string) {
-    const deals = await db.deal.findMany({
-      where: {
-        workspaceId,
-        pipelineId,
-        isArchived: false,
-      },
-      select: {
-        id: true,
-        customData: true,
-        createdAt: true,
-        contacts: {
-          select: {
-            contact: {
-              select: { phone: true },
-            },
-          },
-          take: 1,
-        },
-      },
-    })
-
-    for (const deal of deals) {
-      if (this.readLeadNumber(deal.customData)) continue
-
-      const phoneNumber = normalizePhoneNumber(deal.contacts[0]?.contact.phone)
-      const leadNumber = await this.generateUniqueLeadNumber(workspaceId, phoneNumber, deal.createdAt)
-      const currentData =
-        deal.customData && typeof deal.customData === 'object' && !Array.isArray(deal.customData)
-          ? deal.customData as Record<string, unknown>
-          : {}
-
-      await db.deal.update({
-        where: { id: deal.id, workspaceId },
-        data: {
-          customData: {
-            ...currentData,
-            leadNumber,
-          } as Prisma.InputJsonValue,
-        },
-      })
-    }
-  }
-
-  private async generateUniqueLeadNumber(workspaceId: string, phoneNumber: string | null, createdAt: Date) {
-    const base = buildLeadNumberBase(phoneNumber, createdAt)
-
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const candidate = attempt === 0 ? base : `${base}${attempt}`
-      const existing = await db.$queryRaw<Array<{ id: string }>>`
-        SELECT id
-        FROM deals
-        WHERE "workspaceId" = ${workspaceId}
-          AND "customData"->>'leadNumber' = ${candidate}
-        LIMIT 1
-      `
-
-      if (existing.length === 0) return candidate
-    }
-
-    return `${base}${Date.now().toString().slice(-5)}`
-  }
-
   private sanitize(deal: Deal) {
     return {
       id: deal.id,
+      leadNumber: deal.leadNumber,
       workspaceId: deal.workspaceId,
       title: deal.title,
       value: deal.value,

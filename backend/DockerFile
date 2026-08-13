@@ -4,16 +4,20 @@ RUN apk add --no-cache openssl git
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
-COPY backend/package.json backend/pnpm-lock.yaml ./
-COPY backend/prisma ./prisma/
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY backend/package.json ./backend/package.json
+COPY frontend/package.json ./frontend/package.json
+COPY backend/prisma ./backend/prisma/
 
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter crm...
 
-COPY backend/ .
+COPY backend/ ./backend/
 
-RUN pnpm exec tsc --outDir dist
+RUN pnpm --filter crm build
+
+WORKDIR /app/backend
 
 EXPOSE 3000
 

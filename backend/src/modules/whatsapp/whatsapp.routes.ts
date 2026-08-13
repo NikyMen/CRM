@@ -5,6 +5,7 @@ import { requireRole } from '../../core/auth/require-role'
 import { config } from '../../core/config'
 import { ValidationError } from '../../types'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
+import { whatsAppRealtime } from './whatsapp.events'
 
 const connectSchema = z.object({
   mode: z.literal('qr').optional().default('qr'),
@@ -43,6 +44,14 @@ const sendMessageSchema = z.object({
 
 const updateChatSchema = z.object({
   displayName: z.string().trim().min(1).max(120),
+})
+
+const updateAssigneeSchema = z.object({
+  assignedToUserId: z.string().nullable(),
+})
+
+const updateIdentitySchema = z.object({
+  phoneNumber: z.string().trim().min(8).max(24),
 })
 
 const maintenanceQuerySchema = z.object({
@@ -104,12 +113,12 @@ export async function whatsappRoutes(app: FastifyInstance) {
     await authenticate(req)
   })
 
-  app.get('/session', async (req, reply) => {
+  app.get('/session', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     return reply.send(await whatsAppManager.getSessionSnapshot(ctx.workspaceId))
   })
 
-  app.post('/connect', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.post('/connect', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     const body = connectSchema.parse(req.body)
     return reply.send(await whatsAppManager.connect(ctx.workspaceId, {
@@ -117,34 +126,74 @@ export async function whatsappRoutes(app: FastifyInstance) {
     }))
   })
 
-  app.post('/disconnect', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.get('/events', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
+    reply.hijack()
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(': connected\n\n')
+
+    const unsubscribe = whatsAppRealtime.subscribe(ctx.workspaceId, (event) => {
+      if (!reply.raw.destroyed) {
+        reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      }
+    })
+    const heartbeat = setInterval(() => {
+      if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n')
+    }, 20_000)
+    req.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+    return reply
+  })
+
+  app.post('/disconnect', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     await whatsAppManager.disconnect(ctx.workspaceId)
     return reply.status(204).send()
   })
 
-  app.get('/chats', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+  app.get('/chats', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const query = chatQuerySchema.parse(req.query)
-    return reply.send(await whatsAppManager.listChats(ctx.workspaceId, query.search))
+    return reply.send(await whatsAppManager.listChats(ctx.workspaceId, ctx, query.search))
   })
 
-  app.get<{ Params: { jid: string } }>('/chats/:jid/messages', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+  app.get<{ Params: { jid: string } }>('/chats/:jid/messages', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const query = messagesQuerySchema.parse(req.query)
     const jid = decodeURIComponent(req.params.jid)
-    return reply.send(await whatsAppManager.listMessages(ctx.workspaceId, jid, query.limit))
+    return reply.send(await whatsAppManager.listMessages(ctx.workspaceId, jid, ctx, query.limit))
   })
 
   app.patch<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const jid = decodeURIComponent(req.params.jid)
     const body = updateChatSchema.parse(req.body) as { displayName: string }
-    return reply.send(await whatsAppManager.updateChat(ctx.workspaceId, jid, body))
+    return reply.send(await whatsAppManager.updateChat(ctx.workspaceId, jid, ctx, body))
   })
 
-  app.delete<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+  app.patch<{ Params: { jid: string } }>('/chats/:jid/assignee', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
+    const jid = decodeURIComponent(req.params.jid)
+    const body = updateAssigneeSchema.parse(req.body)
+    return reply.send(await whatsAppManager.updateAssignee(ctx.workspaceId, jid, ctx, body.assignedToUserId))
+  })
+
+  app.patch<{ Params: { jid: string } }>('/chats/:jid/identity', { preHandler: requireRole('owner') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
+    const jid = decodeURIComponent(req.params.jid)
+    const body = updateIdentitySchema.parse(req.body)
+    return reply.send(await whatsAppManager.updateIdentity(ctx.workspaceId, jid, body.phoneNumber))
+  })
+
+  app.delete<{ Params: { jid: string } }>('/chats/:jid', { preHandler: requireRole('owner') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const jid = decodeURIComponent(req.params.jid)
     await whatsAppManager.deleteChat(ctx.workspaceId, jid)
     return reply.status(204).send()
@@ -169,10 +218,10 @@ export async function whatsappRoutes(app: FastifyInstance) {
     preHandler: requireRole('owner', 'admin', 'member'),
     bodyLimit: Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.5),
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const jid = decodeURIComponent(req.params.jid)
     const body = sendMessageSchema.parse(req.body)
-    return reply.status(201).send(await whatsAppManager.sendChatMessage(ctx.workspaceId, jid, {
+    return reply.status(201).send(await whatsAppManager.sendChatMessage(ctx.workspaceId, jid, ctx, {
       text: body.text,
       file: body.file ? decodeOutboundFile(body.file) : undefined,
     }))

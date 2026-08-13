@@ -72,6 +72,7 @@ export interface ContactFilters {
 // Deals y Kanban
 export interface Deal {
   id: string
+  leadNumber: string
   workspaceId: string
   title: string
   value?: number
@@ -120,6 +121,15 @@ export interface KanbanCard {
     jid: string
     displayName?: string | null
     phoneNumber?: string | null
+    lidJid?: string | null
+    assignedToUserId?: string | null
+    assignee?: {
+      id: string
+      firstName: string
+      lastName?: string | null
+      email: string
+      avatar?: string | null
+    } | null
     profileImageUrl?: string | null
     unreadCount: number
     lastMessageAt?: string | null
@@ -359,6 +369,17 @@ export interface WhatsAppChat {
   jid: string
   displayName?: string | null
   phoneNumber?: string | null
+  lidJid?: string | null
+  phoneNumberSource?: string | null
+  assignedToUserId?: string | null
+  assignee?: {
+    id: string
+    firstName: string
+    lastName?: string | null
+    email: string
+    avatar?: string | null
+  } | null
+  leadNumber?: string | null
   profileImageUrl?: string | null
   isGroup: boolean
   unreadCount: number
@@ -420,6 +441,7 @@ export interface Pipeline {
   id:          string
   workspaceId: string
   name:        string
+  isDefault?:  boolean
   stages:      Stage[]
   createdAt:   string
 }

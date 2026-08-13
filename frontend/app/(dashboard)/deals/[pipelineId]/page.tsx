@@ -24,8 +24,10 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Send, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
 import clsx from 'clsx'
+import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
+import PipelinesPage from '../../pipelines/page'
 
 function chatTitle(deal: KanbanCard) {
   const chat = deal.chat
@@ -176,8 +178,10 @@ function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCar
         </button>
         <Avatar deal={deal} />
         <div className="min-w-0">
-          <p className="truncate text-sm font-extrabold leading-5 text-slate-950">{chatTitle(deal)}</p>
+          <p className="truncate text-sm font-extrabold leading-5 text-slate-950">#{deal.leadNumber} · {chatTitle(deal)}</p>
           <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{chatPhone(deal)}</p>
+          <p className="mt-1 truncate text-[10px] font-bold text-slate-400">@ {chat?.lidJid || (chat?.jid.endsWith('@lid') ? chat.jid : 'LID pendiente')}</p>
+          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-primary-700">{chat?.assignee ? `${chat.assignee.firstName} ${chat.assignee.lastName ?? ''}` : 'Sin asignar'}</p>
         </div>
       </div>
 
@@ -241,32 +245,25 @@ function KanbanColumnComponent({ column, onOpenDeal }: { column: KanbanColumn; o
 function LeadChatModal({
   deal,
   onClose,
-  onDeleteLead,
-  canDeleteLead,
-  isDeletingLead,
 }: {
   deal: KanbanCard | null
   onClose: () => void
-  onDeleteLead: (deal: KanbanCard) => void
-  canDeleteLead: boolean
-  isDeletingLead: boolean
 }) {
   const [text, setText] = useState('')
   const queryClient = useQueryClient()
   const jid = deal?.chat?.jid ?? null
 
   const messagesQuery = useQuery<WhatsAppMessagesPayload>({
-    queryKey: ['lead-chat-messages', jid],
+    queryKey: ['whatsapp-messages', jid],
     queryFn: () => whatsappApi.listMessages(jid!, { limit: 80 }).then((response) => response.data),
     enabled: Boolean(jid),
-    refetchInterval: jid ? 5000 : false,
   })
 
   const sendMutation = useMutation({
     mutationFn: () => whatsappApi.sendMessage(jid!, { text: text.trim() }),
     onSuccess: () => {
       setText('')
-      queryClient.invalidateQueries({ queryKey: ['lead-chat-messages', jid] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', jid] })
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
     },
   })
@@ -285,24 +282,15 @@ function LeadChatModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canDeleteLead ? (
-              <button
-                type="button"
-                onClick={() => onDeleteLead(deal)}
-                disabled={isDeletingLead}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-rose-200 px-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isDeletingLead ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Eliminar lead
-              </button>
-            ) : null}
             <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
               <X size={18} />
             </button>
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50 px-5 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50 p-4 lg:flex-row">
+          {messagesQuery.data?.chat ? <ChatIdentityPanel chat={messagesQuery.data.chat} /> : null}
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1">
           {!jid ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
               Este lead no tiene chat de WhatsApp vinculado.
@@ -326,6 +314,7 @@ function LeadChatModal({
               </div>
             ))
           )}
+          </div>
         </div>
 
         <footer className="flex shrink-0 items-end gap-3 border-t border-slate-200 bg-white p-4">
@@ -432,10 +421,11 @@ export default function KanbanPage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const storedAuth = auth.get()
-  const canDeleteLead = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
+  const canEditBoard = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
   const [activeId, setActiveId] = useState<string | null>(null)
   const [openDeal, setOpenDeal] = useState<KanbanCard | null>(null)
   const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
+  const [editingBoard, setEditingBoard] = useState(false)
 
   useEffect(() => {
     if (pathname.startsWith('/deals/')) {
@@ -468,32 +458,10 @@ export default function KanbanPage() {
     },
   })
 
-  const deleteLeadMutation = useMutation({
-    mutationFn: (dealId: string) => dealsApi.delete(dealId),
-    onSuccess: () => {
-      setOpenDeal(null)
-      queryClient.invalidateQueries({ queryKey: ['kanban', pipelineId] })
-      toast({ type: 'success', title: 'Lead eliminado' })
-    },
-    onError: (error: any) => {
-      toast({
-        type: 'error',
-        title: 'No se pudo eliminar el lead',
-        description: error?.response?.data?.message ?? error?.message ?? 'Error inesperado.',
-      })
-    },
-  })
-
   const activeDeal = board?.columns.flatMap((column) => column.deals).find((deal) => deal.id === activeId)
 
   function handleOpenDeal(deal: KanbanCard) {
     startTransition(() => setOpenDeal(deal))
-  }
-
-  function handleDeleteLead(deal: KanbanCard) {
-    if (!canDeleteLead) return
-    if (!window.confirm(`Vas a eliminar el lead "${chatTitle(deal)}". Esta accion lo saca del tablero.`)) return
-    deleteLeadMutation.mutate(deal.id)
   }
 
   function handleSelectPipeline(pipeline: Pipeline) {
@@ -579,10 +547,11 @@ export default function KanbanPage() {
               ) : null}
             </p>
           </div>
+          {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary shrink-0"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
         </div>
       </header>
 
-      <div className="flex-1 overflow-x-auto p-4">
+      {editingBoard ? <div className="flex-1 overflow-y-auto"><PipelinesPage /></div> : <div className="flex-1 overflow-x-auto p-4">
         <DndContext
           sensors={sensors}
           collisionDetection={pointerFirstCollisionDetection}
@@ -615,14 +584,11 @@ export default function KanbanPage() {
             ) : null}
           </DragOverlay>
         </DndContext>
-      </div>
+      </div>}
 
       <LeadChatModal
         deal={openDeal}
         onClose={() => setOpenDeal(null)}
-        onDeleteLead={handleDeleteLead}
-        canDeleteLead={Boolean(canDeleteLead)}
-        isDeletingLead={deleteLeadMutation.isPending}
       />
       <PipelineSwitchModal
         open={isPipelineSwitcherOpen}

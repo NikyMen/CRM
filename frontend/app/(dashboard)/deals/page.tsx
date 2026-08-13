@@ -21,12 +21,13 @@ export default function DealsPage() {
       return
     }
 
-    if (pipelines?.length === 1) {
-      router.push(`/leads/${pipelines[0].id}`)
+    const defaultPipeline = pipelines?.find((pipeline: { isDefault?: boolean }) => pipeline.isDefault)
+    if (defaultPipeline || pipelines?.length === 1) {
+      router.push(`/leads/${defaultPipeline?.id ?? pipelines![0].id}`)
     }
   }, [pathname, pipelines, router])
 
-  if (isLoading || pipelines?.length === 1) {
+  if (isLoading || pipelines?.length === 1 || pipelines?.some((pipeline: { isDefault?: boolean }) => pipeline.isDefault)) {
     return (
       <div className="flex h-[70vh] items-center justify-center">
         <Loader2 className="animate-spin text-primary-500" size={40} />

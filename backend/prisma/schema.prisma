@@ -67,6 +67,7 @@ model User {
   activities     Activity[]
   notes          Note[]
   stockMovements StockMovement[]
+  assignedWhatsAppChats WhatsAppChat[] @relation("WhatsAppChatAssignee")
 
   @@map("users")
 }
@@ -162,6 +163,7 @@ model Stage {
 model Deal {
   id          String   @id @default(cuid())
   workspaceId String
+  leadNumber String   @db.VarChar(8)
   title       String
   value       Decimal?  @db.Decimal(15, 2)  
   currency    String    @default("USD")
@@ -191,6 +193,7 @@ model Deal {
   notes       Note[]
 
   @@index([workspaceId])
+  @@unique([workspaceId, leadNumber])
   @@index([workspaceId, stageId])
   @@index([workspaceId, status])
   @@map("deals")
@@ -284,8 +287,10 @@ model WhatsAppChat {
   workspaceId        String
   sessionId          String
   jid                String
+  lidJid             String?
   displayName        String?
   phoneNumber        String?
+  phoneNumberSource  String?
   isGroup            Boolean  @default(false)
   unreadCount        Int      @default(0)
   archived           Boolean  @default(false)
@@ -295,17 +300,20 @@ model WhatsAppChat {
   lastMessagePreview String?
   lastMessageFromMe  Boolean?
   contactId          String?
+  assignedToUserId   String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session   WhatsAppSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   contact   Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedTo User?           @relation("WhatsAppChatAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   messages  WhatsAppMessage[]
 
   @@unique([workspaceId, jid])
   @@index([workspaceId, lastMessageAt])
   @@index([workspaceId, contactId])
+  @@index([workspaceId, assignedToUserId])
   @@map("whatsapp_chats")
 }
 

@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio --schema=prisma/schema.prisma",
-    "backup": "tsx scripts/backup.ts"
+    "backup": "tsx scripts/backup.ts",
+    "test": "tsx --test src/modules/deals/lead-number.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -32,7 +33,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "5.22.0",
     "@sentry/node": "^10.45.0",
-    "baileys": "^6.0.8",
+    "baileys": "7.0.0-rc14",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.69.3",
     "dotenv": "^17.3.1",

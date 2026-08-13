@@ -55,11 +55,13 @@ export async function dealRoutes(
   // El endpoint más importante — devuelve el tablero completo
   app.get<{ Params: { pipelineId: string } }>(
     '/kanban/:pipelineId',
+    { preHandler: requireRole('owner', 'admin', 'member') },
     async (req, reply) => {
-      const ctx = req.user as { workspaceId: string }
+      const ctx = req.user as { workspaceId: string; userId: string; role: string }
       const board = await service.getKanban(
         ctx.workspaceId,
-        req.params.pipelineId
+        req.params.pipelineId,
+        ctx
       )
       return reply.send(board)
     }
@@ -92,14 +94,15 @@ export async function dealRoutes(
 
   // ─── PATCH /deals/:id/move ─────────────────────────────────────
   // Drag & drop — mover una tarjeta entre columnas
-  app.patch<{ Params: { id: string } }>('/:id/move', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+  app.patch<{ Params: { id: string } }>('/:id/move', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const body = moveDealSchema.parse(req.body) as Parameters<typeof service.move>[2]
     const deal = await service.move(
       ctx.workspaceId,
       req.params.id,
       body,
-      ctx.userId
+      ctx.userId,
+      ctx.role
     )
     return reply.send(deal)
   })

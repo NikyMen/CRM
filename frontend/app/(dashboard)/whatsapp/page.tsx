@@ -13,6 +13,7 @@ import type {
 } from '@/types'
 import { useToast } from '@/components/ui/toast'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
+import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import {
   AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp,
   Loader2, RefreshCcw,
@@ -100,10 +101,10 @@ function chatPrimaryName(chat?: WhatsAppChat | null) {
 }
 
 function chatPhoneLine(chat?: WhatsAppChat | null) {
-  if (!chat) return null
+  if (!chat) return 'Teléfono pendiente'
   if (chat.phoneNumber) return formatPhoneNumber(chat.phoneNumber)
   const match = chat.jid.match(/^(\d+)(?=@s\.whatsapp\.net$)/)
-  return formatPhoneNumber(match?.[1])
+  return formatPhoneNumber(match?.[1]) || 'Teléfono pendiente'
 }
 
 function messageSenderName(message: WhatsAppMessage, chat?: WhatsAppChat | null) {
@@ -417,6 +418,7 @@ export default function ChatsPage() {
   const { toast } = useToast()
   const storedAuth = auth.get()
   const canManage = storedAuth?.role !== 'viewer'
+  const canManageSession = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
   const canDeleteChat = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
   const [requestedJid, setRequestedJid] = useState<string | null>(null)
   const [chatSearch, setChatSearch] = useState('')
@@ -440,11 +442,6 @@ export default function ChatsPage() {
     queryKey: ['whatsapp-session'],
     queryFn: () => whatsappApi.getSession().then((r) => r.data),
     retry: false,
-    refetchInterval: (query) => {
-      if (query.state.error || !query.state.data) return false
-      const data = query.state.data
-      return data.hasActiveSocket || data.status === 'CONNECTING' || data.status === 'PAIRING' ? 4000 : false
-    },
   })
 
   const session = sessionQuery.data
@@ -453,8 +450,6 @@ export default function ChatsPage() {
     queryKey: ['whatsapp-chats', deferredSearch],
     queryFn: () => whatsappApi.listChats({ search: deferredSearch || undefined }).then((r) => r.data),
     enabled: Boolean(session),
-    refetchInterval: session?.hasActiveSocket ? 1500 : false,
-    refetchIntervalInBackground: true,
   })
 
   const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
@@ -486,8 +481,6 @@ export default function ChatsPage() {
     queryKey: ['whatsapp-messages', selectedJid],
     queryFn: () => whatsappApi.listMessages(selectedJid!, { limit: 80 }).then((r) => r.data),
     enabled: Boolean(selectedJid),
-    refetchInterval: session?.hasActiveSocket && selectedJid ? 1200 : false,
-    refetchIntervalInBackground: true,
   })
 
   useEffect(() => {
@@ -681,16 +674,16 @@ export default function ChatsPage() {
   const sessionStatus = session?.status ?? 'DISCONNECTED'
   const sessionRuntimeReady = Boolean(session?.runtimeCompatible && session?.packageInstalled)
   const sessionIsBusy = connectMutation.isPending || disconnectMutation.isPending
-  const canGenerateQr = Boolean(canManage && sessionRuntimeReady && !connectMutation.isPending)
+  const canGenerateQr = Boolean(canManageSession && sessionRuntimeReady && !connectMutation.isPending)
   const canResumeSession = Boolean(
-    canManage &&
+    canManageSession &&
     sessionRuntimeReady &&
     session?.authAvailable &&
     !session?.hasActiveSocket &&
     !sessionIsBusy
   )
   const canDisconnectSession = Boolean(
-    canManage &&
+    canManageSession &&
     session &&
     !sessionIsBusy &&
     (session.hasActiveSocket || ['CONNECTED', 'CONNECTING', 'PAIRING', 'ERROR'].includes(sessionStatus))
@@ -823,7 +816,7 @@ export default function ChatsPage() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-[340px_minmax(0,1fr)] lg:items-stretch lg:overflow-hidden xl:grid-cols-[390px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-[310px_210px_minmax(0,1fr)] lg:items-stretch lg:overflow-hidden xl:grid-cols-[340px_220px_minmax(0,1fr)]">
 
         <section className="interactive-card static-card flex min-h-[460px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-full lg:min-h-0">
           <div className="shrink-0 border-b px-5 py-4" style={{ borderColor: 'var(--border-0)', background: 'var(--surface-0)' }}>
@@ -908,9 +901,9 @@ export default function ChatsPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink-primary)' }}>{chatPrimaryName(chat)}</p>
-                              {chatPhoneLine(chat) ? (
-                                <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>{chatPhoneLine(chat)}</p>
-                              ) : null}
+                              <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--ink-tertiary)' }}>#{chat.leadNumber ?? '--------'} · {chatPhoneLine(chat)}</p>
+                              <p className="mt-0.5 truncate text-[10px] font-bold" style={{ color: 'var(--ink-muted)' }}>@ {chat.lidJid || (chat.jid.endsWith('@lid') ? chat.jid : 'LID pendiente')}</p>
+                              <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--accent-text)' }}>{chat.assignee ? `${chat.assignee.firstName} ${chat.assignee.lastName ?? ''}` : 'Sin asignar'}</p>
                             </div>
                             <div className="shrink-0 text-right">
                               <p className="text-[11px]" style={{ color: 'var(--ink-tertiary)' }}>{formatChatTimestamp(chat.lastMessageAt)}</p>
@@ -935,6 +928,10 @@ export default function ChatsPage() {
             )}
           </div>
         </section>
+
+        <div className="min-h-0 lg:overflow-y-auto">
+          {selectedChat ? <ChatIdentityPanel chat={selectedChat} /> : <div className="identity-line rounded-2xl p-4 text-xs font-bold text-[var(--ink-tertiary)]">Seleccioná un chat para ver su identidad y responsable.</div>}
+        </div>
 
         <section className="interactive-card static-card flex min-h-[620px] flex-col overflow-hidden ring-1 ring-emerald-500/10 lg:h-full lg:min-h-0">
           {selectedChat ? (
@@ -1000,9 +997,8 @@ export default function ChatsPage() {
                         </div>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--ink-secondary)' }}>
-                        {chatPhoneLine(selectedChat) ? (
-                          <span className="truncate">{chatPhoneLine(selectedChat)}</span>
-                        ) : null}
+                        <span className="truncate">#{selectedChat.leadNumber ?? '--------'} · {chatPhoneLine(selectedChat)}</span>
+                        <span className="truncate">@ {selectedChat.lidJid || (selectedChat.jid.endsWith('@lid') ? selectedChat.jid : 'LID pendiente')}</span>
                       </div>
                     </div>
                   </div>

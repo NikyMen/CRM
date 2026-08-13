@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { AuthBrand, DevelopedBy } from '@/components/AuthBrand'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -51,8 +52,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] p-4">
+      <div className="interactive-card w-full max-w-md p-8">
+        <AuthBrand title="Nueva contraseña" subtitle="Protegé el acceso a tu workspace" />
         <div className="mb-8">
           <Link
             href="/login"
@@ -117,6 +119,7 @@ export default function ResetPasswordPage() {
             Cambiar contraseña
           </button>
         </form>
+        <DevelopedBy />
       </div>
     </div>
   )

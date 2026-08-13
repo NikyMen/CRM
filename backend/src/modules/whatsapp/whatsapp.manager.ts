@@ -4,6 +4,8 @@ import path from 'node:path'
 import { db } from '../../core/database'
 import { config } from '../../core/config'
 import { ActivityType, AppError, ValidationError } from '../../types'
+import { generateUniqueLeadNumber } from '../deals/lead-number'
+import { whatsAppRealtime } from './whatsapp.events'
 
 const prisma = db as any
 
@@ -510,23 +512,6 @@ function isDownloadableMediaMessage(messageType: string) {
   return ['image', 'audio', 'video', 'document'].includes(messageType)
 }
 
-function padLeadPart(value: number | string, size: number) {
-  return String(value).padStart(size, '0')
-}
-
-function buildLeadNumberBase(phoneNumber: string, sentAt: Date) {
-  const lastDigits = phoneNumber.slice(-6).padStart(6, '0')
-  return [
-    padLeadPart(sentAt.getFullYear() % 100, 2),
-    padLeadPart(sentAt.getMonth() + 1, 2),
-    padLeadPart(sentAt.getDate(), 2),
-    padLeadPart(sentAt.getHours(), 2),
-    padLeadPart(sentAt.getMinutes(), 2),
-    padLeadPart(sentAt.getSeconds(), 2),
-    lastDigits,
-  ].join('')
-}
-
 function isPersistableMessage(details: { messageType: string; text?: string | null }, message: any) {
   if (message?.messageStubType != null) return false
 
@@ -553,6 +538,8 @@ export class WhatsAppManager {
   private sockets = new Map<string, SocketEntry>()
   private booting = new Map<string, Promise<SocketEntry>>()
   private reconnectTimers = new Map<string, NodeJS.Timeout>()
+  private reconnectAttempts = new Map<string, number>()
+  private watchdogTimer: NodeJS.Timeout | null = null
   private manualDisconnects = new Map<string, any>()
   private baileysModule: any | null = null
   private baileysVersion: number[] | null = null
@@ -826,7 +813,7 @@ export class WhatsAppManager {
     return run
   }
 
-  async listChats(workspaceId: string, search?: string) {
+  async listChats(workspaceId: string, actor: { userId: string; role: string }, search?: string) {
     await this.ensureDevMaintenanceAppliedOnce()
     await this.dedupeWorkspace(workspaceId)
     const normalizedSearch = search?.trim()
@@ -838,6 +825,9 @@ export class WhatsAppManager {
         messages: {
           some: {},
         },
+        ...(actor.role === 'owner' ? {} : {
+          AND: [{ OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }] }],
+        }),
         ...(normalizedSearch
           ? {
               OR: [
@@ -859,8 +849,19 @@ export class WhatsAppManager {
       },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            deals: {
+              where: { deal: { status: 'OPEN', isArchived: false } },
+              select: { deal: { select: { leadNumber: true } } },
+              take: 1,
+            },
+          },
         },
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
       },
       orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
       take: 150,
@@ -869,15 +870,37 @@ export class WhatsAppManager {
     return Promise.all(chats.map((chat) => this.serializeChatRecord(workspaceId, chat)))
   }
 
-  async listMessages(workspaceId: string, jid: string, limit = 60) {
+  async listMessages(
+    workspaceId: string,
+    jid: string,
+    actor: { userId: string; role: string },
+    limit = 60
+  ) {
     await this.ensureDevMaintenanceAppliedOnce()
     const canonicalJid = await this.resolveCanonicalJid(workspaceId, jid)
-    const chat = await prisma.whatsAppChat.findUnique({
-      where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
+    const chat = await prisma.whatsAppChat.findFirst({
+      where: {
+        workspaceId,
+        jid: canonicalJid,
+        ...(actor.role === 'owner' ? {} : {
+          OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
+        }),
+      },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            deals: {
+              where: { deal: { status: 'OPEN', isArchived: false } },
+              select: { deal: { select: { leadNumber: true } } },
+              take: 1,
+            },
+          },
         },
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
       },
     })
 
@@ -917,12 +940,155 @@ export class WhatsAppManager {
       contactName: chat.contact
         ? `${chat.contact.firstName}${chat.contact.lastName ? ` ${chat.contact.lastName}` : ''}`
         : null,
+      leadNumber: chat.contact?.deals?.[0]?.deal?.leadNumber ?? null,
     }
   }
 
-  async updateChat(workspaceId: string, jid: string, input: { displayName: string }) {
-    await this.ensureDevMaintenanceAppliedOnce()
+  async startBackgroundRuntime() {
+    if (!this.isRuntimeCompatible() || !this.isPackageInstalled()) return
+    if (!this.watchdogTimer) {
+      this.watchdogTimer = setInterval(() => void this.restorePersistedSessions(), 15_000)
+    }
+    await this.restorePersistedSessions()
+  }
+
+  stopBackgroundRuntime() {
+    if (this.watchdogTimer) clearInterval(this.watchdogTimer)
+    this.watchdogTimer = null
+    for (const timer of this.reconnectTimers.values()) clearTimeout(timer)
+    this.reconnectTimers.clear()
+  }
+
+  private async restorePersistedSessions() {
+    const sessions = await prisma.whatsAppSession.findMany({
+      where: { status: { in: ['CONNECTED', 'CONNECTING', 'ERROR'] } },
+      select: { workspaceId: true },
+    })
+    for (const session of sessions) {
+      if (
+        !this.sockets.has(session.workspaceId) &&
+        !this.booting.has(session.workspaceId) &&
+        !this.reconnectTimers.has(session.workspaceId) &&
+        await this.hasAuthState(session.workspaceId)
+      ) {
+        this.scheduleReconnect(session.workspaceId, true)
+      }
+    }
+  }
+
+  private async findVisibleChat(
+    workspaceId: string,
+    jid: string,
+    actor: { userId: string; role: string }
+  ) {
     const canonicalJid = await this.resolveCanonicalJid(workspaceId, jid)
+    const chat = await prisma.whatsAppChat.findFirst({
+      where: {
+        workspaceId,
+        jid: canonicalJid,
+        ...(actor.role === 'owner' ? {} : {
+          OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
+        }),
+      },
+      select: { id: true, jid: true, contactId: true, assignedToUserId: true },
+    })
+    if (!chat) throw new AppError(404, 'Chat no encontrado o no asignado a tu usuario.', 'NOT_FOUND')
+    return chat
+  }
+
+  async updateAssignee(
+    workspaceId: string,
+    jid: string,
+    actor: { userId: string; role: string },
+    assignedToUserId: string | null
+  ) {
+    const chat = await this.findVisibleChat(workspaceId, jid, actor)
+
+    if (assignedToUserId) {
+      const target = await db.workspaceUser.findUnique({
+        where: { workspaceId_userId: { workspaceId, userId: assignedToUserId } },
+      })
+      if (!target || !['owner', 'admin', 'member'].includes(target.role)) {
+        throw new ValidationError('El responsable debe ser un miembro activo del equipo.')
+      }
+    }
+
+    if (actor.role !== 'owner') {
+      const canClaim = assignedToUserId === actor.userId && chat.assignedToUserId === null
+      const canRelease = assignedToUserId === null && chat.assignedToUserId === actor.userId
+      const unchanged = assignedToUserId === chat.assignedToUserId
+      if (!canClaim && !canRelease && !unchanged) {
+        throw new AppError(403, 'Solo podes tomar un chat libre o liberar uno propio.', 'FORBIDDEN')
+      }
+    }
+
+    const updatedCount = await prisma.whatsAppChat.updateMany({
+      where: {
+        id: chat.id,
+        workspaceId,
+        ...(actor.role === 'owner' ? {} : { assignedToUserId: chat.assignedToUserId }),
+      },
+      data: { assignedToUserId },
+    })
+    if (updatedCount.count !== 1) {
+      throw new AppError(409, 'Otro usuario tomo este chat antes.', 'ASSIGNMENT_CONFLICT')
+    }
+
+    if (chat.contactId) {
+      await db.$transaction([
+        db.contact.updateMany({ where: { id: chat.contactId, workspaceId }, data: { ownerId: assignedToUserId } }),
+        db.deal.updateMany({
+          where: { workspaceId, status: 'OPEN', isArchived: false, contacts: { some: { contactId: chat.contactId } } },
+          data: { ownerId: assignedToUserId },
+        }),
+      ])
+    }
+
+    whatsAppRealtime.publish(workspaceId, { type: 'assignment.updated', jid: chat.jid })
+    whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: chat.jid })
+    return this.listMessages(workspaceId, chat.jid, actor, 1).then((result) => result.chat)
+  }
+
+  async updateIdentity(workspaceId: string, jid: string, phoneNumberInput: string) {
+    const canonicalJid = await this.resolveCanonicalJid(workspaceId, jid)
+    const phoneNumber = normalizePhoneNumber(phoneNumberInput)
+    if (!phoneNumber || phoneNumber.length < 8 || phoneNumber.length > 15) {
+      throw new ValidationError('El telefono debe contener entre 8 y 15 digitos.')
+    }
+
+    const chat = await prisma.whatsAppChat.findUnique({
+      where: { workspaceId_jid: { workspaceId, jid: canonicalJid } },
+    })
+    if (!chat) throw new AppError(404, 'Chat no encontrado.', 'NOT_FOUND')
+
+    const contact = chat.contactId
+      ? await db.contact.update({ where: { id: chat.contactId }, data: { phone: phoneNumber } })
+      : await this.ensureInboundContact(workspaceId, {
+          chatId: chat.id,
+          contactId: null,
+          phoneNumber,
+          remoteJid: canonicalJid,
+          displayName: chat.displayName,
+        })
+
+    await prisma.whatsAppChat.update({
+      where: { id: chat.id },
+      data: { phoneNumber, phoneNumberSource: 'manual', contactId: contact?.id ?? chat.contactId },
+    })
+    whatsAppRealtime.publish(workspaceId, { type: 'chat.updated', jid: canonicalJid })
+    whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: canonicalJid })
+    return this.listChats(workspaceId, { userId: '', role: 'owner' }).then((items) => items.find((item: any) => item.id === chat.id))
+  }
+
+  async updateChat(
+    workspaceId: string,
+    jid: string,
+    actor: { userId: string; role: string },
+    input: { displayName: string }
+  ) {
+    await this.ensureDevMaintenanceAppliedOnce()
+    const visibleChat = await this.findVisibleChat(workspaceId, jid, actor)
+    const canonicalJid = visibleChat.jid
     const displayName = normalizeLabel(input.displayName)
 
     if (!displayName) {
@@ -1045,11 +1211,12 @@ export class WhatsAppManager {
     )
   }
 
-  async sendTextMessage(workspaceId: string, jid: string, text: string) {
-    return this.sendChatMessage(workspaceId, jid, { text })
-  }
-
-  async sendChatMessage(workspaceId: string, jid: string, input: SendChatMessageInput) {
+  async sendChatMessage(
+    workspaceId: string,
+    jid: string,
+    actor: { userId: string; role: string },
+    input: SendChatMessageInput
+  ) {
     this.assertRuntimeReady()
     const text = input.text?.trim() ?? ''
     const file = input.file
@@ -1067,7 +1234,8 @@ export class WhatsAppManager {
       throw new ValidationError('WhatsApp no admite texto adjunto en audios. Envia el audio sin texto.')
     }
 
-    const sendJid = await this.resolveCanonicalJid(workspaceId, jid)
+    const visibleChat = await this.findVisibleChat(workspaceId, jid, actor)
+    const sendJid = visibleChat.jid
 
     let entry = this.sockets.get(workspaceId)
     if (!entry) {
@@ -1078,6 +1246,9 @@ export class WhatsAppManager {
       await this.connect(workspaceId, { mode: 'qr' })
       entry = this.sockets.get(workspaceId)
     }
+
+    await this.waitForConnected(workspaceId, 12_000)
+    entry = this.sockets.get(workspaceId)
 
     const session = await this.ensureSessionRecord(workspaceId)
     if (session.status !== 'CONNECTED' || !entry?.sock) {
@@ -1094,6 +1265,16 @@ export class WhatsAppManager {
     }
 
     return persisted ? this.serializeMessageRecord(persisted) : null
+  }
+
+  private async waitForConnected(workspaceId: string, timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      const session = await this.ensureSessionRecord(workspaceId)
+      if (session.status === 'CONNECTED' && this.sockets.get(workspaceId)?.sock) return
+      if (session.status === 'DISCONNECTED' || session.lastDisconnectCode === 401) return
+      await sleep(250)
+    }
   }
 
   async getMessageMedia(workspaceId: string, messageDbId: string) {
@@ -1196,6 +1377,16 @@ export class WhatsAppManager {
     sock.ev.on('chats.phoneNumberShare', (payload: any) => {
       void this.rememberPhoneNumberShare(workspaceId, payload?.lid, payload?.jid)
     })
+    sock.ev.on('lid-mapping.update', (payload: any) => {
+      const mappings = Array.isArray(payload) ? payload : payload?.mapping ?? payload?.mappings ?? []
+      for (const mapping of mappings) {
+        void this.rememberPhoneNumberShare(
+          workspaceId,
+          mapping?.lid ?? mapping?.lidJid,
+          mapping?.pn ?? mapping?.phoneNumber ?? mapping?.jid
+        )
+      }
+    })
     sock.ev.on('contacts.upsert', (payload: any[]) => {
       void this.rememberContactAliases(workspaceId, payload ?? [])
     })
@@ -1225,7 +1416,7 @@ export class WhatsAppManager {
     } catch {
       throw new AppError(
         503,
-        'Baileys no esta instalado en backend. Corre npm install dentro de backend antes de usar WhatsApp.',
+        'Baileys no esta instalado en backend. Corre pnpm install antes de usar WhatsApp.',
         'WHATSAPP_DEPENDENCY_MISSING'
       )
     }
@@ -1261,7 +1452,7 @@ export class WhatsAppManager {
     if (!this.isPackageInstalled()) {
       throw new AppError(
         503,
-        'Baileys no esta instalado en backend. Corre npm install dentro de backend antes de usar WhatsApp.',
+        'Baileys no esta instalado en backend. Corre pnpm install antes de usar WhatsApp.',
         'WHATSAPP_DEPENDENCY_MISSING'
       )
     }
@@ -1281,6 +1472,7 @@ export class WhatsAppManager {
     }
 
     if (update?.connection === 'open') {
+      this.reconnectAttempts.delete(workspaceId)
       const currentSession = await this.readSessionRecord(workspaceId)
       const shouldResetInboxWindow =
         !currentSession.lastConnectedAt ||
@@ -1350,18 +1542,22 @@ export class WhatsAppManager {
     }
   }
 
-  private scheduleReconnect(workspaceId: string) {
+  private scheduleReconnect(workspaceId: string, immediate = false) {
     if (this.reconnectTimers.has(workspaceId)) return
-
+    const attempt = this.reconnectAttempts.get(workspaceId) ?? 0
+    const baseDelay = immediate ? 250 : Math.min(30_000, 1_000 * (2 ** Math.min(attempt, 5)))
+    const delay = baseDelay + Math.floor(Math.random() * Math.min(baseDelay, 1_000))
     const timer = setTimeout(() => {
       this.reconnectTimers.delete(workspaceId)
       void this.connect(workspaceId, { mode: 'qr' }).catch(async (error) => {
+        this.reconnectAttempts.set(workspaceId, attempt + 1)
         await this.updateSession(workspaceId, {
-          status: 'ERROR',
+          status: 'CONNECTING',
           lastError: error instanceof Error ? error.message : 'No se pudo reconectar WhatsApp.',
         })
+        this.scheduleReconnect(workspaceId)
       })
-    }, 3000)
+    }, delay)
 
     this.reconnectTimers.set(workspaceId, timer)
   }
@@ -1563,6 +1759,14 @@ export class WhatsAppManager {
 
     this.getWorkspaceLidAliases(workspaceId).set(lidJid, phoneJid)
     await this.mergeChatAlias(workspaceId, lidJid, phoneJid)
+    await prisma.whatsAppChat.updateMany({
+      where: { workspaceId, jid: phoneJid },
+      data: {
+        lidJid,
+        phoneNumber: extractPhoneNumberFromJid(phoneJid) ?? undefined,
+        phoneNumberSource: 'whatsapp',
+      },
+    })
   }
 
   private async rememberContactAliases(workspaceId: string, contacts: any[]) {
@@ -1589,6 +1793,10 @@ export class WhatsAppManager {
   }
 
   private async resolveMessageRemoteJid(workspaceId: string, rawRemoteJid: string, message: any) {
+    const alternateJid = normalizeLabel(message?.key?.remoteJidAlt)
+    if (isLidJid(rawRemoteJid) && isPhoneUserJid(alternateJid)) {
+      await this.rememberPhoneNumberShare(workspaceId, rawRemoteJid, alternateJid)
+    }
     const remoteJid = await this.resolveCanonicalJid(workspaceId, rawRemoteJid)
     if (!isLidJid(remoteJid) || message?.key?.fromMe) return remoteJid
 
@@ -1653,7 +1861,9 @@ export class WhatsAppManager {
           where: { id: source.id },
           data: {
             jid: toJid,
+            lidJid: isLidJid(fromJid) ? fromJid : source.lidJid,
             phoneNumber: toPhoneNumber ?? undefined,
+            phoneNumberSource: toPhoneNumber ? 'whatsapp' : undefined,
           },
         })
       })
@@ -1695,7 +1905,10 @@ export class WhatsAppManager {
         where: { id: target.id },
         data: {
           displayName: target.displayName || source.displayName || undefined,
+          lidJid: target.lidJid || (isLidJid(fromJid) ? fromJid : source.lidJid) || undefined,
           phoneNumber: target.phoneNumber || toPhoneNumber || source.phoneNumber || undefined,
+          phoneNumberSource: toPhoneNumber ? 'whatsapp' : target.phoneNumberSource || source.phoneNumberSource || undefined,
+          assignedToUserId: target.assignedToUserId || source.assignedToUserId || undefined,
           contactId: target.contactId || source.contactId || undefined,
           lastMessageAt: sourceIsNewer ? source.lastMessageAt : undefined,
           lastMessagePreview: sourceIsNewer ? source.lastMessagePreview : undefined,
@@ -2180,8 +2393,10 @@ export class WhatsAppManager {
         workspaceId,
         sessionId: session.id,
         jid,
+        lidJid: isLidJid(rawJid) ? rawJid : null,
         displayName: displayName || phoneNumber || jid,
         phoneNumber,
+        phoneNumberSource: phoneNumber ? 'whatsapp' : null,
         isGroup,
         unreadCount: typeof chat?.unreadCount === 'number' ? chat.unreadCount : 0,
         archived: Boolean(chat?.archive),
@@ -2194,8 +2409,10 @@ export class WhatsAppManager {
       },
       update: {
         sessionId: session.id,
+        lidJid: isLidJid(rawJid) ? rawJid : undefined,
         displayName: displayName || undefined,
         phoneNumber: phoneNumber ?? undefined,
+        phoneNumberSource: phoneNumber ? 'whatsapp' : undefined,
         isGroup,
         unreadCount: typeof chat?.unreadCount === 'number' ? chat.unreadCount : undefined,
         archived: typeof chat?.archive === 'boolean' ? chat.archive : undefined,
@@ -2217,6 +2434,8 @@ export class WhatsAppManager {
     if (persistedChat.contactId) {
       await this.mergeDuplicateContactChats(workspaceId, persistedChat.contactId)
     }
+
+    whatsAppRealtime.publish(workspaceId, { type: 'chat.updated', jid: persistedChat.jid })
 
     return persistedChat
   }
@@ -2341,6 +2560,9 @@ export class WhatsAppManager {
         phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(remoteJid),
       }, remoteJid, sentAt, inboundPushName)
     }
+
+    whatsAppRealtime.publish(workspaceId, { type: 'message.updated', jid: remoteJid })
+    whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: remoteJid })
 
     return persistedWithMedia
   }
@@ -3010,12 +3232,13 @@ export class WhatsAppManager {
       buildContactName(contact) ??
       selectChatDisplayName(pushName, chat.displayName, phoneNumber, remoteJid) ??
       phoneNumber
-    const leadNumber = await this.generateUniqueLeadNumber(workspaceId, contact.phone ?? phoneNumber, sentAt)
+    const leadNumber = await generateUniqueLeadNumber(workspaceId)
 
     const createdLead = await db.$transaction(async (tx) => {
       const lead = await tx.deal.create({
         data: {
           workspaceId,
+          leadNumber,
           title: leadTitle,
           pipelineId: defaultPipeline.id,
           stageId: newLeadStage.id,
@@ -3191,27 +3414,6 @@ export class WhatsAppManager {
     ) ?? null
   }
 
-  private async generateUniqueLeadNumber(workspaceId: string, phoneNumber: string, sentAt: Date) {
-    const base = buildLeadNumberBase(phoneNumber, sentAt)
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const candidate = attempt === 0 ? base : `${base}${attempt}`
-      const existing = await db.$queryRaw<Array<{ id: string }>>`
-        SELECT id
-        FROM deals
-        WHERE "workspaceId" = ${workspaceId}
-          AND "customData"->>'leadNumber' = ${candidate}
-        LIMIT 1
-      `
-
-      if (existing.length === 0) {
-        return candidate
-      }
-    }
-
-    return `${base}${Date.now().toString().slice(-3)}`
-  }
-
   private async ensureSessionRecord(workspaceId: string) {
     try {
       return await prisma.whatsAppSession.upsert({
@@ -3278,10 +3480,12 @@ export class WhatsAppManager {
     }>
   ) {
     await this.ensureSessionRecord(workspaceId)
-    return prisma.whatsAppSession.update({
+    const session = await prisma.whatsAppSession.update({
       where: { workspaceId },
       data,
     })
+    whatsAppRealtime.publish(workspaceId, { type: 'session.updated' })
+    return session
   }
 
   // Verifica si el directorio de autenticacion existe

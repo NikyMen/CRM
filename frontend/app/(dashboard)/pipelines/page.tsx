@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { pipelinesApi } from '@/lib/api'
 import type { Pipeline, Stage } from '@/types'
 import {
   Plus, Trash2, Pencil, Check, X,
-  Loader2, ChevronRight, Layers,
+  ArrowDown, ArrowUp, Loader2, ChevronRight, Layers, Star,
 } from 'lucide-react'
 import clsx from 'clsx'
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 
 const COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
@@ -36,8 +37,15 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
 }
 
 export default function PipelinesPage() {
+  const pathname = usePathname()
+  const router = useRouter()
   const queryClient = useQueryClient()
   const [newPipelineName, setNewPipelineName]     = useState('')
+
+  useEffect(() => {
+    if (pathname === '/pipelines') router.replace('/settings?tab=kanban')
+  }, [pathname, router])
+
   const [editingPipeline, setEditingPipeline]     = useState<string | null>(null)
   const [editingPipelineName, setEditingPipelineName] = useState('')
   const [expandedPipeline, setExpandedPipeline]   = useState<string | null>(null)
@@ -96,6 +104,27 @@ export default function PipelinesPage() {
       pipelinesApi.deleteStage(pipelineId, stageId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
   })
+
+  const setDefault = useMutation({
+    mutationFn: (id: string) => pipelinesApi.update(id, { isDefault: true }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
+  })
+
+  const reorderStages = useMutation({
+    mutationFn: ({ pipelineId, stageIds }: { pipelineId: string; stageIds: string[] }) => pipelinesApi.reorderStages(pipelineId, stageIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+    },
+  })
+
+  function moveStage(pipeline: Pipeline, index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= pipeline.stages.length) return
+    const ids = pipeline.stages.map((stage) => stage.id)
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    reorderStages.mutate({ pipelineId: pipeline.id, stageIds: ids })
+  }
 
   if (isLoading) {
     return (
@@ -190,10 +219,12 @@ export default function PipelinesPage() {
                     <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-100 whitespace-nowrap">
                       {pipeline.stages.length} etapas
                     </span>
+                    {pipeline.isDefault && <span className="text-xs font-black text-primary-700">Predeterminado</span>}
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 shrink-0 ml-auto">
+                  {!pipeline.isDefault && <button onClick={() => setDefault.mutate(pipeline.id)} className="p-1.5 text-slate-400 hover:text-primary-700" title="Usar como predeterminado"><Star size={16} /></button>}
                   <Link
                       href={`/leads/${pipeline.id}`}
                     className="text-xs font-bold text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-primary-100 mr-2"
@@ -229,7 +260,7 @@ export default function PipelinesPage() {
                 <div className="border-t border-slate-100 p-5 bg-slate-50/50">
                   <div className="space-y-3 mb-6">
                     {/* Lista de etapas */}
-                    {pipeline.stages.map((stage) => (
+                    {pipeline.stages.map((stage, stageIndex) => (
                       <div key={stage.id} className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-3 group">
                         {editingStage === stage.id ? (
                           <div className="flex items-center gap-3 flex-1 flex-wrap">
@@ -268,6 +299,8 @@ export default function PipelinesPage() {
                             <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md">Pos. {stage.position}</span>
                             
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => moveStage(pipeline, stageIndex, -1)} disabled={stageIndex === 0 || reorderStages.isPending} className="p-1.5 text-slate-400 disabled:opacity-25" title="Mover arriba"><ArrowUp size={14} /></button>
+                                <button onClick={() => moveStage(pipeline, stageIndex, 1)} disabled={stageIndex === pipeline.stages.length - 1 || reorderStages.isPending} className="p-1.5 text-slate-400 disabled:opacity-25" title="Mover abajo"><ArrowDown size={14} /></button>
                                 <button
                                 onClick={() => {
                                     setEditingStage(stage.id)

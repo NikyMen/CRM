@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { authApi } from '@/lib/api'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Mail } from 'lucide-react'
+import { AuthBrand, DevelopedBy } from '@/components/AuthBrand'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]     = useState('')
@@ -49,8 +50,9 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] p-4">
+      <div className="interactive-card w-full max-w-md p-8">
+        <AuthBrand title="Recuperar acceso" subtitle="Te enviaremos un enlace seguro" />
         <div className="mb-8">
           <Link
             href="/login"
@@ -92,6 +94,7 @@ export default function ForgotPasswordPage() {
             Enviar link de recuperación
           </button>
         </form>
+        <DevelopedBy />
       </div>
     </div>
   )

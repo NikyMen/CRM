@@ -2,18 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Check, ImagePlus, Key, Loader2, Save, Settings, Shield, SlidersHorizontal,
+  Check, ImagePlus, Key, KanbanSquare, Loader2, Package, Save, Settings, Shield, SlidersHorizontal,
   Users, Webhook,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { auth, type StoredAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
 import TeamPage from '../team/page'
+import PipelinesPage from '../pipelines/page'
+import { PillNav } from '@/components/react-bits/PillNav'
 
-type SettingsTab = 'profile' | 'webhooks' | 'api-keys' | 'team'
+type SettingsTab = 'profile' | 'kanban' | 'modules' | 'webhooks' | 'api-keys' | 'team'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -24,11 +27,24 @@ const TAB_ITEMS: {
   icon: typeof Settings
   adminOnly?: boolean
 }[] = [
-  { id: 'profile', label: 'Avatar', icon: Settings },
+  { id: 'profile', label: 'Perfil', icon: Settings },
+  { id: 'kanban', label: 'Kanban', icon: KanbanSquare, adminOnly: true },
+  { id: 'modules', label: 'Módulos', icon: Package, adminOnly: true },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
   { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
   { id: 'team', label: 'Equipo', icon: Users, adminOnly: true },
 ]
+
+function ModulesPanel() {
+  const queryClient = useQueryClient()
+  const settings = useQuery({ queryKey: ['workspace-settings'], queryFn: () => authApi.getWorkspaceSettings().then((response) => response.data) })
+  const update = useMutation({
+    mutationFn: (stockVisible: boolean) => authApi.updateWorkspaceSettings({ stockVisible }),
+    onSuccess: (response) => queryClient.setQueryData(['workspace-settings'], response.data),
+  })
+  const visible = settings.data?.stockVisible !== false
+  return <div className="mx-auto max-w-5xl p-6"><div className="identity-line flex items-center justify-between gap-4 rounded-2xl p-5"><div><p className="font-display font-black text-[var(--ink-primary)]">Módulo Stock</p><p className="mt-1 text-sm font-medium text-[var(--ink-secondary)]">Oculta Stock de la navegación sin borrar datos ni bloquear su URL o API.</p></div><button type="button" role="switch" aria-checked={visible} disabled={settings.isLoading || update.isPending} onClick={() => update.mutate(!visible)} className={clsx('relative h-7 w-12 shrink-0 rounded-full transition', visible ? 'bg-[#c5ed1b]' : 'bg-slate-300')}><span className={clsx('absolute top-1 h-5 w-5 rounded-full bg-[#0c1015] transition-transform', visible ? 'translate-x-1' : '-translate-x-5')} /></button></div></div>
+}
 
 type EditorState = {
   src: string
@@ -370,6 +386,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setUser(auth.get())
+    const requestedTab = new URLSearchParams(window.location.search).get('tab') as SettingsTab | null
+    if (requestedTab && TAB_ITEMS.some((item) => item.id === requestedTab)) setActiveTab(requestedTab)
   }, [])
 
   const canManageSettings = user?.role === 'owner' || user?.role === 'admin'
@@ -394,33 +412,13 @@ export default function SettingsPage() {
             <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del workspace.</p>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {visibleTabs.map((item) => {
-              const Icon = item.icon
-              const active = activeTab === item.id
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  className={clsx(
-                    'flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold transition',
-                    active
-                      ? 'bg-primary-700 text-white shadow-sm'
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                  )}
-                >
-                  <Icon size={16} />
-                  {item.label}
-                </button>
-              )
-            })}
-          </div>
+          <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
         </div>
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
+      {canManageSettings && activeTab === 'kanban' && <PipelinesPage />}
+      {canManageSettings && activeTab === 'modules' && <ModulesPanel />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
       {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
       {canManageSettings && activeTab === 'team' && <TeamPage />}

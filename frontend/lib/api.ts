@@ -8,7 +8,7 @@ import type {
 } from '@/types'
 
 // Apunta al backend que ya tenemos corriendo
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
 
 export function resolveApiAssetUrl(value?: string | null) {
   if (!value) return null
@@ -63,6 +63,12 @@ export const authApi = {
     api.post('/auth/login', { email, password }),
 
   me: () => api.get('/auth/me'),
+
+  getWorkspaceSettings: () =>
+    api.get<{ stockVisible: boolean }>('/auth/workspace-settings'),
+
+  updateWorkspaceSettings: (data: { stockVisible: boolean }) =>
+    api.patch<{ stockVisible: boolean }>('/auth/workspace-settings', data),
 
   updateAvatar: (avatar: string | null) =>
     api.patch('/auth/me/avatar', { avatar }),
@@ -165,7 +171,7 @@ export const webhooksApi = {
 export const pipelinesApi = {
   list:        ()                                                            => api.get('/pipelines'),
   create:      (data: Pick<Pipeline, 'name'>)                                => api.post('/pipelines', data),
-  update:      (id: string, data: Pick<Pipeline, 'name'>)                    => api.patch(`/pipelines/${id}`, data),
+  update:      (id: string, data: Partial<Pick<Pipeline, 'name' | 'isDefault'>>) => api.patch(`/pipelines/${id}`, data),
   delete:      (id: string)                                                  => api.delete(`/pipelines/${id}`),
   createStage: (pipelineId: string, data: Pick<Stage, 'name' | 'color'>)    =>
     api.post(`/pipelines/${pipelineId}/stages`, data),
@@ -173,6 +179,8 @@ export const pipelinesApi = {
     api.patch(`/pipelines/${pipelineId}/stages/${stageId}`, data),
   deleteStage: (pipelineId: string, stageId: string)                        =>
     api.delete(`/pipelines/${pipelineId}/stages/${stageId}`),
+  reorderStages: (pipelineId: string, stageIds: string[]) =>
+    api.patch(`/pipelines/${pipelineId}/stages/reorder`, { stageIds }),
 }
 
 // Actividades
@@ -323,6 +331,12 @@ export const whatsappApi = {
 
   updateChat: (jid: string, data: { displayName: string }) =>
     api.patch<WhatsAppChat>(`/whatsapp/chats/${encodeURIComponent(jid)}`, data),
+
+  updateAssignee: (jid: string, assignedToUserId: string | null) =>
+    api.patch<WhatsAppChat>(`/whatsapp/chats/${encodeURIComponent(jid)}/assignee`, { assignedToUserId }),
+
+  updateIdentity: (jid: string, phoneNumber: string) =>
+    api.patch<WhatsAppChat>(`/whatsapp/chats/${encodeURIComponent(jid)}/identity`, { phoneNumber }),
 
   deleteChat: (jid: string) =>
     api.delete(`/whatsapp/chats/${encodeURIComponent(jid)}`),

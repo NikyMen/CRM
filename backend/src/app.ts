@@ -30,6 +30,7 @@ import { noteRoutes } from './modules/notes/note.routes'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { inboxRoutes } from './modules/inbox/inbox.routes'
 import { whatsappRoutes } from './modules/whatsapp/whatsapp.routes'
+import { whatsAppManager } from './modules/whatsapp/whatsapp.manager'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
 
@@ -165,6 +166,14 @@ export async function buildApp() {
   await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
   await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
+
+  app.addHook('onReady', async () => {
+    await whatsAppManager.startBackgroundRuntime()
+  })
+
+  app.addHook('onClose', async () => {
+    whatsAppManager.stopBackgroundRuntime()
+  })
 
   // Health check — para verificar que el servidor está vivo
   app.get('/health', async () => ({

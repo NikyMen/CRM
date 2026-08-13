@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
+import { AuthBrand, DevelopedBy } from '@/components/AuthBrand'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -58,7 +59,9 @@ export default function RegisterPage() {
 
       <div className="w-full max-w-md relative z-10">
 
-        <div className="text-center mb-10">
+        <AuthBrand title="Crear cuenta" subtitle="Empezá a gestionar tu operación" />
+
+        <div className="hidden">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl shadow-lg shadow-primary-700/30 mb-5 relative group">
             <span className="text-white text-2xl font-black tracking-tighter">C</span>
             <div className="absolute inset-0 border border-white/20 rounded-2xl"></div>
@@ -157,6 +160,7 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
+        <DevelopedBy />
       </div>
     </div>
   )
