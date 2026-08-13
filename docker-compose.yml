@@ -48,10 +48,11 @@ services:
       - DATABASE_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
       - DIRECT_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
       - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       - WHATSAPP_AUTH_DIR=.data/whatsapp-auth
       - WHATSAPP_MEDIA_DIR=.data/whatsapp-media
     ports:
-      - "3000:3000"
+      - "8080:3000"
     volumes:
       - ./.data/whatsapp-auth:/app/.data/whatsapp-auth
       - ./.data/whatsapp-media:/app/.data/whatsapp-media
@@ -61,7 +62,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api/v1}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
     container_name: crm_frontend
     restart: unless-stopped
     depends_on:
@@ -72,7 +73,7 @@ services:
       PORT: 3001
       HOSTNAME: 0.0.0.0
     ports:
-      - "3001:3001"
+      - "8081:3001"
 
 volumes:
   postgres_data:
