@@ -749,7 +749,7 @@ export default function ChatsPage() {
         <div className="interactive-card static-card mb-4 overflow-hidden p-4">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
             <div className="space-y-3">
-              {!session?.runtimeCompatible && <Notice title="Runtime incompatible" body="Este backend esta corriendo en un contexto serverless. Baileys necesita un proceso Node persistente para que la conexion no se rompa." />}
+              {!session?.runtimeCompatible && <Notice title="Servidor no disponible" body="El proceso persistente de WhatsApp todavía no está listo." />}
               {session?.runtimeCompatible && !session?.packageInstalled && <Notice title="Dependencia faltante" body="El codigo ya esta preparado, pero Baileys no esta instalado en backend. Sin eso no se puede abrir la sesion real." />}
               {sessionQuery.isError && (
                 <div className="space-y-3">

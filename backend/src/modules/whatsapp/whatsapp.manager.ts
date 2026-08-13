@@ -77,15 +77,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function isServerlessRuntime() {
-  return Boolean(
-    process.env.VERCEL === '1' ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.AWS_EXECUTION_ENV?.startsWith('AWS_Lambda') ||
-    process.env.LAMBDA_TASK_ROOT
-  )
-}
-
 function normalizePhoneNumber(value?: string | null) {
   if (!value) return null
   const digits = value.replace(/\D/g, '')
@@ -551,14 +542,6 @@ export class WhatsAppManager {
   private lastDedupeAt = new Map<string, number>()
 
   isRuntimeCompatible() {
-    if (isServerlessRuntime()) {
-      return false
-    }
-
-    if (config.NODE_ENV === 'development') {
-      return true
-    }
-
     return true
   }
 
@@ -1444,8 +1427,8 @@ export class WhatsAppManager {
     if (!this.isRuntimeCompatible()) {
       throw new AppError(
         503,
-        'Baileys no funciona de forma estable en este runtime serverless. Necesitas ejecutar el backend persistente.',
-        'WHATSAPP_SERVERLESS_UNSUPPORTED'
+        'El proceso de WhatsApp no esta disponible en este servidor.',
+        'WHATSAPP_RUNTIME_UNAVAILABLE'
       )
     }
 

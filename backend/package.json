@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate --schema=prisma/schema.prisma && tsc",
-    "vercel-build": "prisma generate --schema=prisma/schema.prisma",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "start": "node dist/src/server.js",
     "db:generate": "prisma generate --schema=prisma/schema.prisma",

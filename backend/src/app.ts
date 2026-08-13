@@ -37,8 +37,6 @@ import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
 export async function buildApp() {
   initSentry()
   // ─── Servidor ──────────────────────────────────────────────────
-  const isServerless = process.env.VERCEL === '1'
-
   const app = Fastify({ 
     logger: { level: 'info' },
     bodyLimit: 1048576,
@@ -89,7 +87,7 @@ export async function buildApp() {
         'http://localhost:3001',
         'http://localhost:3000',
       ]
-      if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      if (!origin || allowed.includes(origin)) {
         cb(null, true)
       } else {
         cb(new Error('Not allowed by CORS'), false)

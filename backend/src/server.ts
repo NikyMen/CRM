@@ -22,8 +22,7 @@ async function startServer() {
   process.on('SIGINT',  () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 
-  // Keep-alive dummy: Para evitar que Node cierre el Event Loop si no hay sockets persistentes
-  // abiertos por Fastify/Prisma en entornos locales serverless-simulated
+  // Mantener el proceso persistente para el watchdog de WhatsApp.
   setInterval(() => {}, 1000 * 60 * 60)
 }
 
