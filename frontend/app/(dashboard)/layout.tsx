@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
 import { useQuery } from '@tanstack/react-query'
-import { KanbanSquare, LayoutDashboard, LogOut, Menu, MessagesSquare, Package, Settings, Users, X } from 'lucide-react'
+import { Braces, KanbanSquare, LayoutDashboard, LogOut, Menu, MessagesSquare, Package, Settings, Users, X } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 import clsx from 'clsx'
 import { authApi } from '@/lib/api'
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'] },
   { href: '/messenger-instagram', label: 'Messenger / Instagram', icon: MessagesSquare, roles: ['owner', 'admin', 'member'] },
+  { href: '/api-meta', label: 'API Meta', icon: Braces, roles: ['owner', 'admin'] },
   { href: '/leads', label: 'Leads', icon: KanbanSquare, roles: ['owner', 'admin', 'member'] },
   { href: '/stock', label: 'Stock', icon: Package, roles: ['owner', 'admin', 'member'], module: 'stock' },
   { href: '/contacts', label: 'Contactos', icon: Users },

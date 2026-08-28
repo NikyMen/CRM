@@ -33,6 +33,7 @@ import { whatsappRoutes } from './modules/whatsapp/whatsapp.routes'
 import { whatsAppManager } from './modules/whatsapp/whatsapp.manager'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
+import { metaApiRoutes } from './modules/meta-api/meta-api.routes'
 
 export async function buildApp() {
   initSentry()
@@ -162,6 +163,7 @@ export async function buildApp() {
   await app.register(dashboardRoutes, { prefix: `${API}/dashboard` })
   await app.register(whatsappRoutes, { prefix: `${API}/whatsapp` })
   await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
+  await app.register(metaApiRoutes, { prefix: `${API}/meta-api`, eventBus })
   await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
 

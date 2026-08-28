@@ -2,3 +2,11 @@ backend/node_modules
 backend/dist
 backend/.env
 backend/.env.*
+.env
+.env.*
+node_modules
+.git
+.data
+backend/.data
+frontend/.next
+*.log

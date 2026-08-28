@@ -577,6 +577,42 @@ export interface EmbeddedSignupConfig {
   channel: 'whatsapp'
 }
 
+export interface MetaApiEndpoint {
+  method: string
+  path: string
+  auth: string
+  description: string
+}
+
+export interface MetaApiChannel {
+  channel: 'whatsapp' | 'instagram' | 'messenger'
+  externalAccountId: string
+  token: string
+  capabilities: string[]
+}
+
+export interface MetaApiStatus {
+  provider: 'meta'
+  graphApiVersion: string
+  graphBaseUrl: string
+  configured: {
+    appConfigured: boolean
+    webhookVerifyTokenConfigured: boolean
+    embeddedSignupConfigured: boolean
+    codeExchangeReady: boolean
+  }
+  missing: string[]
+  webhook: {
+    verifyMethod: 'GET'
+    receiveMethod: 'POST'
+    path: string
+    legacyPath: string
+  }
+  embeddedSignup: EmbeddedSignupConfig
+  supportedChannels: MetaApiChannel[]
+  endpoints: MetaApiEndpoint[]
+}
+
 export interface ConnectionInspection {
   status: 'connected'
   externalAccountLabel?: string

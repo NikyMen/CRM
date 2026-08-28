@@ -5,6 +5,7 @@ import type {
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
+  EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
 } from '@/types'
 
 // Apunta al backend que ya tenemos corriendo
@@ -400,6 +401,71 @@ export const inboxApi = {
   testConnection: (id: string) =>
     api.post(`/inbox/connections/${id}/test`),
 
+}
+
+export const metaApi = {
+  status: () =>
+    api.get<MetaApiStatus>('/meta-api/status'),
+
+  embeddedSignupConfig: () =>
+    api.get<EmbeddedSignupConfig>('/meta-api/embedded-signup/config'),
+
+  listConnections: () =>
+    api.get<InboxConnection[]>('/meta-api/connections'),
+
+  createConnection: (data: {
+    channel: 'whatsapp' | 'instagram' | 'messenger'
+    name: string
+    externalAccountId: string
+    externalAccountLabel?: string
+    credentials?: Record<string, unknown>
+    settings?: Record<string, unknown>
+  }) =>
+    api.post<InboxConnection>('/meta-api/connections', data),
+
+  updateConnection: (id: string, data: Partial<{
+    name: string
+    status: 'disconnected' | 'connected' | 'error'
+    externalAccountLabel: string | null
+    credentials: Record<string, unknown>
+    settings: Record<string, unknown>
+    lastSyncedAt: string | null
+  }>) =>
+    api.patch<InboxConnection>(`/meta-api/connections/${id}`, data),
+
+  deleteConnection: (id: string) =>
+    api.delete(`/meta-api/connections/${id}`),
+
+  testConnection: (id: string) =>
+    api.post(`/meta-api/connections/${id}/test`),
+
+  registerWhatsAppPhone: (id: string, pin: string) =>
+    api.post(`/meta-api/connections/${id}/whatsapp/register`, { pin }),
+
+  completeEmbeddedSignup: (data: {
+    phoneNumberId: string
+    accessToken: string
+    businessId?: string
+    wabaId?: string
+    displayPhoneNumber?: string
+    verifiedName?: string
+    qualityRating?: string
+    name?: string
+  }) =>
+    api.post<EmbeddedSignupCompletionResult>('/meta-api/embedded-signup/complete', data),
+
+  completeEmbeddedSignupCode: (data: {
+    code: string
+    phoneNumberId: string
+    businessId?: string
+    wabaId?: string
+    displayPhoneNumber?: string
+    verifiedName?: string
+    qualityRating?: string
+    name?: string
+    redirectUri?: string
+  }) =>
+    api.post<EmbeddedSignupCompletionResult>('/meta-api/embedded-signup/complete-code', data),
 }
 
 export const chatwootApi = {

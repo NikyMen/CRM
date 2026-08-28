@@ -11,9 +11,13 @@ build/
 
 # Environment variables — NUNCA subir al repo
 .env
+.env.*
 .env.local
 .env.production
 .env*.local
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # Prisma generated client
 backend/node_modules/
@@ -47,6 +51,8 @@ desktop.ini
 # Testing
 coverage/
 output/
+playwright-report/
+test-results/
 
 # Turbopack / Next.js cache
 .turbo/
