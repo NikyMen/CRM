@@ -6,6 +6,7 @@ import { config } from '../../core/config'
 import { ValidationError } from '../../types'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
 import { whatsAppRealtime } from './whatsapp.events'
+import { sseCorsHeaders } from '../../core/cors'
 
 const connectSchema = z.object({
   mode: z.literal('qr').optional().default('qr'),
@@ -151,6 +152,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      ...sseCorsHeaders(req.headers.origin, config.FRONTEND_URL),
     })
     reply.raw.write(': connected\n\n')
 

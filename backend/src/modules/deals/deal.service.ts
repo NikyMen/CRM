@@ -1,6 +1,7 @@
 import { db } from '../../core/database'
 import { EventBus } from '../../core/event-bus'
 import { whatsAppManager } from '../whatsapp/whatsapp.manager'
+import { KANBAN_DEAL_STATUSES } from './deal-kanban'
 import {
   NotFoundError,
   ForbiddenError,
@@ -229,12 +230,13 @@ export class DealService {
       ? undefined
       : { OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }] }
 
-    // Traer todos los deals abiertos del pipeline de una sola consulta
+    // Mantener también ganadas y perdidas en sus columnas: desde allí se
+    // convierte una oportunidad ganada en cliente o se consulta su cierre.
     const deals = await db.deal.findMany({
       where: {
         workspaceId,
         pipelineId,
-        status: 'OPEN',
+        status: { in: [...KANBAN_DEAL_STATUSES] },
         isArchived: false,
         ...dealVisibilityWhere(actor),
       },
@@ -438,9 +440,8 @@ export class DealService {
           probability: newStage.probability ?? deal.probability,
           status: newStatus,
           stageEnteredAt: new Date(),
-          // Si se cierra, registrar la fecha
-          ...(newStage.isWon && { closedAt: new Date() }),
-          ...(newStage.isLost && { closedAt: new Date() }),
+          // Al volver a una etapa abierta, limpiar el cierre anterior.
+          closedAt: newStage.isWon || newStage.isLost ? new Date() : null,
         },
       })
 

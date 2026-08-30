@@ -362,7 +362,13 @@ export const ticketsApi = {
     priority?: TicketPriority | ''
     page?: number
     limit?: number
-  }) => api.get<PaginatedResult<Ticket>>('/tickets', { params }),
+  }) => api.get<PaginatedResult<Ticket>>('/tickets', {
+    params: params ? {
+      ...params,
+      status: params.status || undefined,
+      priority: params.priority || undefined,
+    } : undefined,
+  }),
 
   get: (id: string) => api.get<Ticket>(`/tickets/${id}`),
 

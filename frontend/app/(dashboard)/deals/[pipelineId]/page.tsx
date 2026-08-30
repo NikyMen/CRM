@@ -531,6 +531,10 @@ export default function KanbanPage() {
   if (!board) return null
 
   const totalDeals = board.columns.reduce((sum, column) => sum + column.count, 0)
+  const activeDeals = board.columns
+    .filter((column) => !column.stage.isWon && !column.stage.isLost)
+    .reduce((sum, column) => sum + column.count, 0)
+  const closedDeals = totalDeals - activeDeals
 
   return (
     <div className="relative flex h-full flex-col bg-white">
@@ -549,7 +553,8 @@ export default function KanbanPage() {
               </button>
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{totalDeals} oportunidades activas</span>
+              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{activeDeals} oportunidades activas</span>
+              {closedDeals > 0 ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{closedDeals} cerradas</span> : null}
             </p>
           </div>
           {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary shrink-0"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}

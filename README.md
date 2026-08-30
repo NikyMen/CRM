@@ -50,4 +50,4 @@ La contraseña no tiene valor predeterminado y no se imprime. El resto del equip
 
 Producción prevista: `https://romez.consultoriadigital.io`. El despliegue sólo continúa después de un respaldo con hashes y una restauración temporal verificada.
 
-Estado al 2026-08-30: respaldo y restauración verificados; backend (51 pruebas), frontend y migraciones limpias en verde. La publicación final espera el registro DNS, las variables privadas `ROMEZ_OWNER_*` y el escaneo presencial del QR.
+Estado al 2026-08-30: respaldo y restauración verificados; backend (53 pruebas), frontend y migraciones limpias en verde. La publicación final espera el registro DNS, las variables privadas `ROMEZ_OWNER_*` y el escaneo presencial del QR.

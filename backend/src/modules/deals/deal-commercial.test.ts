@@ -3,6 +3,11 @@ import test from 'node:test'
 import { AppError } from '../../types'
 import { assertDealWriteAccess, dealVisibilityWhere, dealWriteVisibilityWhere } from './deal-access'
 import { buildClientSeed, convertWonDealToClient } from './deal-conversion'
+import { KANBAN_DEAL_STATUSES } from './deal-kanban'
+
+test('el tablero conserva oportunidades cerradas para consultar y convertir', () => {
+  assert.deepEqual(KANBAN_DEAL_STATUSES, ['OPEN', 'WON', 'LOST'])
+})
 
 test('aplica la cartera comercial según el rol', () => {
   assert.deepEqual(dealVisibilityWhere({ workspaceId: 'w', userId: 'owner-1', role: 'owner' }), {})

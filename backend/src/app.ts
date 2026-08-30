@@ -9,6 +9,7 @@ import { config } from './core/config'
 import { EventBus } from './core/event-bus'
 import { AppError } from './types'
 import { httpClientErrorCode, isHttpClientError } from './core/http-errors'
+import { isAllowedCorsOrigin } from './core/cors'
 
 function isAppErrorLike(error: any): error is AppError {
   return error instanceof AppError || (
@@ -97,12 +98,7 @@ export async function buildApp() {
   // ─── Plugins ───────────────────────────────────────────────────
   await app.register(fastifyCors, {
     origin: (origin, cb) => {
-      const allowed = [
-        config.FRONTEND_URL,
-        'http://localhost:3001',
-        'http://localhost:3000',
-      ]
-      if (!origin || allowed.includes(origin)) {
+      if (isAllowedCorsOrigin(origin, config.FRONTEND_URL)) {
         cb(null, true)
       } else {
         cb(new Error('Not allowed by CORS'), false)
