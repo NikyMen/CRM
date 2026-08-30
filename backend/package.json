@@ -16,7 +16,7 @@
     "db:studio": "prisma studio --schema=prisma/schema.prisma",
     "backup": "tsx scripts/backup.ts",
     "acceptance": "tsx scripts/acceptance.ts",
-    "test": "tsx --test src/core/auth/portfolio-visibility.test.ts src/modules/deals/lead-number.test.ts src/modules/deals/deal-commercial.test.ts src/modules/tickets/ticket.service.test.ts src/modules/clients/client.test.ts src/modules/checklists/checklist.test.ts src/modules/collections/collection.test.ts src/modules/bootstrap/bootstrap.test.ts src/modules/workspaces/auth.routes.test.ts src/modules/inbox/meta-webhook-security.test.ts src/modules/pipelines/pipeline-stage-security.test.ts src/modules/inbound/inbound-security.test.ts src/modules/webhooks/webhooks.routes.test.ts"
+    "test": "tsx --test src/core/auth/portfolio-visibility.test.ts src/core/http-errors.test.ts src/modules/deals/lead-number.test.ts src/modules/deals/deal-commercial.test.ts src/modules/tickets/ticket.service.test.ts src/modules/clients/client.test.ts src/modules/checklists/checklist.test.ts src/modules/collections/collection.test.ts src/modules/bootstrap/bootstrap.test.ts src/modules/workspaces/auth.routes.test.ts src/modules/inbox/meta-webhook-security.test.ts src/modules/pipelines/pipeline-stage-security.test.ts src/modules/inbound/inbound-security.test.ts src/modules/webhooks/webhooks.routes.test.ts"
   },
   "keywords": [],
   "author": "",

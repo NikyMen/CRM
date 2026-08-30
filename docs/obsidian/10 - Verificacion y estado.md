@@ -39,7 +39,7 @@ Simular al menos 15 sesiones con conexiones en vivo y una carrera de toma. Resul
 | Control | Estado | Evidencia |
 |---|---|---|
 | Código local | Implementado; revisión final abierta | Rama `codex/gestion-romez` |
-| Backend | Verificado | Build correcto y 49/49 pruebas |
+| Backend | Verificado | Build correcto y 51/51 pruebas |
 | Frontend | Verificado | ESLint sin errores, TypeScript correcto y build de 28 rutas |
 | Dependencias productivas | Verificado | `pnpm audit`: 0 críticas, 0 altas; 3 moderadas transitivas |
 | Migraciones limpias | Verificado | PostgreSQL 16 temporal, 10 migraciones y 41 tablas |

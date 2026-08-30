@@ -8,6 +8,7 @@ import { initSentry, Sentry } from './core/monitoring/sentry'
 import { config } from './core/config'
 import { EventBus } from './core/event-bus'
 import { AppError } from './types'
+import { httpClientErrorCode, isHttpClientError } from './core/http-errors'
 
 function isAppErrorLike(error: any): error is AppError {
   return error instanceof AppError || (
@@ -124,6 +125,7 @@ export async function buildApp() {
     // Reportar a Sentry solo errores inesperados 
     if (
       !isAppErrorLike(error) &&
+      !isHttpClientError(error) &&
       error.name !== 'ZodError' &&
       !(typeof error.code === 'string' && error.code.startsWith('FST_JWT_'))
     ) {
@@ -150,6 +152,15 @@ export async function buildApp() {
     if (typeof error.code === 'string' && error.code.startsWith('FST_JWT_')) {
       return reply.status(401).send({
         error: 'UNAUTHORIZED',
+        message: error.message,
+      })
+    }
+
+    // Errores HTTP esperables de Fastify y sus plugins (por ejemplo 429).
+    // Sin este caso, el rate limiter terminaba convertido incorrectamente en 500.
+    if (isHttpClientError(error)) {
+      return reply.status(error.statusCode).send({
+        error: httpClientErrorCode(error),
         message: error.message,
       })
     }
