@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { pipelinesApi } from '@/lib/api'
-import type { Pipeline, Stage } from '@/types'
+import type { Pipeline } from '@/types'
 import {
   Plus, Trash2, Pencil, Check, X,
   ArrowDown, ArrowUp, Loader2, ChevronRight, Layers, Star,
@@ -138,7 +138,7 @@ export default function PipelinesPage() {
     <div className="p-6 max-w-5xl mx-auto animate-fade-in">
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Embudo de Ventas (Pipelines)</h1>
-        <p className="text-slate-500 font-medium mt-1">Configurá las etapas por las que pasan tus leads</p>
+        <p className="text-slate-500 font-medium mt-1">Configurá las etapas por las que pasan tus oportunidades comerciales</p>
       </div>
 
       {/* Crear pipeline */}

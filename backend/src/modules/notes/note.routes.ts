@@ -2,6 +2,13 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireRole } from '../../core/auth/require-role'
+import {
+  contactPortfolioWhere,
+  noteDeleteWhere,
+  notePortfolioWhere,
+} from '../../core/auth/portfolio-visibility'
+import { NotFoundError, type WorkspaceContext } from '../../types'
 
 export async function noteRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
@@ -10,7 +17,7 @@ export async function noteRoutes(app: FastifyInstance) {
 
   // GET /notes?contactId=xxx
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as WorkspaceContext
     const { contactId } = z.object({
       contactId: z.string().optional(),
     }).parse(req.query)
@@ -18,6 +25,7 @@ export async function noteRoutes(app: FastifyInstance) {
     const notes = await db.note.findMany({
       where: {
         workspaceId: ctx.workspaceId,
+        ...notePortfolioWhere(ctx),
         ...(contactId && { contactId }),
       },
       orderBy: { createdAt: 'desc' },
@@ -28,12 +36,22 @@ export async function noteRoutes(app: FastifyInstance) {
   })
 
   // POST /notes
-  app.post('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+  app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
     const { contactId, content } = z.object({
       contactId: z.string(),
       content:   z.string().min(1),
     }).parse(req.body)
+
+    const contact = await db.contact.findFirst({
+      where: {
+        id: contactId,
+        isArchived: false,
+        ...contactPortfolioWhere(ctx),
+      },
+      select: { id: true },
+    })
+    if (!contact) throw new NotFoundError('Contact', contactId)
 
     const note = await db.note.create({
         data: {
@@ -50,12 +68,13 @@ export async function noteRoutes(app: FastifyInstance) {
   })
 
   // DELETE /notes/:id
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+  app.delete<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
 
-    await db.note.deleteMany({
-      where: { id: req.params.id, workspaceId: ctx.workspaceId },
+    const deleted = await db.note.deleteMany({
+      where: noteDeleteWhere(ctx, req.params.id),
     })
+    if (deleted.count === 0) throw new NotFoundError('Note', req.params.id)
 
     return reply.code(204).send()
   })

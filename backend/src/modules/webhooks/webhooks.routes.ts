@@ -24,15 +24,26 @@ export const ALL_EVENTS: CRMEvent[] = [
   'note.created',
   'message.received',
   'message.sent',
+  'ticket.created',
+  'ticket.updated',
+  'collection.updated',
+  'checklist.updated',
   'automation.triggered',
 ]
 
-const webhookSchema = z.object({
+const webhookEventSchema = z.string().refine(
+  (event): event is CRMEvent => ALL_EVENTS.includes(event as CRMEvent),
+  { message: 'Evento no soportado' }
+)
+
+export const webhookSchema = z.object({
   name:   z.string().min(1).max(100),
   url:    z.string().url(),
   secret: z.string().min(8).max(100).optional(),
-  events: z.array(z.string()).min(1),
+  events: z.array(webhookEventSchema).min(1),
 })
+
+export const webhookUpdateSchema = webhookSchema.partial()
 
 export async function webhookRoutes(app: FastifyInstance) {
   // Autenticación requerida para todas las rutas
@@ -88,7 +99,7 @@ export async function webhookRoutes(app: FastifyInstance) {
   // ─── PATCH /webhooks/:id ───────────────────────────────────────
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
-    const body = webhookSchema.partial().parse(req.body)
+    const body = webhookUpdateSchema.parse(req.body)
 
     // Verificar que el webhook pertenece al workspace
     // Esto es seguridad multi-tenant — un workspace no puede
@@ -144,7 +155,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           event: 'test',
           timestamp: new Date().toISOString(),
           data: {
-            message: 'Test desde CRM',
+            message: 'Test desde Gestión ROMEZ',
             workspaceId: ctx.workspaceId,
           },
         }),

@@ -1,17 +1,18 @@
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { z } from 'zod'
-import { AuthService } from '../../core/auth/auth.service'
+import { AuthService, authenticate, normalizeAuthEmail } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { INVITABLE_ROLES } from '../../core/auth/roles'
-import { authenticate } from '../../core/auth/auth.service'
+import { config } from '../../core/config'
 
 const authService = new AuthService()
+const authEmailSchema = z.string().transform(normalizeAuthEmail).pipe(z.string().email())
 
 export async function authRoutes(app: FastifyInstance) {
 
   app.get('/workspace-settings', { preHandler: authenticate }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as { workspaceId: string; role: string }
     const workspace = await db.workspace.findUnique({
       where: { id: ctx.workspaceId },
       select: { settings: true },
@@ -51,8 +52,15 @@ export async function authRoutes(app: FastifyInstance) {
       }
     }
   }, async (req, reply) => {
+    if (!config.ALLOW_PUBLIC_REGISTRATION) {
+      return reply.status(404).send({
+        error: 'REGISTRATION_DISABLED',
+        message: 'El alta de usuarios se realiza desde Equipo.',
+      })
+    }
+
     const schema = z.object({
-      email:         z.string().email(),
+      email:         authEmailSchema,
       password:      z.string().min(8),
       firstName:     z.string().min(1),
       lastName:      z.string().optional(),
@@ -98,7 +106,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
   }, async (req, reply) => {
     const schema = z.object({
-      email:    z.string().email(),
+      email:    authEmailSchema,
       password: z.string(),
     })
 
@@ -124,7 +132,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ─── GET /auth/me ──────────────────────────────────────────────
   // Verificar token y obtener datos del usuario actual
   app.get('/me', async (req, reply) => {
-    await req.jwtVerify()
+    await authenticate(req)
     const ctx = req.user as {
       sub: string
       workspaceId: string
@@ -144,7 +152,7 @@ export async function authRoutes(app: FastifyInstance) {
   })
 
   app.patch('/me/avatar', async (req, reply) => {
-    await req.jwtVerify()
+    await authenticate(req)
     const ctx = req.user as { sub: string; userId?: string }
 
     const { avatar } = z.object({
@@ -174,8 +182,9 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ─── POST /auth/api-keys ───────────────────────────────────────
   // Crear una API Key para conectar n8n
-  app.post('/api-keys', async (req, reply) => {
-    await req.jwtVerify()
+  app.post('/api-keys', {
+    preHandler: [authenticate, requireRole('owner', 'admin')],
+  }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
 
     const { name } = z.object({
@@ -198,8 +207,9 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ─── GET /auth/api-keys ────────────────────────────────────────
   // Listar API Keys del workspace (sin mostrar las claves)
-  app.get('/api-keys', async (req, reply) => {
-    await req.jwtVerify()
+  app.get('/api-keys', {
+    preHandler: [authenticate, requireRole('owner', 'admin')],
+  }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
 
     const keys = await db.apiKey.findMany({
@@ -212,8 +222,9 @@ export async function authRoutes(app: FastifyInstance) {
     )
   })
 
-  app.delete('/api-keys/:id', async (req, reply) => {
-    await req.jwtVerify()
+  app.delete('/api-keys/:id', {
+    preHandler: [authenticate, requireRole('owner', 'admin')],
+  }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string }
     const { id } = req.params as { id: string }
 
@@ -233,7 +244,7 @@ export async function authRoutes(app: FastifyInstance) {
     const ctx = req.user as { workspaceId: string; role: string }
 
     const schema = z.object({
-      email:     z.string().email(),
+      email:     authEmailSchema,
       firstName: z.string().min(1),
       lastName:  z.string().optional(),
       password:  z.string().min(8),
@@ -267,13 +278,13 @@ export async function authRoutes(app: FastifyInstance) {
   app.patch('/team/:id/role', {
     preHandler: [authenticate, requireRole('owner', 'admin')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as { workspaceId: string; role: string }
     const { id } = req.params as { id: string }
     const { role } = z.object({
       role: z.enum(['admin', 'member', 'viewer']),
     }).parse(req.body)
 
-    const updated = await authService.updateMemberRole(ctx.workspaceId, id, role)
+    const updated = await authService.updateMemberRole(ctx.workspaceId, id, role, ctx.role)
     return reply.send(updated)
   })
 
@@ -298,13 +309,18 @@ export async function authRoutes(app: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { email } = z.object({
-      email: z.string().email(),
+      email: authEmailSchema,
     }).parse(req.body)
 
     const user = await db.user.findUnique({ where: { email } })
 
     // Siempre responder igual — no revelar si el email existe
     if (!user) {
+      return reply.send({ message: 'Si el email existe, recibirás un link de recuperación.' })
+    }
+
+    if (!config.N8N_RESET_WEBHOOK_URL) {
+      req.log.error('N8N_RESET_WEBHOOK_URL no está configurada; no se emitió token de recuperación')
       return reply.send({ message: 'Si el email existe, recibirás un link de recuperación.' })
     }
 
@@ -322,10 +338,9 @@ export async function authRoutes(app: FastifyInstance) {
     })
 
     // Llamar a n8n vía webhook
-    const n8nWebhookUrl = process.env.N8N_RESET_WEBHOOK_URL
-    if (n8nWebhookUrl) {
-      const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`
-      await fetch(n8nWebhookUrl, {
+    const resetUrl = `${config.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${resetToken}`
+    try {
+      const response = await fetch(config.N8N_RESET_WEBHOOK_URL, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -333,7 +348,15 @@ export async function authRoutes(app: FastifyInstance) {
           firstName: user.firstName,
           resetUrl,
         }),
-      }).catch(() => {}) // No fallar si n8n no está disponible
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!response.ok) throw new Error(`Webhook respondió ${response.status}`)
+    } catch (error) {
+      await db.user.updateMany({
+        where: { id: user.id, resetToken },
+        data: { resetToken: null, resetTokenExpiry: null },
+      })
+      req.log.error({ err: error }, 'No se pudo entregar la recuperación de contraseña')
     }
 
     return reply.send({ message: 'Si el email existe, recibirás un link de recuperación.' })

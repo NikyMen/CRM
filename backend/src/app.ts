@@ -31,9 +31,13 @@ import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { inboxRoutes } from './modules/inbox/inbox.routes'
 import { whatsappRoutes } from './modules/whatsapp/whatsapp.routes'
 import { whatsAppManager } from './modules/whatsapp/whatsapp.manager'
-import { stockRoutes } from './modules/stock/stock.routes'
 import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
 import { metaApiRoutes } from './modules/meta-api/meta-api.routes'
+import { ticketRoutes } from './modules/tickets'
+import { customerServiceRoutes } from './modules/customer-service'
+import { clientRoutes } from './modules/clients/client.routes'
+import { collectionRoutes } from './modules/collections/collection.routes'
+import { checklistRoutes } from './modules/checklists/checklist.routes'
 
 export async function buildApp() {
   initSentry()
@@ -41,6 +45,15 @@ export async function buildApp() {
   const app = Fastify({ 
     logger: { level: 'info' },
     bodyLimit: 1048576,
+    trustProxy: (address) => {
+      const ip = address.replace(/^::ffff:/, '')
+      return ip === '::1'
+        || ip.startsWith('127.')
+        || ip.startsWith('10.')
+        || ip.startsWith('192.168.')
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+        || /^(fc|fd)[0-9a-f]{2}:/i.test(ip)
+    },
   })
 
   // ─── Rate Limiting Global ────────────────────────────────────────
@@ -62,7 +75,7 @@ export async function buildApp() {
 
   await app.register(fastifyRateLimit, {
     global: true,
-    max: 300, // Máximo 300 peticiones globales 
+    max: config.GLOBAL_RATE_LIMIT_MAX,
     timeWindow: '1 minute', // por minuto
     keyGenerator: (req) => {
       // Limitar por usuario autenticado o por IP
@@ -162,10 +175,16 @@ export async function buildApp() {
   await app.register(noteRoutes, { prefix: `${API}/notes` })
   await app.register(dashboardRoutes, { prefix: `${API}/dashboard` })
   await app.register(whatsappRoutes, { prefix: `${API}/whatsapp` })
-  await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
-  await app.register(metaApiRoutes, { prefix: `${API}/meta-api`, eventBus })
-  await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
-  await app.register(stockRoutes, { prefix: `${API}/stock` })
+  if (config.ENABLE_LEGACY_CHANNELS) {
+    await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
+    await app.register(metaApiRoutes, { prefix: `${API}/meta-api`, eventBus })
+    await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
+  }
+  await app.register(ticketRoutes, { prefix: `${API}/tickets`, eventBus })
+  await app.register(customerServiceRoutes, { prefix: `${API}/customer-service` })
+  await app.register(clientRoutes, { prefix: `${API}/clients`, eventBus })
+  await app.register(collectionRoutes, { prefix: `${API}/collections`, eventBus })
+  await app.register(checklistRoutes, { prefix: API, eventBus })
 
   app.addHook('onReady', async () => {
     await whatsAppManager.startBackgroundRuntime()

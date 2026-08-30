@@ -1,345 +1,65 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { dashboardApi } from '@/lib/api'
-import { ThemeToggle } from '@/components/theme-toggle'
-import type { DashboardData } from '@/types'
 import Link from 'next/link'
-import {
-  Users, KanbanSquare, DollarSign, Activity,
-  Loader2, PhoneCall, Send, Calendar,
-  CheckSquare, MessageSquare, Clock, ArrowRight, Layers,
-  Package, TriangleAlert, Archive,
-} from 'lucide-react'
-import clsx from 'clsx'
-
-const STATUS_COLORS: Record<string, string> = {
-  LEAD:      'bg-blue-500/10 text-blue-400',
-  QUALIFIED: 'bg-purple-500/10 text-purple-400',
-  ACTIVE:    'bg-green-500/10 text-green-400',
-  CUSTOMER:  'bg-emerald-500/10 text-emerald-400',
-  CHURNED:   'bg-red-500/10 text-red-400',
-}
-
-const ACTIVITY_ICONS: Record<string, any> = {
-  CALL:    PhoneCall,
-  EMAIL:   Send,
-  MEETING: Calendar,
-  TASK:    CheckSquare,
-  NOTE:    MessageSquare,
-  OTHER:   Clock,
-}
-
-function MetricCard({
-  title, value, subtitle, icon: Icon, color,
-}: {
-  title:    string
-  value:    string | number
-  subtitle?: string
-  icon:     any
-  color:    string
-}) {
-  return (
-    <div className="interactive-card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-slate-500 font-bold text-sm tracking-tight">{title}</p>
-        <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center border', color)}>
-          <Icon size={18} strokeWidth={2.5}/>
-        </div>
-      </div>
-      <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{value}</p>
-      {subtitle && <p className="text-slate-400 font-medium text-xs mt-1.5">{subtitle}</p>}
-    </div>
-  )
-}
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, ArrowRight, BadgeDollarSign, BriefcaseBusiness, CalendarCheck2, CheckCircle2, Headphones, Ticket } from 'lucide-react'
+import { auth } from '@/lib/auth'
+import { checklistsApi, clientsApi, collectionsApi, customerServiceApi, dashboardApi } from '@/lib/api'
+import type { ChecklistSummary, Client, CollectionSummary, CustomerServiceSummary, DashboardData, PaginatedResult } from '@/types'
+import { formatMoney, getErrorMessage } from '@/lib/format'
+import { ClientIdentityStrip, EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
-    queryFn:  () => dashboardApi.get().then((r) => r.data),
-  })
+  const user = auth.get()
+  const collectionsQuery = useQuery<CollectionSummary>({ queryKey: ['collections-summary'], queryFn: () => collectionsApi.summary().then((response) => response.data) })
+  const serviceQuery = useQuery<CustomerServiceSummary>({ queryKey: ['customer-service-summary'], queryFn: () => customerServiceApi.summary().then((response) => response.data), refetchInterval: 15_000 })
+  const clientsQuery = useQuery<PaginatedResult<Client>>({ queryKey: ['clients', 'dashboard-attention'], queryFn: () => clientsApi.list({ page: 0, limit: 8 }).then((response) => response.data) })
+  const checklistsQuery = useQuery<ChecklistSummary>({ queryKey: ['checklists-summary'], queryFn: () => checklistsApi.summary().then((response) => response.data) })
+  const commercialQuery = useQuery<DashboardData>({ queryKey: ['dashboard'], queryFn: () => dashboardApi.get().then((response) => response.data) })
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="animate-spin text-primary-500" size={40} />
-      </div>
-    )
-  }
+  const hasPrimaryError = collectionsQuery.isError && serviceQuery.isError && clientsQuery.isError
+  if (hasPrimaryError) return <PageFrame><ErrorState message={getErrorMessage(collectionsQuery.error || serviceQuery.error || clientsQuery.error)} retry={() => { collectionsQuery.refetch(); serviceQuery.refetch(); clientsQuery.refetch() }} /></PageFrame>
 
-  if (!data) return null
+  const collections = collectionsQuery.data
+  const service = serviceQuery.data
+  const clients = clientsQuery.data?.items ?? []
+  const checklistPending = (checklistsQuery.data?.pending ?? 0) + (checklistsQuery.data?.inProgress ?? 0) + (checklistsQuery.data?.overdue ?? 0)
+  const primaryCurrency = collections?.currencies.find((item) => item.currency === 'PYG') ?? collections?.currencies[0]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-fade-in">
-      <ThemeToggle />
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard General</h1>
-        <p className="text-slate-500 font-medium mt-1">Resumen de la actividad en tu CRM y rendimiento de ventas</p>
-      </div>
+    <PageFrame>
+      <PageHeader eyebrow="Mesa de trabajo" title={`Buen día, ${user?.firstName || 'equipo'}`} description="Lo que requiere atención ahora, ordenado por impacto operativo." />
 
-      {/* Métricas principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard
-          title="Contactos"
-          value={data.contacts.total}
-          subtitle="Registrados en el CRM"
-          icon={Users}
-          color="bg-blue-50 text-blue-600 border-blue-100"
-        />
-        <MetricCard
-          title="Leads abiertos"
-          value={data.deals.total}
-          subtitle="En pipelines activos"
-          icon={KanbanSquare}
-          color="bg-purple-50 text-purple-600 border-purple-100"
-        />
-        <MetricCard
-          title="Valor en pipeline"
-          value={`$${data.deals.pipelineValue.toLocaleString()}`}
-          subtitle="Volumen total proyectado"
-          icon={DollarSign}
-          color="bg-emerald-50 text-emerald-600 border-emerald-100"
-        />
-        <MetricCard
-          title="Actividades"
-          value={data.recentActivities.length}
-          subtitle="Últimas gestiones"
-          icon={Activity}
-          color="bg-orange-50 text-orange-600 border-orange-100"
-        />
-      </div>
-
-      {data.stock && (
-        <div className="interactive-card mb-8 p-6">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-              <Package size={20} className="text-primary-500" /> Stock operativo
-            </h3>
-            <Link
-              href="/stock"
-              className="flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-bold text-primary-600 transition-colors hover:border-primary-100 hover:bg-primary-50 hover:text-primary-700"
-            >
-              Gestionar stock <ArrowRight size={14} />
-            </Link>
+      {(collectionsQuery.isLoading || serviceQuery.isLoading) && !collections && !service ? <LoadingState label="Preparando prioridades…" /> : (
+        <section className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)]">
+          <div className="flex flex-col border-b border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="section-label">Prioridades de hoy</p><h2 className="mt-1 font-display text-base font-extrabold text-[var(--ink-primary)]">Cola operativa</h2></div><p className="mt-2 text-xs text-[var(--ink-tertiary)] sm:mt-0">Actualización automática de WhatsApp cada 15 segundos</p></div>
+          <div className="grid divide-y divide-[var(--line-soft)] md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+            <PriorityLink href="/tickets" icon={Ticket} label="Tickets sin responsable" value={service?.unassigned ?? 0} action={(service?.unassigned ?? 0) > 0 ? 'Asignar ahora' : 'Bandeja despejada'} urgent={(service?.unassigned ?? 0) > 0} />
+            <PriorityLink href="/collections" icon={BadgeDollarSign} label="Cuentas vencidas" value={collections?.overdueCount ?? 0} action="Revisar cobranzas" urgent={(collections?.overdueCount ?? 0) > 0} />
+            <PriorityLink href="/clients" icon={CalendarCheck2} label="Checklist pendientes" value={checklistPending} action="Revisar legajos" urgent={checklistPending > 0} />
+            <PriorityLink href="/customer-service" icon={Headphones} label="Esperando cliente" value={service?.waitingCustomer ?? 0} action="Ver seguimiento" />
           </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Productos</p>
-              <p className="mt-2 text-2xl font-black text-slate-900">{data.stock.totalProducts}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Unidades</p>
-              <p className="mt-2 text-2xl font-black text-emerald-700">{data.stock.unitsInStock}</p>
-            </div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50/80 p-4">
-              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-700">
-                <TriangleAlert size={14} /> Alertas
-              </p>
-              <p className="mt-2 text-2xl font-black text-amber-700">
-                {data.stock.lowStockProducts + data.stock.outOfStockProducts}
-              </p>
-            </div>
-            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Valor estimado</p>
-              <p className="mt-2 text-2xl font-black text-blue-700">
-                ${data.stock.inventoryValue.toLocaleString()}
-              </p>
-            </div>
-          </div>
-
-          {data.stock.criticalProducts.length > 0 ? (
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {data.stock.criticalProducts.slice(0, 3).map((product) => (
-                <Link
-                  key={product.id}
-                  href="/stock"
-                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white p-3 transition-colors hover:bg-amber-50"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-900">{product.name}</p>
-                    <p className="text-xs font-semibold text-slate-400">Minimo {product.minStock}</p>
-                  </div>
-                  <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-sm font-black text-amber-700">
-                    {product.stockQuantity}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-              <Archive size={18} className="text-slate-400" />
-              <p className="text-sm font-semibold text-slate-500">Sin alertas de stock.</p>
-            </div>
-          )}
-        </div>
+        </section>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Leads por etapa */}
-        <div className="lg:col-span-2 interactive-card p-6">
-          <h3 className="text-slate-900 font-bold mb-5 flex items-center gap-2 text-lg">
-            <KanbanSquare size={20} className="text-primary-500" /> Rendimiento de Embudos (Leads por etapa)
-          </h3>
-          {data.deals.byStage.length === 0 ? (
-            <div className="text-center py-10 bg-slate-50 border border-slate-200 border-dashed rounded-xl">
-               <Layers size={36} className="text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
-               <p className="text-slate-500 font-medium">No hay leads todavía</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {data.deals.byStage.map((stage) => {
-                const maxCount = Math.max(...data.deals.byStage.map((s) => s.count))
-                const pct = maxCount > 0 ? (stage.count / maxCount) * 100 : 0
-                return (
-                  <div key={stage.stageId}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-3 h-3 rounded-full shadow-inner border border-black/5"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                        <span className="text-sm font-bold text-slate-800">{stage.stageName}</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                          ${stage.value.toLocaleString()}
-                        </span>
-                        <span className="text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md text-right min-w-[32px]">
-                          {stage.count}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-slate-100 border border-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${pct}%`, backgroundColor: stage.color }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_.85fr]">
+        <SectionPanel title="Legajos que requieren contexto" description="Identidad, responsable, cuenta y pendientes sin entrar a cada ficha." action={<Link href="/clients" className="text-xs font-bold text-[var(--brand-blue)]">Ver cartera</Link>}>
+          {clientsQuery.isLoading ? <LoadingState /> : clientsQuery.isError ? <ErrorState message={getErrorMessage(clientsQuery.error)} retry={() => clientsQuery.refetch()} /> : clients.length ? <div className="space-y-2 p-3">{clients.slice(0, 6).map((client) => { const balance = client.balances?.find((item) => item.currency === 'PYG') ?? client.balances?.[0]; return <Link href={`/clients/${client.id}`} key={client.id} className="block"><ClientIdentityStrip client={client} account={balance ? { currency: balance.currency, balance: balance.balance, billed: '0', paid: '0', count: 0 } : undefined} pending={(client.pendingChecklistItems ?? 0) + (client.openTickets ?? 0)} compact /></Link> })}</div> : <EmptyState title="Sin legajos" description="Los clientes creados aparecerán en esta cola." />}
+        </SectionPanel>
 
-        {/* Contactos por estado */}
-        <div className="interactive-card p-6 flex flex-col">
-          <h3 className="text-slate-900 font-bold mb-5 flex items-center gap-2 text-lg">
-             <Users size={20} className="text-primary-500" /> Estado de leads
-          </h3>
-          {data.contacts.byStatus.length === 0 ? (
-            <div className="text-center py-10 bg-slate-50 border border-slate-200 border-dashed rounded-xl flex-1 flex flex-col justify-center">
-                <Users size={36} className="text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
-                <p className="text-slate-500 font-medium pb-2">Sin contactos</p>
-            </div>
-          ) : (
-            <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-              {data.contacts.byStatus.map((s) => (
-                <div key={s.status} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50">
-                  <span className={clsx(
-                    'text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-wider',
-                    STATUS_COLORS[s.status] ?? 'bg-slate-100 text-slate-600 border border-slate-200'
-                  )}>
-                    {s.status}
-                  </span>
-                  <span className="text-base text-slate-900 font-extrabold">{s.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="space-y-6">
+          <SectionPanel title="Pulso comercial" description="Oportunidades abiertas en el embudo.">
+            {commercialQuery.isLoading ? <LoadingState /> : commercialQuery.data ? <div className="p-5"><div className="flex items-end justify-between"><div><p className="font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]">{commercialQuery.data.deals.total}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">oportunidades activas</p></div><p className="font-mono text-sm font-bold tabular-nums text-[var(--brand-blue)]">{formatMoney(commercialQuery.data.deals.pipelineValue)}</p></div><div className="mt-5 space-y-3">{commercialQuery.data.deals.byStage.slice(0, 5).map((stage) => <div key={stage.stageId} className="flex items-center gap-3"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} /><p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--ink-secondary)]">{stage.stageName}</p><span className="font-mono text-xs font-bold tabular-nums text-[var(--ink-primary)]">{stage.count}</span></div>)}</div><Link href="/commercial" className="btn-secondary mt-5 w-full"><BriefcaseBusiness size={15} /> Abrir gestión comercial</Link></div> : <EmptyState title="Sin datos comerciales" description="El embudo aparecerá cuando existan oportunidades." />}
+          </SectionPanel>
+
+          <SectionPanel title="Estado del día">
+            <div className="divide-y divide-[var(--line-soft)]"><HealthRow label="WhatsApp" ok={service?.whatsapp?.status === 'CONNECTED'} detail={service?.whatsapp?.status === 'CONNECTED' ? 'Conectado' : 'Requiere atención'} /><HealthRow label="Tickets propios" ok={(service?.mine ?? 0) === 0} detail={`${service?.mine ?? 0} abiertos`} /><HealthRow label="Cobros registrados" ok={Number(primaryCurrency?.received ?? 0) > 0} detail={formatMoney(primaryCurrency?.received, primaryCurrency?.currency)} /></div>
+          </SectionPanel>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Actividad reciente */}
-        <div className="interactive-card p-6">
-          <h3 className="text-slate-900 font-bold mb-5 flex items-center gap-2 text-lg">
-             <Activity size={20} className="text-primary-500" /> Registro de actividades
-          </h3>
-          {data.recentActivities.length === 0 ? (
-             <div className="text-center py-10 bg-slate-50 border border-slate-200 border-dashed rounded-xl">
-                 <Clock size={36} className="text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
-                 <p className="text-slate-500 font-medium">Sin movimientos recientes</p>
-             </div>
-          ) : (
-            <div className="space-y-4">
-              {data.recentActivities.map((activity) => {
-                const Icon = ACTIVITY_ICONS[activity.type] ?? Clock
-                return (
-                  <div key={activity.id} className="flex items-start gap-4 p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                    <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-                      <Icon size={16} className="text-slate-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-slate-900 font-bold text-sm tracking-tight truncate">{activity.title}</p>
-                      {activity.contactName && (
-                        <p className="text-slate-500 font-medium text-xs mt-0.5">{activity.contactName}</p>
-                      )}
-                    </div>
-                    <p className="text-slate-400 font-medium text-xs shrink-0 whitespace-nowrap bg-white border border-slate-200 px-2 py-0.5 rounded-md">
-                      {new Date(activity.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Contactos recientes */}
-        <div className="interactive-card p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-slate-900 font-bold flex items-center gap-2 text-lg">
-              <Users size={20} className="text-primary-500" /> Contactos recientes
-            </h3>
-            <Link
-              href="/contacts"
-              className="text-xs font-bold text-primary-600 hover:text-primary-700 hover:bg-primary-50 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent hover:border-primary-100 transition-colors"
-            >
-              Ver agenda completa <ArrowRight size={14} />
-            </Link>
-          </div>
-          {data.contacts.recent.length === 0 ? (
-            <div className="text-center py-10 bg-slate-50 border border-slate-200 border-dashed rounded-xl">
-                <Users size={36} className="text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
-                <p className="text-slate-500 font-medium">Todavía no has agregado contactos</p>
-            </div>
-          ) : (
-             <div className="space-y-3">
-              {data.contacts.recent.map((contact) => (
-                <Link
-                  key={contact.id}
-                  href={`/contacts/${contact.id}`}
-                  className="flex items-center gap-4 hover:bg-slate-50 rounded-xl p-3 transition-colors border border-slate-100 bg-white"
-                >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-100 to-slate-200 border border-slate-300/50 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0 shadow-sm">
-                    {contact.firstName[0]}{contact.lastName?.[0] ?? ''}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-slate-900 font-bold text-sm truncate tracking-tight">
-                      {contact.firstName} {contact.lastName}
-                    </p>
-                    <p className="text-slate-500 font-medium text-xs mt-0.5 flex items-center gap-1.5">
-                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span> {contact.status}
-                    </p>
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                      <span className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 mb-1">Score</span>
-                      <span className={clsx(
-                        'text-xs font-extrabold px-2 py-0.5 rounded-md border',
-                        contact.score >= 70 ? 'bg-green-50 text-green-600 border-green-200' :
-                        contact.score >= 40 ? 'bg-yellow-50 text-yellow-600 border-yellow-200' : 'bg-slate-100 text-slate-500 border-slate-200'
-                      )}>
-                        {contact.score}
-                      </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    </PageFrame>
   )
 }
+
+function PriorityLink({ href, icon: Icon, label, value, action, urgent }: { href: string; icon: typeof Ticket; label: string; value: string | number; action: string; urgent?: boolean }) { return <Link href={href} className="group p-5 hover:bg-[var(--paper-soft)]"><div className="flex items-center gap-2"><Icon size={16} className={urgent ? 'text-[var(--warning)]' : 'text-[var(--brand-blue)]'} /><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-tertiary)]">{label}</p></div><p className={urgent ? 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--warning)]' : 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]'}>{value}</p><p className="mt-3 flex items-center gap-1 text-xs font-bold text-[var(--brand-blue)]">{action} <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" /></p></Link> }
+function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) { return <div className="flex items-center gap-3 px-5 py-3.5">{ok ? <CheckCircle2 size={16} className="text-[var(--success)]" /> : <AlertTriangle size={16} className="text-[var(--warning)]" />}<p className="flex-1 text-xs font-bold text-[var(--ink-primary)]">{label}</p><StatusPill tone={ok ? 'success' : 'warning'}>{detail}</StatusPill></div> }

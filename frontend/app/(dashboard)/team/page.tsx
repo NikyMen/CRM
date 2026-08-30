@@ -16,13 +16,6 @@ const ROLE_LABELS: Record<Role, string> = {
   viewer: 'Viewer',
 }
 
-const ROLE_COLORS: Record<Role, string> = {
-  owner:  'bg-amber-50 text-amber-600 border-amber-200',
-  admin:  'bg-primary-50 text-primary-600 border-primary-200',
-  member: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-  viewer: 'bg-slate-50 text-slate-600 border-slate-200',
-}
-
 type Member = {
   id:       string
   role:     Role
@@ -232,7 +225,7 @@ export default function TeamPage() {
                   {isOwner && !isOwnerMember && !isMe ? (
                     <button
                       onClick={() => {
-                        if (confirm(`¿Eliminar a ${member.user.firstName} del workspace?`)) {
+                        if (confirm(`¿Eliminar a ${member.user.firstName} del espacio de trabajo?`)) {
                           removeMutation.mutate(member.id)
                         }
                       }}
@@ -263,7 +256,7 @@ export default function TeamPage() {
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-admin mb-2 inline-block">Admin</span>
-            <p className="leading-relaxed">Gestiona contactos, leads, webhooks y pipelines. Puede invitar nuevos Members y Viewers a la plataforma.</p>
+            <p className="leading-relaxed">Gestiona clientes, oportunidades, tickets e integraciones. Puede invitar integrantes y usuarios de consulta.</p>
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-member mb-2 inline-block">Member</span>
@@ -271,7 +264,7 @@ export default function TeamPage() {
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-viewer mb-2 inline-block">Viewer</span>
-            <p className="leading-relaxed">Solo lectura. Puede revisar auditorías, contactos y leads pero no tiene capacidad de modificar ni interactuar.</p>
+            <p className="leading-relaxed">Solo lectura. Puede consultar la cartera y sus registros asignados, sin capacidad de modificar ni responder.</p>
           </div>
         </div>
       </div>

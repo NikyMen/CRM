@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Check, ImagePlus, Key, KanbanSquare, Loader2, Package, Save, Settings, Shield, SlidersHorizontal,
-  Users, Webhook,
+  AlertTriangle, Check, ImagePlus, Key, KanbanSquare, Loader2, RefreshCcw, Save, Settings,
+  Shield, SlidersHorizontal, Smartphone, Unplug, Users, Webhook, Wifi, WifiOff,
 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import NextImage from 'next/image'
+import QRCode from 'qrcode'
 import clsx from 'clsx'
 import { auth, type StoredAuth } from '@/lib/auth'
-import { authApi } from '@/lib/api'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { authApi, whatsappApi } from '@/lib/api'
+import type { WhatsAppSessionSnapshot } from '@/types'
+import { formatDateTime, getErrorMessage } from '@/lib/format'
 import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
@@ -16,7 +20,7 @@ import TeamPage from '../team/page'
 import PipelinesPage from '../pipelines/page'
 import { PillNav } from '@/components/react-bits/PillNav'
 
-type SettingsTab = 'profile' | 'kanban' | 'modules' | 'webhooks' | 'api-keys' | 'team'
+type SettingsTab = 'profile' | 'whatsapp' | 'kanban' | 'webhooks' | 'api-keys' | 'team'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -28,23 +32,12 @@ const TAB_ITEMS: {
   adminOnly?: boolean
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
-  { id: 'kanban', label: 'Kanban', icon: KanbanSquare, adminOnly: true },
-  { id: 'modules', label: 'Módulos', icon: Package, adminOnly: true },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true },
+  { id: 'kanban', label: 'Gestión comercial', icon: KanbanSquare, adminOnly: true },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
   { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
   { id: 'team', label: 'Equipo', icon: Users, adminOnly: true },
 ]
-
-function ModulesPanel() {
-  const queryClient = useQueryClient()
-  const settings = useQuery({ queryKey: ['workspace-settings'], queryFn: () => authApi.getWorkspaceSettings().then((response) => response.data) })
-  const update = useMutation({
-    mutationFn: (stockVisible: boolean) => authApi.updateWorkspaceSettings({ stockVisible }),
-    onSuccess: (response) => queryClient.setQueryData(['workspace-settings'], response.data),
-  })
-  const visible = settings.data?.stockVisible !== false
-  return <div className="mx-auto max-w-5xl p-6"><div className="identity-line flex items-center justify-between gap-4 rounded-2xl p-5"><div><p className="font-display font-black text-[var(--ink-primary)]">Módulo Stock</p><p className="mt-1 text-sm font-medium text-[var(--ink-secondary)]">Oculta Stock de la navegación sin borrar datos ni bloquear su URL o API.</p></div><button type="button" role="switch" aria-checked={visible} disabled={settings.isLoading || update.isPending} onClick={() => update.mutate(!visible)} className={clsx('relative h-7 w-12 shrink-0 rounded-full transition', visible ? 'bg-[#c5ed1b]' : 'bg-slate-300')}><span className={clsx('absolute top-1 h-5 w-5 rounded-full bg-[#0c1015] transition-transform', visible ? 'translate-x-1' : '-translate-x-5')} /></button></div></div>
-}
 
 type EditorState = {
   src: string
@@ -185,8 +178,8 @@ function AvatarSettingsPanel() {
       setUser((current) => current ? { ...current, ...updated } : current)
       setSelectedAvatar(updated.avatar || DEFAULT_AVATARS[0].value)
       setMessage('Avatar actualizado.')
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'No se pudo guardar el avatar.')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'No se pudo guardar el avatar.'))
     } finally {
       setSaving(false)
     }
@@ -380,6 +373,88 @@ function AvatarSettingsPanel() {
   )
 }
 
+const WHATSAPP_STATUS: Record<WhatsAppSessionSnapshot['status'], string> = {
+  CONNECTED: 'Conectado',
+  CONNECTING: 'Conectando',
+  PAIRING: 'Esperando vinculación',
+  ERROR: 'Con error',
+  DISCONNECTED: 'Desconectado',
+}
+
+function WhatsAppSettingsPanel() {
+  const queryClient = useQueryClient()
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
+  const sessionQuery = useQuery<WhatsAppSessionSnapshot>({
+    queryKey: ['whatsapp-session'],
+    queryFn: () => whatsappApi.getSession().then((response) => response.data),
+    retry: false,
+    refetchInterval: (query) => ['PAIRING', 'CONNECTING'].includes(query.state.data?.status ?? '') ? 3_000 : 15_000,
+  })
+  const connect = useMutation({
+    mutationFn: () => whatsappApi.connect(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['whatsapp-session'] }),
+  })
+  const disconnect = useMutation({
+    mutationFn: () => whatsappApi.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-session'] })
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] })
+    },
+  })
+
+  useEffect(() => {
+    let active = true
+    const qrCode = sessionQuery.data?.qrCode
+    if (!qrCode) {
+      setQrImageUrl(null)
+      return () => { active = false }
+    }
+    QRCode.toDataURL(qrCode, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#062d65', light: '#ffffff' } })
+      .then((url) => { if (active) setQrImageUrl(url) })
+      .catch(() => { if (active) setQrImageUrl(null) })
+    return () => { active = false }
+  }, [sessionQuery.data?.qrCode])
+
+  if (sessionQuery.isLoading) return <div className="mx-auto max-w-5xl p-6"><div className="state-panel"><Loader2 size={24} className="animate-spin text-[var(--brand-blue)]" /><p className="text-sm font-semibold text-[var(--ink-secondary)]">Consultando el WhatsApp del estudio…</p></div></div>
+
+  const session = sessionQuery.data
+  const isConnected = session?.status === 'CONNECTED'
+  const runtimeReady = Boolean(session?.runtimeCompatible && session?.packageInstalled)
+  const busy = connect.isPending || disconnect.isPending
+  const error = sessionQuery.error || connect.error || disconnect.error
+
+  return <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">WhatsApp de ROMEZ</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
+
+    <section className="paper-panel overflow-hidden">
+      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-lg border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm('¿Desconectar el WhatsApp compartido de ROMEZ?')) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
+
+      {!runtimeReady ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p><strong>El servidor de WhatsApp no está disponible.</strong> Revisá que el proceso persistente y Baileys estén instalados antes de vincular el número.</p></div> : null}
+      {error || session?.lastError ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p>{session?.lastError || getErrorMessage(error, 'No pudimos consultar la sesión.')}</p></div> : null}
+
+      <div className="grid lg:grid-cols-[360px_1fr]">
+        <div className="border-b border-[var(--line-soft)] p-5 lg:border-b-0 lg:border-r">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Vinculación por QR</p>
+          {qrImageUrl ? <><div className="mt-4 grid place-items-center rounded-lg border border-[var(--line)] bg-white p-4"><NextImage unoptimized src={qrImageUrl} alt="Código QR para vincular WhatsApp" width={280} height={280} className="h-auto w-full max-w-[280px]" /></div><p className="mt-3 text-xs leading-5 text-[var(--ink-tertiary)]">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular dispositivo. El código se actualiza automáticamente mientras espera.</p></> : <div className="mt-4 grid min-h-64 place-items-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--paper-soft)] p-6 text-center"><div><Smartphone size={30} className="mx-auto text-[var(--brand-blue)]" /><p className="mt-3 text-sm font-bold text-[var(--ink-primary)]">{isConnected ? 'Número vinculado' : 'Todavía no hay un QR activo'}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{isConnected ? 'Los mensajes entrantes se convierten en tickets.' : 'Generá un código para conectar el único número del estudio.'}</p></div></div>}
+        </div>
+        <dl className="grid content-start sm:grid-cols-2">
+          <SessionDatum label="Número" value={session?.phoneNumber || 'Sin vincular'} />
+          <SessionDatum label="Nombre" value={session?.pushName || '—'} />
+          <SessionDatum label="Última conexión" value={formatDateTime(session?.lastConnectedAt)} />
+          <SessionDatum label="Conversaciones sincronizadas" value={String(session?.chatCount ?? 0)} />
+          <SessionDatum label="Sesión guardada" value={session?.authAvailable ? 'Sí' : 'No'} />
+          <SessionDatum label="Proceso activo" value={session?.hasActiveSocket ? 'Sí' : 'No'} />
+        </dl>
+      </div>
+    </section>
+  </div>
+}
+
+function SessionDatum({ label, value }: { label: string; value: string }) {
+  return <div className="border-b border-[var(--line-soft)] p-5 odd:sm:border-r"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt><dd className="mt-2 text-sm font-bold text-[var(--ink-primary)]">{value}</dd></div>
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [user, setUser] = useState<StoredAuth | null>(null)
@@ -408,8 +483,8 @@ export default function SettingsPage() {
       <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[var(--background)]/90 px-4 py-3 backdrop-blur-xl md:top-0">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuracion</h1>
-            <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del workspace.</p>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuración</h1>
+            <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del espacio de trabajo.</p>
           </div>
 
           <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
@@ -417,8 +492,8 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
+      {canManageSettings && activeTab === 'whatsapp' && <WhatsAppSettingsPanel />}
       {canManageSettings && activeTab === 'kanban' && <PipelinesPage />}
-      {canManageSettings && activeTab === 'modules' && <ModulesPanel />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
       {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
       {canManageSettings && activeTab === 'team' && <TeamPage />}

@@ -1,0 +1,16 @@
+http:
+  routers:
+    romez:
+      rule: "Host(`romez.consultoriadigital.io`)"
+      entryPoints:
+        - websecure
+      service: romez
+      tls:
+        certResolver: mytlschallenge
+
+  services:
+    romez:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://172.18.0.1:8080"

@@ -3,9 +3,15 @@ import { z } from 'zod'
 import { AuthService } from '../../core/auth/auth.service'
 import { ContactService } from '../contacts/contact.service'
 import { db } from '../../core/database'
+import { config } from '../../core/config'
 import { UnauthorizedError, ActivityType } from '../../types'
 import type { EventBus } from '../../core/event-bus'
-import { type Prisma } from '@prisma/client'
+import {
+  assertInboundChannelAllowed,
+  createValidatedInboundActivity,
+  findInboundContactById,
+  type ValidatedInboundActivityInput,
+} from './inbound-security'
 
 const authService = new AuthService()
 
@@ -128,30 +134,12 @@ export async function inboundRoutes(
       source:      z.string().default('N8N'),
     })
 
-    const body = schema.parse(req.body)
+    const body = schema.parse(req.body) as Omit<ValidatedInboundActivityInput, 'workspaceId'>
 
-    const activity = await db.activity.create({
-      data: {
-        workspaceId,
-        type:        body.type,
-        entityType:  body.entityType,
-        entityId:    body.entityId,
-        source:      body.source,
-        title:       body.title,
-        description: body.description,
-        metadata:    (body.metadata ?? null) as Prisma.InputJsonValue,
-        ...(body.entityType === 'contact' && { contactId: body.entityId }),
-        ...(body.entityType === 'deal'    && { dealId:    body.entityId }),
-      },
+    const activity = await createValidatedInboundActivity(db, {
+      workspaceId,
+      ...body,
     })
-
-    // Si es actividad de contacto, actualizar lastContactedAt
-    if (body.entityType === 'contact') {
-      await db.contact.update({
-        where: { id: body.entityId },
-        data: { lastContactedAt: new Date() },
-      })
-    }
 
     await options.eventBus.emit('automation.triggered', {
       workspaceId,
@@ -181,9 +169,21 @@ export async function inboundRoutes(
     })
 
     const body = schema.parse(req.body)
+    assertInboundChannelAllowed(body.channel, config.ENABLE_LEGACY_CHANNELS)
 
     // Resolver a qué contacto pertenece el mensaje
-    let contactId = body.contactId
+    let contactId: string | undefined
+
+    if (body.contactId) {
+      const suppliedContact = await findInboundContactById(db, workspaceId, body.contactId)
+      if (!suppliedContact) {
+        return reply.status(422).send({
+          error: 'CONTACT_NOT_FOUND',
+          message: 'El contactId no pertenece al espacio de trabajo de esta API key.',
+        })
+      }
+      contactId = suppliedContact.id
+    }
 
     if (!contactId) {
       const contact = await db.contact.findFirst({
@@ -238,27 +238,16 @@ export async function inboundRoutes(
         ? ActivityType.EMAIL_RECEIVED
         : ActivityType.EMAIL_SENT
 
-    const activity = await db.activity.create({
-      data: {
-        workspaceId,
-        type:        activityType,
-        entityType:  'contact',
-        entityId:    contactId,
-        contactId,
-        source:      body.channel,
-        title:       `${body.channel} ${body.direction === 'inbound' ? 'recibido' : 'enviado'}`,
-        description: body.content.substring(0, 500),
-        metadata:    (body.metadata ?? null) as Prisma.InputJsonValue,
-      },
+    const activity = await createValidatedInboundActivity(db, {
+      workspaceId,
+      type: activityType,
+      entityType: 'contact',
+      entityId: contactId,
+      source: body.channel,
+      title: `${body.channel} ${body.direction === 'inbound' ? 'recibido' : 'enviado'}`,
+      description: body.content.substring(0, 500),
+      metadata: body.metadata,
     })
-
-    // Actualizar lastContactedAt del contacto
-    if (contactId) {
-      await db.contact.update({
-        where: { id: contactId },
-        data: { lastContactedAt: new Date() },
-      })
-    }
 
     await options.eventBus.emit('message.received', {
       workspaceId,

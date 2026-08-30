@@ -4,6 +4,11 @@ import { db } from '../../core/database'
 import { authenticate } from '../../core/auth/auth.service'
 import { AppError } from '../../types'
 import { requireRole } from '../../core/auth/require-role'
+import {
+  assertStageInWorkspacePipeline,
+  deleteStageInWorkspacePipeline,
+  updateStageInWorkspacePipeline,
+} from './pipeline-stage-security'
 
 export async function pipelineRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
@@ -135,10 +140,13 @@ export async function pipelineRoutes(app: FastifyInstance) {
     })
     if (!pipeline) throw new AppError( 404, 'Pipeline no encontrado')
 
-    const stage = await db.stage.update({
-      where: { id: stageId },
-      data:  body,
-    })
+    const stage = await updateStageInWorkspacePipeline(
+      db,
+      ctx.workspaceId,
+      id,
+      stageId,
+      body
+    )
     return reply.send(stage)
   })
 
@@ -169,13 +177,15 @@ export async function pipelineRoutes(app: FastifyInstance) {
     })
     if (!pipeline) throw new AppError( 404, 'Pipeline no encontrado')
 
+    await assertStageInWorkspacePipeline(db, ctx.workspaceId, id, stageId)
+
     const [stageCount, dealCount] = await Promise.all([
       db.stage.count({ where: { pipelineId: id } }),
       db.deal.count({ where: { workspaceId: ctx.workspaceId, stageId, isArchived: false } }),
     ])
     if (stageCount <= 1) throw new AppError(409, 'El embudo debe conservar al menos una etapa')
     if (dealCount > 0) throw new AppError(409, `La etapa contiene ${dealCount} leads; movelos antes de eliminarla`)
-    await db.stage.delete({ where: { id: stageId } })
+    await deleteStageInWorkspacePipeline(db, ctx.workspaceId, id, stageId)
     return reply.status(204).send()
   })
 }

@@ -1,92 +1,79 @@
 # Entorno local y push seguro
 
-Esta guia deja el proyecto listo para trabajar localmente y subirlo a GitHub sin secretos.
+## Preparación local
 
-## Setup local
-
-1. Instalar dependencias desde la raiz:
+1. Instalar desde la raíz:
 
 ```bash
 pnpm install
 ```
 
-2. Crear variables locales:
+2. Crear archivos locales:
 
-```bash
-copy backend\.env.example backend\.env
-copy frontend\.env.example frontend\.env.local
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env.local
 ```
 
-3. Completar `backend\.env` con valores reales solo en tu maquina:
+3. Completar sin versionar:
 
-- `DATABASE_URL` y `DIRECT_URL`
-- `REDIS_URL`
-- `JWT_SECRET` con al menos 32 caracteres
-- `FRONTEND_URL=http://localhost:3001`
-- `META_WEBHOOK_VERIFY_TOKEN`
-- `META_APP_ID`
-- `META_APP_SECRET`
-- `META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID`
-- `CHATWOOT_*` si se usa Chatwoot
+- `DATABASE_URL` y `DIRECT_URL` de una PostgreSQL de desarrollo.
+- `REDIS_URL`.
+- `JWT_SECRET` de al menos 32 caracteres.
+- `FRONTEND_URL=http://localhost:3001`.
+- `ROMEZ_OWNER_*` sólo para ejecutar el bootstrap.
 
-4. Preparar Prisma cuando la base local este disponible:
+Mantener `ALLOW_PUBLIC_REGISTRATION=false`, `ENABLE_LEGACY_CHANNELS=false`, `DEFAULT_CURRENCY=PYG` y `APP_TIMEZONE=America/Asuncion`.
+
+4. Preparar una base limpia y crear el owner:
 
 ```bash
 pnpm --filter crm db:generate
-pnpm --filter crm db:push
+pnpm --filter crm db:migrate
+pnpm --filter crm db:bootstrap
 ```
 
-5. Levantar el CRM:
+5. Levantar Gestión ROMEZ:
 
 ```bash
 pnpm dev
 ```
 
-Frontend queda en `http://localhost:3001` y backend en `http://localhost:3000`.
+- Web: `http://localhost:3001`.
+- API: `http://localhost:3000/api/v1`.
+- Salud: `http://localhost:3000/health`.
+
+## Verificación
+
+```bash
+pnpm --filter crm test
+pnpm --filter crm build
+pnpm --filter frontend lint
+pnpm --filter frontend exec tsc --noEmit
+pnpm --filter frontend build
+```
+
+No usar `prisma db push` en producción.
 
 ## GitHub seguro
 
-Antes de pushear:
+Antes de subir:
 
 ```bash
 git status --short
 git diff -- . ":(exclude)**/.env" ":(exclude)**/.env.*"
 ```
 
-No deben aparecer archivos `.env`, `.data`, dumps de base, tokens, claves privadas ni sesiones de WhatsApp.
+No deben aparecer `.env`, `.data`, dumps, respaldos, tokens, claves privadas, documentos ni sesiones/medios de WhatsApp.
 
-Si Git en Windows muestra `detected dubious ownership`, ejecutar una sola vez:
+Si Git en Windows informa `detected dubious ownership`, autorizar únicamente la ruta exacta del repositorio:
 
 ```bash
-git config --global --add safe.directory C:/dev/CRM
+git config --global --add safe.directory D:/dev/crm/CRM
 ```
 
-## Archivos ignorados
+## Canal WhatsApp
 
-El repo ignora:
+La integración canónica es un solo WhatsApp mediante QR/Baileys, configurado por owner/admin desde Configuración. Los módulos heredados Meta, Inbox y Chatwoot permanecen en el código por reversibilidad, pero no registran rutas cuando `ENABLE_LEGACY_CHANNELS=false`.
 
-- `.env` y `.env.*`, manteniendo versionables solo `.env.example`
-- `node_modules`, `dist`, `.next`, `.turbo`
-- `.data`, `backend/.data`, sesiones y media local de WhatsApp
-- logs, coverage, reportes de pruebas y caches locales
-
-## API Meta
-
-La nueva seccion del CRM vive en `/api-meta`.
-
-Endpoints backend:
-
-- `GET /api/v1/meta-api/status`
-- `GET /api/v1/meta-api/connections`
-- `POST /api/v1/meta-api/connections`
-- `PATCH /api/v1/meta-api/connections/:id`
-- `DELETE /api/v1/meta-api/connections/:id`
-- `POST /api/v1/meta-api/connections/:id/test`
-- `POST /api/v1/meta-api/connections/:id/whatsapp/register`
-- `GET /api/v1/meta-api/embedded-signup/config`
-- `POST /api/v1/meta-api/embedded-signup/complete`
-- `POST /api/v1/meta-api/embedded-signup/complete-code`
-- `GET /api/v1/meta-api/webhook`
-- `POST /api/v1/meta-api/webhook`
-
-Los `accessToken` de clientes se aceptan por backend y no se devuelven al frontend. Para produccion real conviene cifrarlos en base de datos o moverlos a un vault.
+No guardar credenciales de DNIT, Marangatu, SIFEN ni WhatsApp en Git u Obsidian.

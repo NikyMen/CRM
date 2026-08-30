@@ -6,6 +6,7 @@ import { requireRole } from '../../core/auth/require-role'
 import type { EventBus } from '../../core/event-bus'
 import { InboxService } from './inbox.service'
 import { MetaWebhookAdapter } from './meta.adapter'
+import { assertValidMetaWebhookSignature, installRawMetaWebhookCapture } from './meta-webhook-security'
 
 const providerSchema = z.enum(['meta', 'tiktok'])
 const channelSchema = z.enum(['whatsapp', 'instagram', 'messenger', 'tiktok'])
@@ -88,6 +89,10 @@ export async function inboxRoutes(
     meta: metaAdapter,
   })
 
+  installRawMetaWebhookCapture(app, (pathname) =>
+    pathname === '/meta/webhook' || pathname.endsWith('/inbox/meta/webhook')
+  )
+
   // Webhook publico para Meta. No lleva auth del CRM.
   app.get('/meta/webhook', async (req, reply) => {
     const result = await metaAdapter.verifyWebhook({
@@ -104,6 +109,7 @@ export async function inboxRoutes(
   })
 
   app.post('/meta/webhook', async (req, reply) => {
+    assertValidMetaWebhookSignature(req)
     const envelope = {
       headers: req.headers,
       query: req.query as Record<string, unknown>,
@@ -190,7 +196,7 @@ export async function inboxRoutes(
     })
 
     privateApp.get('/conversations', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'admin'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const filters = z.object({
@@ -205,7 +211,7 @@ export async function inboxRoutes(
     })
 
     privateApp.get<{ Params: { id: string } }>('/conversations/:id/messages', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'admin'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const filters = z.object({
@@ -218,7 +224,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post<{ Params: { id: string } }>('/conversations/:id/read', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'admin'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       await service.markConversationAsRead(ctx.workspaceId, req.params.id)
@@ -226,7 +232,7 @@ export async function inboxRoutes(
     })
 
     privateApp.post<{ Params: { id: string } }>('/conversations/:id/messages', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'admin'),
     }, async (req, reply) => {
       const ctx = req.user as { workspaceId: string }
       const body = sendConversationMessageSchema.parse(req.body) as Parameters<typeof service.sendConversationMessage>[2]

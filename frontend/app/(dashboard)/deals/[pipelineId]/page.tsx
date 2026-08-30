@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Check, ChevronDown, DollarSign, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
+import { Building2, Check, ChevronDown, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '../../pipelines/page'
@@ -47,7 +47,7 @@ function chatInitial(deal: KanbanCard) {
 
 function formatMessageTime(value?: string | null) {
   if (!value) return ''
-  return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+  return new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' }).format(new Date(value))
 }
 
 function recalcColumn(column: KanbanColumn): KanbanColumn {
@@ -162,14 +162,14 @@ function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCar
         'select-none',
         isDragging
           ? 'opacity-0'
-          : 'border-slate-200 hover:border-emerald-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-emerald-400/40'
+          : 'border-slate-200 hover:border-blue-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-400/40'
       )}
       onClick={() => onOpen(deal)}
     >
       <div className="flex items-start gap-3">
         <button
           type="button"
-          aria-label="Arrastrar lead"
+          aria-label="Arrastrar oportunidad"
           className="mt-0.5 flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
           onClick={(event) => event.stopPropagation()}
           {...listeners}
@@ -186,7 +186,7 @@ function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCar
       </div>
 
       <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2">
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-emerald-950/75">
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-700">
           {chat?.lastMessageFromMe ? 'Tu: ' : ''}{chat?.lastMessagePreview ?? 'Sin preview disponible.'}
         </p>
         {chat?.lastMessageAt ? (
@@ -212,18 +212,13 @@ function KanbanColumnComponent({ column, onOpenDeal }: { column: KanbanColumn; o
             </span>
           </div>
         </div>
-        {column.totalValue > 0 ? (
-          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-slate-600">
-            <DollarSign size={12} strokeWidth={2.5} /> {column.totalValue.toLocaleString()}
-          </p>
-        ) : null}
       </div>
 
       <div
         ref={setNodeRef}
         className={clsx(
           'flex-1 space-y-3 overflow-y-auto rounded-b-2xl border-2 p-3 transition-colors duration-150',
-          isOver ? 'border-dashed border-emerald-300 bg-emerald-50/70' : 'border-transparent'
+          isOver ? 'border-dashed border-blue-300 bg-blue-50/70' : 'border-transparent'
         )}
       >
         <SortableContext items={column.deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
@@ -234,7 +229,7 @@ function KanbanColumnComponent({ column, onOpenDeal }: { column: KanbanColumn; o
 
         {column.deals.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-3 py-6 text-center text-xs font-semibold leading-5 text-slate-400">
-            Sin chats en esta etapa
+            Sin oportunidades en esta etapa
           </div>
         ) : null}
       </div>
@@ -251,6 +246,10 @@ function LeadChatModal({
 }) {
   const [text, setText] = useState('')
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const { toast } = useToast()
+  const currentRole = auth.get()?.role
+  const canConvert = Boolean(currentRole && currentRole !== 'viewer')
   const jid = deal?.chat?.jid ?? null
 
   const messagesQuery = useQuery<WhatsAppMessagesPayload>({
@@ -268,6 +267,18 @@ function LeadChatModal({
     },
   })
 
+  const convertMutation = useMutation({
+    mutationFn: () => dealsApi.convertToClient(deal!.id),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      toast({ type: 'success', title: response.data.created ? 'Cliente creado' : 'Cliente vinculado', description: 'La oportunidad quedó asociada al legajo contable.' })
+      onClose()
+      router.push(`/clients/${response.data.client.id}`)
+    },
+    onError: () => toast({ type: 'error', title: 'No pudimos convertir la oportunidad', description: 'Revisá sus datos y volvé a intentar.' }),
+  })
+
   if (!deal) return null
 
   return (
@@ -282,6 +293,7 @@ function LeadChatModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {deal.companyId ? <button type="button" onClick={() => { onClose(); router.push(`/clients/${deal.companyId}`) }} className="btn-secondary"><Building2 size={15} /> Abrir cliente</button> : deal.status === 'WON' && canConvert ? <button type="button" disabled={convertMutation.isPending} onClick={() => convertMutation.mutate()} className="btn-primary"><Building2 size={15} /> {convertMutation.isPending ? 'Convirtiendo…' : 'Convertir en cliente'}</button> : null}
             <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
               <X size={18} />
             </button>
@@ -293,7 +305,7 @@ function LeadChatModal({
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1">
           {!jid ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-              Este lead no tiene chat de WhatsApp vinculado.
+              Esta oportunidad no tiene un chat de WhatsApp vinculado.
             </div>
           ) : messagesQuery.isLoading ? (
             <div className="flex h-full items-center justify-center">
@@ -370,7 +382,7 @@ function PipelineSwitchModal({
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 id="pipeline-switch-title" className="text-base font-extrabold text-slate-950">Cambiar embudo</h2>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">Elegí qué tablero de leads ver.</p>
+            <p className="mt-0.5 text-xs font-semibold text-slate-500">Elegí qué embudo comercial querés ver.</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
             <X size={18} />
@@ -419,7 +431,6 @@ export default function KanbanPage() {
   const pathname = usePathname()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { toast } = useToast()
   const storedAuth = auth.get()
   const canEditBoard = storedAuth?.role === 'owner' || storedAuth?.role === 'admin'
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -520,7 +531,6 @@ export default function KanbanPage() {
   if (!board) return null
 
   const totalDeals = board.columns.reduce((sum, column) => sum + column.count, 0)
-  const totalValue = board.columns.reduce((sum, column) => sum + column.totalValue, 0)
 
   return (
     <div className="relative flex h-full flex-col bg-white">
@@ -528,23 +538,18 @@ export default function KanbanPage() {
         <div className="flex items-center justify-between gap-6">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Leads con chat</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Gestión comercial</h1>
               <button
                 type="button"
                 onClick={() => setIsPipelineSwitcherOpen(true)}
-                className="inline-flex max-w-[min(420px,100%)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-extrabold text-slate-800 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                className="inline-flex max-w-[min(420px,100%)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-extrabold text-slate-800 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
               >
                 <span className="truncate">{board.pipeline.name}</span>
                 <ChevronDown size={16} strokeWidth={2.5} />
               </button>
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{totalDeals} leads activos</span>
-              {totalValue > 0 ? (
-                <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                  Monto proyectado: ${totalValue.toLocaleString()}
-                </span>
-              ) : null}
+              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{totalDeals} oportunidades activas</span>
             </p>
           </div>
           {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary shrink-0"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
@@ -568,7 +573,7 @@ export default function KanbanPage() {
 
           <DragOverlay adjustScale={false} dropAnimation={null} modifiers={[snapOverlayToCursor]}>
             {activeDeal ? (
-              <div className="w-[296px] cursor-grabbing rounded-xl border border-emerald-300 bg-white p-3 shadow-xl shadow-slate-900/15">
+              <div className="w-[296px] cursor-grabbing rounded-xl border border-blue-300 bg-white p-3 shadow-xl shadow-slate-900/15">
                 <div className="flex items-start gap-3">
                   <Avatar deal={activeDeal} />
                   <div className="min-w-0">
@@ -576,7 +581,7 @@ export default function KanbanPage() {
                     <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{chatPhone(activeDeal)}</p>
                   </div>
                 </div>
-                <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-2 text-xs font-bold text-emerald-800">
+                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/70 px-2.5 py-2 text-xs font-bold text-blue-800">
                   <MessageCircle size={13} className="mr-1.5 inline" />
                   {activeDeal.chat?.lastMessagePreview ?? 'Chat activo'}
                 </div>

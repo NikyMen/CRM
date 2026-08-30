@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { pipelinesApi } from '@/lib/api'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowRight, KanbanSquare, Loader2 } from 'lucide-react'
+import type { Pipeline } from '@/types'
 
 export default function DealsPage() {
   const router = useRouter()
@@ -38,14 +39,14 @@ export default function DealsPage() {
   return (
     <div className="mx-auto max-w-5xl animate-fade-in p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Leads con chat</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Gestión comercial</h1>
         <p className="mt-1 font-medium text-slate-500">
-          Selecciona un pipeline para administrar solo leads vinculados a una conversacion
+          Seleccioná un embudo para organizar oportunidades, conversaciones y próximos pasos.
         </p>
       </div>
 
       <div className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
-        {pipelines?.map((pipeline: any) => (
+        {pipelines?.map((pipeline: Pipeline) => (
           <button
             key={pipeline.id}
             onClick={() => router.push(`/leads/${pipeline.id}`)}

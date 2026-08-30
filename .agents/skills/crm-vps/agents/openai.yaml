@@ -1,0 +1,4 @@
+interface:
+  display_name: "CRM VPS"
+  short_description: "Revisa el CRM del VPS por SSH seguro"
+  default_prompt: "Usa $crm-vps para revisar el estado remoto del CRM sin modificar el servidor."

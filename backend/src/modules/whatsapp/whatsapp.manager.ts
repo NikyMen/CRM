@@ -5,6 +5,15 @@ import { db } from '../../core/database'
 import { config } from '../../core/config'
 import { ActivityType, AppError, ValidationError } from '../../types'
 import { generateUniqueLeadNumber } from '../deals/lead-number'
+import {
+  assignChatAndRelatedRecords,
+  assertAssignmentAllowed,
+  isManagerRole,
+  validateAssignee,
+} from '../tickets/ticket.assignment'
+import { ensureTicketForInboundMessage } from '../tickets/ticket.inbound'
+import { emitTicketEvent } from '../tickets/ticket.events'
+import { reconcilePendingTicketState } from '../tickets/ticket.reconcile'
 import { whatsAppRealtime } from './whatsapp.events'
 
 const prisma = db as any
@@ -29,6 +38,7 @@ type ConnectOptions = {
 type PersistMessageOptions = {
   allowHistorical?: boolean
   recoveryCutoff?: Date | null
+  ensureTicket?: boolean
 }
 
 type OutboundFile = {
@@ -41,6 +51,7 @@ type OutboundFile = {
 type SendChatMessageInput = {
   text?: string
   file?: OutboundFile
+  ticketId?: string
 }
 
 type ProfilePhotoCacheEntry = {
@@ -808,7 +819,7 @@ export class WhatsAppManager {
         messages: {
           some: {},
         },
-        ...(actor.role === 'owner' ? {} : {
+        ...(isManagerRole(actor.role) ? {} : {
           AND: [{ OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }] }],
         }),
         ...(normalizedSearch
@@ -865,7 +876,7 @@ export class WhatsAppManager {
       where: {
         workspaceId,
         jid: canonicalJid,
-        ...(actor.role === 'owner' ? {} : {
+        ...(isManagerRole(actor.role) ? {} : {
           OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
         }),
       },
@@ -930,9 +941,12 @@ export class WhatsAppManager {
   async startBackgroundRuntime() {
     if (!this.isRuntimeCompatible() || !this.isPackageInstalled()) return
     if (!this.watchdogTimer) {
-      this.watchdogTimer = setInterval(() => void this.restorePersistedSessions(), 15_000)
+      this.watchdogTimer = setInterval(() => {
+        void this.restorePersistedSessions()
+        void reconcilePendingTicketState()
+      }, 15_000)
     }
-    await this.restorePersistedSessions()
+    await Promise.all([this.restorePersistedSessions(), reconcilePendingTicketState()])
   }
 
   stopBackgroundRuntime() {
@@ -969,7 +983,7 @@ export class WhatsAppManager {
       where: {
         workspaceId,
         jid: canonicalJid,
-        ...(actor.role === 'owner' ? {} : {
+        ...(isManagerRole(actor.role) ? {} : {
           OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
         }),
       },
@@ -987,47 +1001,39 @@ export class WhatsAppManager {
   ) {
     const chat = await this.findVisibleChat(workspaceId, jid, actor)
 
-    if (assignedToUserId) {
-      const target = await db.workspaceUser.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId: assignedToUserId } },
-      })
-      if (!target || !['owner', 'admin', 'member'].includes(target.role)) {
-        throw new ValidationError('El responsable debe ser un miembro activo del equipo.')
-      }
-    }
-
-    if (actor.role !== 'owner') {
-      const canClaim = assignedToUserId === actor.userId && chat.assignedToUserId === null
-      const canRelease = assignedToUserId === null && chat.assignedToUserId === actor.userId
-      const unchanged = assignedToUserId === chat.assignedToUserId
-      if (!canClaim && !canRelease && !unchanged) {
-        throw new AppError(403, 'Solo podes tomar un chat libre o liberar uno propio.', 'FORBIDDEN')
-      }
-    }
-
-    const updatedCount = await prisma.whatsAppChat.updateMany({
-      where: {
-        id: chat.id,
-        workspaceId,
-        ...(actor.role === 'owner' ? {} : { assignedToUserId: chat.assignedToUserId }),
-      },
-      data: { assignedToUserId },
+    await validateAssignee(workspaceId, assignedToUserId)
+    assertAssignmentAllowed(actor, chat.assignedToUserId, assignedToUserId)
+    await assignChatAndRelatedRecords({
+      workspaceId,
+      chatId: chat.id,
+      expectedAssignedToUserId: chat.assignedToUserId,
+      assignedToUserId,
     })
-    if (updatedCount.count !== 1) {
-      throw new AppError(409, 'Otro usuario tomo este chat antes.', 'ASSIGNMENT_CONFLICT')
-    }
-
-    if (chat.contactId) {
-      await db.$transaction([
-        db.contact.updateMany({ where: { id: chat.contactId, workspaceId }, data: { ownerId: assignedToUserId } }),
-        db.deal.updateMany({
-          where: { workspaceId, status: 'OPEN', isArchived: false, contacts: { some: { contactId: chat.contactId } } },
-          data: { ownerId: assignedToUserId },
-        }),
-      ])
+    const activeTicket = await db.ticket.findFirst({
+      where: { workspaceId, whatsappChatId: chat.id, activeKey: { not: null } },
+      select: { id: true },
+    })
+    if (activeTicket) {
+      await db.ticketEvent.create({
+        data: {
+          workspaceId,
+          ticketId: activeTicket.id,
+          actorUserId: actor.userId,
+          type: assignedToUserId ? 'ASSIGNED' : 'RELEASED',
+          fromValue: chat.assignedToUserId,
+          toValue: assignedToUserId,
+          metadata: { source: 'WHATSAPP_CHAT' },
+        },
+      })
+      await emitTicketEvent('ticket.updated', {
+        workspaceId,
+        ticketId: activeTicket.id,
+        assignedToUserId,
+      })
     }
 
     whatsAppRealtime.publish(workspaceId, { type: 'assignment.updated', jid: chat.jid })
+    whatsAppRealtime.publish(workspaceId, { type: 'ticket.updated', jid: chat.jid })
     whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: chat.jid })
     return this.listMessages(workspaceId, chat.jid, actor, 1).then((result) => result.chat)
   }
@@ -1218,6 +1224,30 @@ export class WhatsAppManager {
     }
 
     const visibleChat = await this.findVisibleChat(workspaceId, jid, actor)
+    if (!isManagerRole(actor.role) && visibleChat.assignedToUserId !== actor.userId) {
+      throw new AppError(
+        403,
+        'Toma el ticket antes de responder por WhatsApp.',
+        'WHATSAPP_TICKET_NOT_ASSIGNED'
+      )
+    }
+    if (!input.ticketId) {
+      throw new AppError(409, 'Respondé desde un ticket activo.', 'WHATSAPP_TICKET_REQUIRED')
+    }
+    const activeTicket = await prisma.ticket.findFirst({
+      where: {
+        id: input.ticketId,
+        workspaceId,
+        whatsappChatId: visibleChat.id,
+        activeKey: { not: null },
+        status: { not: 'CLOSED' },
+        ...(!isManagerRole(actor.role) ? { assignedToUserId: actor.userId } : {}),
+      },
+      select: { id: true },
+    })
+    if (!activeTicket) {
+      throw new AppError(409, 'El ticket ya no está activo o no está asignado a tu usuario.', 'WHATSAPP_TICKET_INACTIVE')
+    }
     const sendJid = visibleChat.jid
 
     let entry = this.sockets.get(workspaceId)
@@ -1260,20 +1290,30 @@ export class WhatsAppManager {
     }
   }
 
-  async getMessageMedia(workspaceId: string, messageDbId: string) {
+  async getMessageMedia(
+    workspaceId: string,
+    messageDbId: string,
+    actor: { userId: string; role: string }
+  ) {
     await this.ensureDevMaintenanceAppliedOnce()
     let message: any
     try {
-      ;[message] = await prisma.$queryRawUnsafe(
-        `
-          SELECT id, "mediaPath", "mediaMimeType", "mediaFileName"
-          FROM whatsapp_messages
-          WHERE id = $1 AND "workspaceId" = $2
-          LIMIT 1
-        `,
-        messageDbId,
-        workspaceId
-      )
+      message = await prisma.whatsAppMessage.findFirst({
+        where: {
+          id: messageDbId,
+          workspaceId,
+          ...(isManagerRole(actor.role) ? {} : {
+            chat: {
+              OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
+            },
+          }),
+        },
+        select: {
+          mediaPath: true,
+          mediaMimeType: true,
+          mediaFileName: true,
+        },
+      })
     } catch {
       throw new AppError(404, 'La base todavia no tiene soporte de media para este mensaje.', 'WHATSAPP_MEDIA_NOT_AVAILABLE')
     }
@@ -1284,7 +1324,8 @@ export class WhatsAppManager {
 
     const mediaRoot = path.resolve(MEDIA_ROOT)
     const absolutePath = path.resolve(mediaRoot, String(message.mediaPath))
-    if (!absolutePath.startsWith(mediaRoot) || !existsSync(absolutePath)) {
+    const relativePath = path.relative(mediaRoot, absolutePath)
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !existsSync(absolutePath)) {
       throw new AppError(404, 'No encontramos el archivo multimedia local.', 'WHATSAPP_MEDIA_FILE_MISSING')
     }
 
@@ -1377,7 +1418,11 @@ export class WhatsAppManager {
       void this.rememberContactAliases(workspaceId, payload ?? [])
     })
     sock.ev.on('messages.upsert', (payload: any) => {
-      void this.persistMessages(workspaceId, payload?.messages ?? [])
+      void this.persistMessages(workspaceId, payload?.messages ?? [], {
+        ensureTicket: payload?.type === 'notify',
+      }).catch((error) => {
+        console.error('[whatsapp] no se pudieron persistir mensajes nuevos:', error)
+      })
     })
     sock.ev.on('messages.update', (updates: any[]) => {
       void this.applyMessageUpdates(workspaceId, updates ?? [])
@@ -2502,6 +2547,17 @@ export class WhatsAppManager {
       ? await this.ensureMessageMedia(workspaceId, persistedWithQuote, message, details)
       : persistedWithQuote
 
+    const pendingTicketLog = !fromMe && !chat.isGroup && options?.ensureTicket
+      ? await prisma.eventLog.create({
+          data: {
+            workspaceId,
+            event: 'ticket.inbound_pending',
+            payload: { chatId: chat.id, messageId: persistedWithMedia.id, sentAt: sentAt.toISOString() },
+          },
+          select: { id: true },
+        })
+      : null
+
     const inboundPushName = fromMe ? null : message?.pushName
     const groupName = chat.isGroup ? await this.resolveGroupDisplayName(workspaceId, remoteJid) : null
     const chatDisplayName = chat.isGroup
@@ -2542,6 +2598,22 @@ export class WhatsAppManager {
         displayName: chatDisplayName ?? chat.displayName,
         phoneNumber: chat.phoneNumber ?? extractPhoneNumberFromJid(remoteJid),
       }, remoteJid, sentAt, inboundPushName)
+
+      if (options?.ensureTicket) {
+        try {
+          const ticket = await ensureTicketForInboundMessage({
+            workspaceId,
+            chatId: chat.id,
+            messageId: persistedWithMedia.id,
+            sentAt,
+          })
+          if (ticket && pendingTicketLog) {
+            await prisma.eventLog.deleteMany({ where: { id: pendingTicketLog.id, workspaceId } })
+          }
+        } catch (error) {
+          console.error('[whatsapp] ticket inbound pendiente de reintento durable:', error)
+        }
+      }
     }
 
     whatsAppRealtime.publish(workspaceId, { type: 'message.updated', jid: remoteJid })

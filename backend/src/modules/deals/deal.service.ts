@@ -3,46 +3,34 @@ import { EventBus } from '../../core/event-bus'
 import { whatsAppManager } from '../whatsapp/whatsapp.manager'
 import {
   NotFoundError,
+  ForbiddenError,
+  ConflictError,
   ValidationError,
   paginate,
   ActivityType,
   type PaginationQuery,
   type PaginatedResult,
   customDataSchema,
+  type WorkspaceContext,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
 import { createWithUniqueLeadNumber } from './lead-number'
+import {
+  assertDealWriteAccess,
+  dealVisibilityWhere,
+  dealWriteVisibilityWhere,
+  isDealManager,
+} from './deal-access'
+import { clientVisibilityWhere } from '../clients/client-visibility'
+import { contactAssignmentVisibilityWhere } from '../../core/auth/portfolio-visibility'
+import { convertWonDealToClient } from './deal-conversion'
 
 type Deal = Prisma.DealGetPayload<object>
-
-function normalizePhoneNumber(value?: string | null) {
-  if (!value) return null
-  const digits = value.replace(/\D/g, '')
-  return digits.length >= 10 ? digits : null
-}
 
 function extractPhoneNumberFromJid(jid?: string | null) {
   if (!jid) return null
   const match = jid.match(/^(\d+)(?=@s\.whatsapp\.net$)/)
   return match?.[1] ?? null
-}
-
-function normalizeLabel(value?: string | null) {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
-
-function splitContactName(value?: string | null) {
-  const normalized = normalizeLabel(value)
-  if (!normalized) {
-    return { firstName: 'Chat WhatsApp', lastName: null as string | null }
-  }
-
-  const parts = normalized.split(/\s+/).filter(Boolean)
-  return {
-    firstName: parts[0] ?? 'Chat WhatsApp',
-    lastName: parts.length > 1 ? parts.slice(1).join(' ') : null,
-  }
 }
 
 // ─── DTOs ─────────────────────────────────────────────────────────
@@ -54,8 +42,8 @@ export interface CreateDealDto {
   probability?: number
   pipelineId: string
   stageId: string
-  companyId?: string
-  ownerId?: string
+  companyId?: string | null
+  ownerId?: string | null
   contactIds?: string[]
   expectedCloseDate?: Date
   customData?: Record<string, unknown>
@@ -133,7 +121,7 @@ export interface KanbanCard {
     lastMessagePreview: string | null
     lastMessageFromMe: boolean | null
     contactName: string | null
-  }
+  } | null
   createdAt: Date
   updatedAt: Date
 }
@@ -145,10 +133,13 @@ export class DealService {
 
   // ─── Crear Deal ──────────────────────────────────────────────────
   async create(
-    workspaceId: string,
-    data: CreateDealDto,
-    userId?: string
+    ctx: WorkspaceContext,
+    data: CreateDealDto
   ): Promise<Deal> {
+    const { workspaceId, userId } = ctx
+    if (ctx.role === 'viewer') {
+      throw new ForbiddenError('El rol viewer solo puede consultar oportunidades')
+    }
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
       const result = customDataSchema.safeParse(data.customData)
@@ -156,6 +147,9 @@ export class DealService {
         throw new ValidationError(`customData inválido: ${result.error.message}`)
       }
     }
+
+    const ownerId = await this.resolveCreateOwner(ctx, data.ownerId, data.companyId)
+    await this.validateLinkedRecords(ctx, data.companyId, data.contactIds)
 
     // Verificar que la stage pertenece al pipeline y al workspace
     const stage = await db.stage.findFirst({
@@ -179,13 +173,13 @@ export class DealService {
           leadNumber,
           title: data.title,
           value: data.value,
-          currency: data.currency ?? 'USD',
+          currency: data.currency ?? 'PYG',
           probability: data.probability ?? stage.probability,
           pipelineId: data.pipelineId,
           stageId: data.stageId,
           position,
           companyId: data.companyId,
-          ownerId: data.ownerId,
+          ownerId,
           expectedCloseDate: data.expectedCloseDate,
           customData: (data.customData ?? {}) as Prisma.InputJsonValue,
         },
@@ -222,7 +216,7 @@ export class DealService {
   async getKanban(
     workspaceId: string,
     pipelineId: string,
-    actor: { userId: string; role: string }
+    actor: WorkspaceContext
   ): Promise<KanbanBoard> {
     const pipeline = await db.pipeline.findFirst({
       where: { id: pipelineId, workspaceId },
@@ -231,10 +225,7 @@ export class DealService {
       },
     })
     if (!pipeline) throw new NotFoundError('Pipeline', pipelineId)
-    await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId)
-    await this.ensureWhatsappChatsHaveLeads(workspaceId, pipeline)
-    await whatsAppManager.dedupeWorkspace(workspaceId, pipelineId, { force: true })
-    const assignmentScope = actor.role === 'owner'
+    const assignmentScope = isDealManager(actor)
       ? undefined
       : { OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }] }
 
@@ -245,15 +236,7 @@ export class DealService {
         pipelineId,
         status: 'OPEN',
         isArchived: false,
-        ...(assignmentScope ? {
-          contacts: {
-            some: {
-              contact: {
-                whatsappChats: { some: { workspaceId, ...assignmentScope } },
-              },
-            },
-          },
-        } : {}),
+        ...dealVisibilityWhere(actor),
       },
       select: {
         id: true,
@@ -320,7 +303,6 @@ export class DealService {
         const chat =
           linkedContact?.contact.whatsappChats.find((item) => item.jid === linkedChatJid) ??
           linkedContact?.contact.whatsappChats[0]
-        if (!linkedContact || !chat) return null
         // Calcular días en la stage actual
         const daysInStage = Math.floor(
           (now.getTime() - d.stageEnteredAt.getTime()) / (1000 * 60 * 60 * 24)
@@ -331,10 +313,9 @@ export class DealService {
           ? daysInStage >= stage.rottenAfterDays
           : false
 
-        const contactName = [
-          linkedContact.contact.firstName,
-          linkedContact.contact.lastName,
-        ].filter(Boolean).join(' ') || null
+        const contactName = linkedContact
+          ? [linkedContact.contact.firstName, linkedContact.contact.lastName].filter(Boolean).join(' ') || null
+          : null
 
         return {
           id: d.id,
@@ -351,7 +332,7 @@ export class DealService {
           expectedCloseDate: d.expectedCloseDate,
           daysInStage,
           isRotten,
-          chat: {
+          chat: chat ? {
             id: chat.id,
             jid: chat.jid,
             lidJid: chat.lidJid,
@@ -365,7 +346,7 @@ export class DealService {
             lastMessagePreview: chat.lastMessagePreview,
             lastMessageFromMe: chat.lastMessageFromMe,
             contactName,
-          },
+          } : null,
           createdAt: d.createdAt,
           updatedAt: d.updatedAt,
         } satisfies KanbanCard
@@ -400,25 +381,19 @@ export class DealService {
   // ─── Mover Deal (Drag & Drop) ────────────────────────────────────
   // Este es el método más complejo — maneja el reordenamiento del Kanban
   async move(
-    workspaceId: string,
+    ctx: WorkspaceContext,
     dealId: string,
-    dto: MoveDealDto,
-    userId?: string,
-    role = 'viewer'
+    dto: MoveDealDto
   ): Promise<Deal> {
+    const { workspaceId, userId } = ctx
+    if (ctx.role === 'viewer') {
+      throw new ForbiddenError('El rol viewer solo puede consultar oportunidades')
+    }
     const deal = await db.deal.findFirst({
       where: {
         id: dealId,
         workspaceId,
-        ...(role === 'owner' ? {} : {
-          contacts: {
-            some: {
-              contact: {
-                whatsappChats: { some: { OR: [{ assignedToUserId: null }, { assignedToUserId: userId }] } },
-              },
-            },
-          },
-        }),
+        ...dealWriteVisibilityWhere(ctx),
       },
     })
     if (!deal) throw new NotFoundError('Deal', dealId)
@@ -429,7 +404,7 @@ export class DealService {
 
     // Verificar que la nueva stage existe en el workspace
     const newStage = await db.stage.findFirst({
-      where: { id: newStageId, pipeline: { workspaceId } },
+      where: { id: newStageId, pipeline: { id: deal.pipelineId, workspaceId } },
     })
     if (!newStage) throw new NotFoundError('Stage', newStageId)
 
@@ -533,9 +508,14 @@ export class DealService {
   }
 
   // ─── Buscar por ID ───────────────────────────────────────────────
-  async findById(workspaceId: string, id: string): Promise<Deal> {
+  async findById(ctx: WorkspaceContext, id: string): Promise<Deal> {
     const deal = await db.deal.findFirst({
-      where: { id, workspaceId, isArchived: false },
+      where: {
+        id,
+        workspaceId: ctx.workspaceId,
+        isArchived: false,
+        ...dealVisibilityWhere(ctx),
+      },
     })
     if (!deal) throw new NotFoundError('Deal', id)
     return deal
@@ -543,13 +523,17 @@ export class DealService {
 
   // ─── Buscar con filtros ──────────────────────────────────────────
   async search(
-    workspaceId: string,
+    ctx: WorkspaceContext,
     filters: DealFilters
   ): Promise<PaginatedResult<Deal>> {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
 
-    const where: Prisma.DealWhereInput = { workspaceId, isArchived: false}
+    const where: Prisma.DealWhereInput = {
+      workspaceId: ctx.workspaceId,
+      isArchived: false,
+      ...dealVisibilityWhere(ctx),
+    }
     if (filters.pipelineId) where.pipelineId = filters.pipelineId
     if (filters.stageId)    where.stageId    = filters.stageId
     if (filters.status)     where.status     = filters.status
@@ -571,12 +555,24 @@ export class DealService {
 
   // ─── Actualizar ──────────────────────────────────────────────────
   async update(
-    workspaceId: string,
+    ctx: WorkspaceContext,
     id: string,
-    data: UpdateDealDto,
-    userId?: string
+    data: UpdateDealDto
   ): Promise<Deal> {
-    await db.deal.findFirstOrThrow({ where: { id, workspaceId } })
+    const { workspaceId, userId } = ctx
+    const current = await db.deal.findFirst({ where: { id, workspaceId, isArchived: false } })
+    if (!current) throw new NotFoundError('Oportunidad', id)
+
+    const clientAssignment = current.companyId && !isDealManager(ctx)
+      ? await db.clientAssignment.findFirst({
+          where: { workspaceId, companyId: current.companyId, userId: ctx.userId },
+          select: { id: true },
+        })
+      : null
+
+    const changedFields = Object.keys(data).filter((key) => data[key as keyof UpdateDealDto] !== undefined)
+    const changesOnlyOwner = changedFields.length === 1 && changedFields[0] === 'ownerId'
+    assertDealWriteAccess(ctx, current.ownerId, data.ownerId, changesOnlyOwner, Boolean(clientAssignment))
 
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
@@ -584,6 +580,28 @@ export class DealService {
       if (!result.success) {
         throw new ValidationError(`customData inválido: ${result.error.message}`)
       }
+    }
+
+    if (data.ownerId) await this.ensureWorkspaceOwner(workspaceId, data.ownerId)
+    const nextCompanyId = data.companyId !== undefined ? data.companyId : current.companyId
+    const nextOwnerId = data.ownerId !== undefined ? data.ownerId : current.ownerId
+    const linkedCompany = await this.validateLinkedRecords(ctx, nextCompanyId)
+    if (linkedCompany?.ownerId && linkedCompany.ownerId !== nextOwnerId) {
+      throw new ValidationError('Reasigná el responsable desde Clientes para mantener la cartera sincronizada')
+    }
+
+    if (!isDealManager(ctx) && current.ownerId === null && !clientAssignment) {
+      const claimed = await db.deal.updateMany({
+        where: { id, workspaceId, ownerId: null, isArchived: false },
+        data: { ownerId: ctx.userId },
+      })
+      if (claimed.count !== 1) {
+        throw new ConflictError('Otra persona tomó la oportunidad antes')
+      }
+      const deal = await db.deal.findUniqueOrThrow({ where: { id } })
+      await this.logActivity(workspaceId, id, ActivityType.DEAL_UPDATED, userId)
+      await this.eventBus.emit('deal.updated', { workspaceId, deal: this.sanitize(deal) })
+      return deal
     }
 
     const deal = await db.deal.update({
@@ -613,6 +631,22 @@ export class DealService {
     return deal
   }
 
+  async convertToClient(ctx: WorkspaceContext, id: string, clientId?: string) {
+    const result = await convertWonDealToClient({ ...ctx, dealId: id, clientId })
+    if (result.changed) {
+      await this.logActivity(ctx.workspaceId, id, ActivityType.DEAL_UPDATED, ctx.userId, {
+        action: 'converted_to_client',
+        clientId: result.client.id,
+        created: result.created,
+      })
+      await this.eventBus.emit('deal.updated', {
+        workspaceId: ctx.workspaceId,
+        deal: this.sanitize(result.deal),
+      })
+    }
+    return result
+  }
+
   // ─── Eliminar ────────────────────────────────────────────────────
   async delete(workspaceId: string, id: string, userId?: string): Promise<void> {
     await db.deal.findFirstOrThrow({ where: { id, workspaceId } })
@@ -631,6 +665,86 @@ export class DealService {
   }
 
   // ─── Helpers privados ────────────────────────────────────────────
+  private async resolveCreateOwner(
+    ctx: WorkspaceContext,
+    requestedOwnerId?: string | null,
+    companyId?: string | null
+  ) {
+    if (!isDealManager(ctx) && requestedOwnerId && requestedOwnerId !== ctx.userId) {
+      throw new ForbiddenError('Solo podés crear oportunidades bajo tu responsabilidad')
+    }
+
+    let ownerId = ctx.role === 'member' ? ctx.userId : requestedOwnerId ?? null
+    if (companyId) {
+      const company = await db.company.findFirst({
+        where: {
+          id: companyId,
+          workspaceId: ctx.workspaceId,
+          isArchived: false,
+          ...clientVisibilityWhere(ctx),
+        },
+        select: { ownerId: true },
+      })
+      if (!company) throw new NotFoundError('Cliente', companyId)
+      if (company.ownerId && requestedOwnerId !== undefined && company.ownerId !== requestedOwnerId) {
+        throw new ValidationError('La oportunidad debe conservar el responsable del cliente')
+      }
+      ownerId = company.ownerId ?? ownerId
+    }
+
+    if (ownerId) await this.ensureWorkspaceOwner(ctx.workspaceId, ownerId)
+    return ownerId
+  }
+
+  private async ensureWorkspaceOwner(workspaceId: string, ownerId: string) {
+    const membership = await db.workspaceUser.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: ownerId } },
+      select: { userId: true },
+    })
+    if (!membership) {
+      throw new ValidationError('El responsable no pertenece a este espacio de trabajo')
+    }
+  }
+
+  private async validateLinkedRecords(
+    ctx: WorkspaceContext,
+    companyId?: string | null,
+    contactIds?: string[]
+  ) {
+    let linkedCompany: { id: string; ownerId: string | null } | null = null
+    if (companyId) {
+      linkedCompany = await db.company.findFirst({
+        where: {
+          id: companyId,
+          workspaceId: ctx.workspaceId,
+          isArchived: false,
+          ...clientVisibilityWhere(ctx),
+        },
+        select: { id: true, ownerId: true },
+      })
+      if (!linkedCompany) throw new NotFoundError('Cliente', companyId)
+    }
+
+    const uniqueContactIds = [...new Set(contactIds ?? [])]
+    if (!uniqueContactIds.length) return linkedCompany
+    const contacts = await db.contact.findMany({
+      where: {
+        workspaceId: ctx.workspaceId,
+        id: { in: uniqueContactIds },
+        isArchived: false,
+        ...contactAssignmentVisibilityWhere(ctx),
+      },
+      select: { id: true, companyId: true },
+    })
+    if (contacts.length !== uniqueContactIds.length) {
+      throw new ValidationError('Uno o más contactos no pertenecen a tu cartera')
+    }
+    if (companyId && contacts.some((contact) => contact.companyId && contact.companyId !== companyId)) {
+      throw new ValidationError('Un contacto ya pertenece a otro cliente')
+    }
+    return linkedCompany
+  }
+
   private async logActivity(
     workspaceId: string,
     dealId: string,
@@ -659,177 +773,6 @@ export class DealService {
         metadata: (metadata ?? null) as Prisma.InputJsonValue,
       },
     })
-  }
-
-  private async ensureWhatsappChatsHaveLeads(
-    workspaceId: string,
-    pipeline: {
-      id: string
-      stages: Array<{
-        id: string
-        name: string
-        position: number
-        probability: number | null
-        isWon: boolean
-        isLost: boolean
-      }>
-    }
-  ) {
-    const targetStage =
-      pipeline.stages.find((stage) => stage.name.trim().toLowerCase() === 'nuevo lead') ??
-      pipeline.stages.find((stage) => !stage.isWon && !stage.isLost) ??
-      pipeline.stages[0]
-
-    if (!targetStage) return
-
-    const chats = await db.whatsAppChat.findMany({
-      where: {
-        workspaceId,
-        isGroup: false,
-        messages: { some: {} },
-      },
-      select: {
-        id: true,
-        jid: true,
-        displayName: true,
-        phoneNumber: true,
-        contactId: true,
-        lastMessageAt: true,
-      },
-      orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
-      take: 500,
-    })
-
-    for (const chat of chats) {
-      const phoneNumber = normalizePhoneNumber(chat.phoneNumber) ?? extractPhoneNumberFromJid(chat.jid)
-      let contactId = chat.contactId
-
-      if (!contactId && phoneNumber) {
-        const existing = await this.findContactByPhone(workspaceId, phoneNumber)
-        contactId = existing?.id ?? null
-      }
-
-      if (!contactId) {
-        const { firstName, lastName } = splitContactName(chat.displayName ?? phoneNumber ?? chat.jid)
-        const created = await db.contact.create({
-          data: {
-            workspaceId,
-            firstName,
-            lastName,
-            phone: phoneNumber,
-            status: 'LEAD',
-            source: 'WHATSAPP',
-            tags: ['whatsapp'],
-            channels: [
-              {
-                type: 'whatsapp',
-                identifier: phoneNumber ?? chat.jid,
-                metadata: { jid: chat.jid },
-              },
-            ] as Prisma.InputJsonValue,
-            lastContactedAt: chat.lastMessageAt,
-          },
-          select: { id: true },
-        })
-        contactId = created.id
-      }
-
-      await db.whatsAppChat.update({
-        where: { id: chat.id },
-        data: {
-          contactId,
-          ...(phoneNumber && !chat.phoneNumber ? { phoneNumber } : {}),
-        },
-      })
-
-      const existingLead = await db.deal.findFirst({
-        where: {
-          workspaceId,
-          status: 'OPEN',
-          isArchived: false,
-          contacts: { some: { contactId } },
-        },
-        select: { id: true, customData: true },
-      })
-
-      if (existingLead) {
-        const currentData =
-          existingLead.customData && typeof existingLead.customData === 'object' && !Array.isArray(existingLead.customData)
-            ? existingLead.customData as Record<string, unknown>
-            : {}
-
-        if (currentData.whatsAppChatJid !== chat.jid) {
-          await db.deal.update({
-            where: { id: existingLead.id, workspaceId },
-            data: {
-              customData: {
-                ...currentData,
-                whatsAppChatJid: chat.jid,
-                sourceChannel: currentData.sourceChannel ?? 'whatsapp',
-              } as Prisma.InputJsonValue,
-            },
-          })
-        }
-        continue
-      }
-
-      const lastDeal = await db.deal.findFirst({
-        where: {
-          workspaceId,
-          stageId: targetStage.id,
-          status: 'OPEN',
-          isArchived: false,
-        },
-        orderBy: { position: 'desc' },
-        select: { position: true },
-      })
-
-      const title = normalizeLabel(chat.displayName) ?? phoneNumber ?? chat.jid
-      await createWithUniqueLeadNumber(workspaceId, (leadNumber) => db.$transaction(async (tx) => {
-        const lead = await tx.deal.create({
-          data: {
-            workspaceId,
-            leadNumber,
-            title,
-            pipelineId: pipeline.id,
-            stageId: targetStage.id,
-            position: (lastDeal?.position ?? -1) + 1,
-            probability: targetStage.probability,
-            status: 'OPEN',
-            customData: {
-              leadNumber,
-              sourceChannel: 'whatsapp',
-              autoCreated: true,
-              whatsAppChatJid: chat.jid,
-            } as Prisma.InputJsonValue,
-          },
-        })
-
-        await tx.dealContact.create({
-          data: {
-            dealId: lead.id,
-            contactId,
-          },
-        })
-      }))
-    }
-  }
-
-  private async findContactByPhone(workspaceId: string, phoneNumber: string) {
-    const contacts = await db.contact.findMany({
-      where: {
-        workspaceId,
-        isArchived: false,
-        phone: { not: null },
-      },
-      select: { id: true, phone: true },
-      take: 5000,
-    })
-
-    return contacts.find((contact) => {
-      const normalized = normalizePhoneNumber(contact.phone)
-      return normalized === phoneNumber || Boolean(normalized && (normalized.endsWith(phoneNumber) || phoneNumber.endsWith(normalized)))
-    }) ?? null
   }
 
   private readWhatsAppChatJid(customData: Prisma.JsonValue | null | undefined) {

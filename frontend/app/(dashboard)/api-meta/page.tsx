@@ -30,8 +30,9 @@ const CHANNELS: Array<{ value: MetaChannel; label: string; helper: string }> = [
   { value: 'instagram', label: 'Instagram', helper: 'Instagram Business Account ID' },
 ]
 
-function toErrorMessage(error: any) {
-  return error?.response?.data?.message ?? error?.response?.data?.error ?? error?.message ?? 'Error inesperado'
+function toErrorMessage(error: unknown) {
+  const value = error as { response?: { data?: { message?: string; error?: string } }; message?: string }
+  return value?.response?.data?.message ?? value?.response?.data?.error ?? value?.message ?? 'Error inesperado'
 }
 
 function apiOrigin() {
@@ -92,7 +93,7 @@ function ConnectionCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#0c1015] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#c5ed1b] dark:bg-[#c5ed1b] dark:text-[#0c1015]">
+            <span className="rounded-full bg-[var(--brand-navy)] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-white">
               {connection.channel}
             </span>
             <StatusPill ok={connection.status === 'connected'} label={connection.status} />
@@ -312,7 +313,7 @@ export default function MetaApiPage() {
             </div>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">API Meta</h1>
             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-              Conecta cuentas oficiales de Meta por workspace y usa webhooks, conversaciones y envio normalizado sin mostrar secretos en el frontend.
+              Conectá cuentas oficiales de Meta por espacio de trabajo y usá webhooks y conversaciones sin mostrar secretos en pantalla.
             </p>
           </div>
 
@@ -373,7 +374,7 @@ export default function MetaApiPage() {
                     className={clsx(
                       'rounded-xl border px-3 py-2 text-xs font-black transition',
                       channel === item.value
-                        ? 'border-[#c5ed1b] bg-[#c5ed1b] text-[#0c1015]'
+                        ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white'
                         : 'border-[var(--panel-border)] bg-[var(--surface-1)] text-slate-600 dark:text-slate-300'
                     )}
                   >
@@ -469,7 +470,7 @@ export default function MetaApiPage() {
             </div>
           ) : connections.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-dashed border-[var(--panel-border)] p-8 text-center">
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Todavia no hay conexiones Meta en este workspace.</p>
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Todavía no hay conexiones Meta en este espacio de trabajo.</p>
             </div>
           ) : (
             connections.map((connection) => (

@@ -100,6 +100,12 @@ export type CRMEvent =
   // Mensajes — (WhatsApp, Facebook, etc.)
   | 'message.received'
   | 'message.sent'
+  // Atención
+  | 'ticket.created'
+  | 'ticket.updated'
+  // Gestión contable
+  | 'collection.updated'
+  | 'checklist.updated'
   // Automatización
   | 'automation.triggered'
 

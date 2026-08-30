@@ -4,16 +4,17 @@ import { DealService } from './deal.service'
 import type { EventBus } from '../../core/event-bus'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
+import type { WorkspaceContext } from '../../types'
 
 const createDealSchema = z.object({
   title:             z.string().min(1).max(200),
   value:             z.number().positive().optional(),
-  currency:          z.string().length(3).default('USD'),
+  currency:          z.string().length(3).default('PYG'),
   probability:       z.number().min(0).max(100).optional(),
   pipelineId:        z.string(),
   stageId:           z.string(),
-  companyId:         z.string().optional(),
-  ownerId:           z.string().optional(),
+  companyId:         z.string().nullable().optional(),
+  ownerId:           z.string().nullable().optional(),
   contactIds:        z.array(z.string()).optional(),
   expectedCloseDate: z.coerce.date().optional(),
   customData:        z.record(z.unknown()).optional(),
@@ -22,6 +23,10 @@ const createDealSchema = z.object({
 const moveDealSchema = z.object({
   stageId:  z.string(),
   position: z.number().int().min(0).optional(),
+})
+
+const convertDealSchema = z.object({
+  clientId: z.string().min(1).optional(),
 })
 
 const filtersSchema = z.object({
@@ -46,9 +51,9 @@ export async function dealRoutes(
 
   // ─── GET /deals ────────────────────────────────────────────────
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as WorkspaceContext
     const filters = filtersSchema.parse(req.query)
-    return reply.send(await service.search(ctx.workspaceId, filters))
+    return reply.send(await service.search(ctx, filters))
   })
 
   // ─── GET /deals/kanban/:pipelineId ─────────────────────────────
@@ -57,7 +62,7 @@ export async function dealRoutes(
     '/kanban/:pipelineId',
     { preHandler: requireRole('owner', 'admin', 'member') },
     async (req, reply) => {
-      const ctx = req.user as { workspaceId: string; userId: string; role: string }
+      const ctx = req.user as WorkspaceContext
       const board = await service.getKanban(
         ctx.workspaceId,
         req.params.pipelineId,
@@ -69,43 +74,52 @@ export async function dealRoutes(
 
   // ─── POST /deals ───────────────────────────────────────────────
   app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as WorkspaceContext
     const body = createDealSchema.parse(req.body) as Parameters<typeof service.create>[1]
-    const deal = await service.create(ctx.workspaceId, body, ctx.userId)
+    const deal = await service.create(ctx, body)
     return reply.status(201).send(deal)
   })
 
   // ─── GET /deals/:id ────────────────────────────────────────────
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
-    const deal = await service.findById(ctx.workspaceId, req.params.id)
+    const ctx = req.user as WorkspaceContext
+    const deal = await service.findById(ctx, req.params.id)
     return reply.send(deal)
   })
 
   // ─── PATCH /deals/:id ──────────────────────────────────────────
   // viewer no puede editar deals
   app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as WorkspaceContext
     const body = createDealSchema.partial().parse(req.body)
     return reply.send(
-      await service.update(ctx.workspaceId, req.params.id, body, ctx.userId)
+      await service.update(ctx, req.params.id, body)
     )
   })
 
   // ─── PATCH /deals/:id/move ─────────────────────────────────────
   // Drag & drop — mover una tarjeta entre columnas
   app.patch<{ Params: { id: string } }>('/:id/move', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string; role: string }
+    const ctx = req.user as WorkspaceContext
     const body = moveDealSchema.parse(req.body) as Parameters<typeof service.move>[2]
     const deal = await service.move(
-      ctx.workspaceId,
+      ctx,
       req.params.id,
-      body,
-      ctx.userId,
-      ctx.role
+      body
     )
     return reply.send(deal)
   })
+
+  // ─── POST /deals/:id/convert-to-client ─────────────────────────
+  app.post<{ Params: { id: string } }>(
+    '/:id/convert-to-client',
+    { preHandler: requireRole('owner', 'admin', 'member') },
+    async (req, reply) => {
+      const ctx = req.user as WorkspaceContext
+      const body = convertDealSchema.parse(req.body ?? {})
+      return reply.send(await service.convertToClient(ctx, req.params.id, body.clientId))
+    }
+  )
 
   // ─── DELETE /deals/:id ─────────────────────────────────────────
   // Solo owner y admin pueden borrar deals

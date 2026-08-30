@@ -40,7 +40,7 @@ export default function ChannelsPage() {
             <WhatsAppLogo className="text-sky-600 dark:text-sky-300" size={24} />
             <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Operacion en WhatsApp</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-              Una vez conectado, ahi mismo ves conversaciones, mensajes y envio desde el CRM.
+              Una vez conectado, ahí mismo ves conversaciones, mensajes y envío desde Gestión ROMEZ.
             </p>
           </div>
         </div>
