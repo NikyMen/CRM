@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Building2, Check, ChevronDown, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
+import { Building2, Check, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '../../pipelines/page'
@@ -542,15 +542,7 @@ export default function KanbanPage() {
         <div className="flex items-center justify-between gap-6">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Gestión comercial</h1>
-              <button
-                type="button"
-                onClick={() => setIsPipelineSwitcherOpen(true)}
-                className="inline-flex max-w-[min(420px,100%)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-extrabold text-slate-800 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
-              >
-                <span className="truncate">{board.pipeline.name}</span>
-                <ChevronDown size={16} strokeWidth={2.5} />
-              </button>
+              <span className="text-lg font-extrabold tracking-tight text-slate-950">{board.pipeline.name}</span>
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
               <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{activeDeals} oportunidades activas</span>

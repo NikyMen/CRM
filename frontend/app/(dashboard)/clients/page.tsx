@@ -33,7 +33,8 @@ export default function ClientsPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
 
-  const clientsQuery = useQuery<PaginatedResult<Client>>({ queryKey: ['clients', { search: deferredSearch, status, hasDebt, page }], queryFn: () => clientsApi.list({ search: deferredSearch || undefined, status: status || undefined, hasDebt: hasDebt || undefined, page, limit: PAGE_SIZE }).then((response) => response.data) })
+  const normalizedSearch = deferredSearch.trim()
+  const clientsQuery = useQuery<PaginatedResult<Client>>({ queryKey: ['clients', { search: normalizedSearch, status, hasDebt, page }], queryFn: () => clientsApi.list({ search: normalizedSearch || undefined, status: status || undefined, hasDebt: hasDebt || undefined, page, limit: PAGE_SIZE }).then((response) => response.data) })
   const teamQuery = useQuery<Member[]>({ queryKey: ['team'], queryFn: () => teamApi.list().then((response) => response.data), enabled: canManage })
 
   const createClient = useMutation({

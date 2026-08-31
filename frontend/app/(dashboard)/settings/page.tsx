@@ -273,17 +273,17 @@ function AvatarSettingsPanel() {
           </div>
 
           <div className="interactive-card static-card p-6">
-            <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-primary-100 bg-primary-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="section-label">Imagen personalizada</p>
                 <p className="mt-1 text-sm font-medium text-slate-500">
-                  Subi un logo o foto, ajusta zoom y posicion, y confirmala.
+                  Tu identidad visual, lista para usar en todo ROMEZ.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="btn-secondary"
+                className="btn-primary w-full shrink-0 sm:w-auto"
               >
                 <ImagePlus size={16} />
                 Subir imagen
@@ -361,9 +361,10 @@ function AvatarSettingsPanel() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center">
+              <div className="rounded-2xl border border-dashed border-primary-200 bg-primary-50/30 px-6 py-12 text-center">
                 <ImagePlus size={34} className="mx-auto mb-3 text-slate-300" />
-                <p className="text-sm font-bold text-slate-500">No hay imagen en edicion.</p>
+                <p className="text-sm font-bold text-slate-600">Todavía no hay una imagen personalizada</p>
+                <p className="mx-auto mt-1 max-w-sm text-xs font-medium leading-5 text-slate-400">Subí una foto o logo para previsualizarlo, ajustarlo y guardarlo como tu avatar.</p>
               </div>
             )}
           </div>
@@ -481,13 +482,17 @@ export default function SettingsPage() {
   return (
     <div className="min-h-full">
       <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[var(--background)]/90 px-4 py-3 backdrop-blur-xl md:top-0">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuración</h1>
-            <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del espacio de trabajo.</p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuración</h1>
+              <p className="mt-0.5 text-sm font-medium text-slate-500">Perfil, integraciones y acceso del espacio de trabajo.</p>
+            </div>
           </div>
 
-          <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
+          <div className="min-w-0 overflow-x-auto pb-0.5">
+            <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
+          </div>
         </div>
       </div>
 

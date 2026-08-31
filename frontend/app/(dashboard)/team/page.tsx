@@ -38,6 +38,7 @@ export default function TeamPage() {
     lastName:  '',
     email:     '',
     password:  '',
+    confirmPassword: '',
     role:      'member' as 'admin' | 'member' | 'viewer',
   })
 
@@ -51,7 +52,7 @@ export default function TeamPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] })
       setShowInvite(false)
-      setForm({ firstName: '', lastName: '', email: '', password: '', role: 'member' })
+      setForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', role: 'member' })
     },
   })
 
@@ -83,7 +84,7 @@ export default function TeamPage() {
           className="btn-primary"
         >
           <UserPlus size={18} strokeWidth={2.5} />
-          Invitar usuario
+          Crear usuario
         </button>
       </div>
 
@@ -100,7 +101,8 @@ export default function TeamPage() {
               { key: 'firstName', placeholder: 'Nombre *' },
               { key: 'lastName',  placeholder: 'Apellido'  },
               { key: 'email',     placeholder: 'Email corporativo *'   },
-              { key: 'password',  placeholder: 'Contraseña temporal * (mín. 8 caracteres)' },
+              { key: 'password',  placeholder: 'Contraseña * (mín. 8 caracteres)' },
+              { key: 'confirmPassword', placeholder: 'Repetir contraseña *' },
             ].map(({ key, placeholder }) => (
               <input
                 key={key}
@@ -129,11 +131,11 @@ export default function TeamPage() {
 
             <button
               onClick={() => inviteMutation.mutate()}
-              disabled={!form.firstName || !form.email || !form.password || inviteMutation.isPending}
+              disabled={!form.firstName || !form.email || !form.password || form.password !== form.confirmPassword || inviteMutation.isPending}
               className="btn-primary py-2.5"
             >
               {inviteMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-              Enviar invitación
+              Crear usuario
             </button>
             <button
               onClick={() => setShowInvite(false)}
@@ -143,6 +145,7 @@ export default function TeamPage() {
             </button>
           </div>
 
+          {form.password && form.confirmPassword && form.password !== form.confirmPassword ? <p className="mt-3 text-sm font-semibold text-[var(--danger)]">Las contraseñas no coinciden.</p> : null}
           {inviteMutation.isError && (
             <div className="bg-red-50 border border-red-100 text-red-600 rounded-xl px-4 py-3 mt-4 text-sm font-medium animate-slide-up flex items-start gap-2">
                 <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

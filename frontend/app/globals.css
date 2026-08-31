@@ -84,20 +84,20 @@
 }
 
 .dark {
-  --paper-canvas: #09182f;
-  --paper: #10213d;
-  --paper-soft: #132745;
-  --paper-inset: #0c1c35;
-  --ink-primary: #f3f6fb;
-  --ink-secondary: #c0c9d7;
-  --ink-tertiary: #8f9db2;
-  --ink-muted: #67758b;
+  --paper-canvas: #202225;
+  --paper: #292c30;
+  --paper-soft: #303338;
+  --paper-inset: #1b1d20;
+  --ink-primary: #f2f3f4;
+  --ink-secondary: #d0d3d6;
+  --ink-tertiary: #a5aab0;
+  --ink-muted: #7d838a;
   --line-soft: rgba(220, 230, 245, 0.07);
   --line: rgba(220, 230, 245, 0.13);
   --line-strong: rgba(220, 230, 245, 0.24);
-  --brand-blue: #82a4e2;
-  --brand-blue-hover: #9ab5e7;
-  --brand-paper: rgba(92, 130, 194, 0.18);
+  --brand-blue: #aebed8;
+  --brand-blue-hover: #c4d1e5;
+  --brand-paper: rgba(174, 190, 216, 0.18);
   --success: #6fc39e;
   --success-paper: rgba(57, 151, 108, 0.17);
   --success-line: rgba(111, 195, 158, 0.35);
@@ -107,20 +107,20 @@
   --danger: #ee8f93;
   --danger-paper: rgba(170, 61, 66, 0.19);
   --danger-line: rgba(238, 143, 147, 0.34);
-  --sidebar-background: #06142b;
-  --chat-incoming-bg: #132745;
+  --sidebar-background: #181a1d;
+  --chat-incoming-bg: #303338;
   --color-white: #10213d;
-  --color-slate-50: #132745;
-  --color-slate-100: #182d4b;
-  --color-slate-200: #203654;
-  --color-slate-300: #435570;
-  --color-slate-400: #75849a;
-  --color-slate-500: #98a6b9;
-  --color-slate-600: #b8c2d0;
-  --color-slate-700: #d0d7e2;
-  --color-slate-800: #e5eaf1;
-  --color-slate-900: #f3f6fb;
-  --color-slate-950: #06142b;
+  --color-slate-50: #303338;
+  --color-slate-100: #383b40;
+  --color-slate-200: #484c52;
+  --color-slate-300: #686e76;
+  --color-slate-400: #92989f;
+  --color-slate-500: #aeb3b9;
+  --color-slate-600: #c4c8cd;
+  --color-slate-700: #d5d8dc;
+  --color-slate-800: #e5e7e9;
+  --color-slate-900: #f2f3f4;
+  --color-slate-950: #181a1d;
 }
 
 @theme inline {
@@ -171,8 +171,18 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
   .btn-secondary { border: 1px solid var(--line); background: var(--paper); color: var(--ink-primary); }
   .btn-secondary:hover { border-color: var(--line-strong); background: var(--paper-soft); }
   .btn-danger { border: 1px solid var(--danger-line); background: var(--danger-paper); color: var(--danger); }
-  .ctrl-input { width: 100%; min-height: 2.5rem; border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--paper-inset); color: var(--ink-primary); padding: .5rem .75rem; font-size: .8125rem; font-weight: 550; outline: none; }
+  .rb-pill-nav { display: flex; width: max-content; min-width: 100%; gap: .35rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--paper-soft); padding: .3rem; }
+  .rb-pill { display: inline-flex; min-height: 2.25rem; flex: 0 0 auto; align-items: center; justify-content: center; gap: .45rem; border: 1px solid transparent; border-radius: .65rem; padding: .45rem .8rem; color: var(--ink-tertiary); font-size: .75rem; font-weight: 750; white-space: nowrap; }
+  .rb-pill:hover { background: var(--paper); color: var(--ink-primary); }
+  .rb-pill.is-active { border-color: var(--line); background: var(--paper); color: var(--brand-navy); box-shadow: 0 1px 2px rgba(8, 35, 78, .06); }
+  .ctrl-input { width: 100%; min-height: 2.5rem; border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--paper-inset); color: var(--ink-primary); padding: .5rem .75rem; font-size: .875rem; font-weight: 550; outline: none; }
   .ctrl-input::placeholder { color: var(--ink-muted); }
+  /* Reserve space whenever a field has a decorative leading icon. This keeps
+     placeholder text readable even when a page forgets the matching pl-* utility. */
+  .relative:has(> svg:first-child) > .ctrl-input { padding-left: 2.5rem; }
+  .relative:has(> svg:first-child) > .ctrl-input.pl-9 { padding-left: 2.25rem; }
+  .relative:has(> svg:first-child) > .ctrl-input.pl-10 { padding-left: 2.5rem; }
+  .relative > .ctrl-input + button { right: .75rem; }
   .ctrl-input:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(54, 92, 171, .16); }
   .page-title { color: var(--ink-primary); font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -.035em; line-height: 1.12; }
   .page-subtitle { color: var(--ink-secondary); margin-top: .375rem; font-size: .8125rem; font-weight: 500; line-height: 1.55; }

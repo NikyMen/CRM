@@ -10,5 +10,5 @@ export function AuthBrand({ title, subtitle }: { title: string; subtitle: string
 }
 
 export function DevelopedBy() {
-  return <p className="mt-6 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por <span className="text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Consultoría Digital</span></p>
+  return <div className="mt-6 flex items-center justify-center gap-2"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={104} height={24} className="h-6 w-auto object-contain" /></div>
 }
