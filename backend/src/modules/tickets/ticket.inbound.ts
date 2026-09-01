@@ -19,13 +19,15 @@ async function appendInboundMessage(
   chat: any,
   input: { workspaceId: string; messageId: string; sentAt: Date }
 ) {
-  const reopens = current.status === 'WAITING_CUSTOMER' || current.status === 'RESOLVED'
+  const reopens = current.status === 'WAITING_CUSTOMER' || current.status === 'RESOLVED' || current.status === 'CLOSED'
   const nextStatus = reopens ? 'OPEN' : current.status
   const updated = await tx.ticket.update({
     where: { id: current.id },
     data: {
       status: nextStatus,
-      resolvedAt: current.status === 'RESOLVED' ? null : current.resolvedAt,
+      activeKey: ticketActiveKey(input.workspaceId, chat.id),
+      resolvedAt: current.status === 'RESOLVED' || current.status === 'CLOSED' ? null : current.resolvedAt,
+      closedAt: current.status === 'CLOSED' ? null : current.closedAt,
       lastMessageAt: input.sentAt,
       contactId: chat.contactId ?? current.contactId,
       companyId: chat.contact?.companyId ?? current.companyId,
@@ -106,6 +108,18 @@ export async function ensureTicketForInboundMessage(input: {
     const racedTicket = await tx.ticket.findUnique({ where: { activeKey: key } })
     if (racedTicket) {
       return appendInboundMessage(tx, racedTicket, chat, input)
+    }
+    const lastClosedTicket = await tx.ticket.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        whatsappChatId: chat.id,
+        status: 'CLOSED',
+        activeKey: null,
+      },
+      orderBy: [{ closedAt: 'desc' }, { createdAt: 'desc' }],
+    })
+    if (lastClosedTicket) {
+      return appendInboundMessage(tx, lastClosedTicket, chat, input)
     }
     const aggregate = await tx.ticket.aggregate({
       where: { workspaceId: input.workspaceId },
@@ -211,4 +225,61 @@ export async function ensureTicketForInboundMessage(input: {
     source: 'WHATSAPP',
   })
   return ticket
+}
+
+export async function attachOutboundMessageToActiveTicket(input: {
+  workspaceId: string
+  chatId: string
+  messageId: string
+  sentAt: Date
+}, database: any = prisma) {
+  const result = await database.$transaction(async (tx: any) => {
+    const ticket = await tx.ticket.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        whatsappChatId: input.chatId,
+        activeKey: { not: null },
+      },
+      select: { id: true, lastMessageAt: true },
+    })
+    if (!ticket) return null
+
+    const linked = await tx.whatsAppMessage.updateMany({
+      where: {
+        id: input.messageId,
+        workspaceId: input.workspaceId,
+        ticketId: null,
+      },
+      data: { ticketId: ticket.id },
+    })
+    if (linked.count !== 1) return null
+
+    await tx.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        lastMessageAt: !ticket.lastMessageAt || input.sentAt > ticket.lastMessageAt
+          ? input.sentAt
+          : ticket.lastMessageAt,
+      },
+    })
+    await tx.ticketEvent.create({
+      data: {
+        workspaceId: input.workspaceId,
+        ticketId: ticket.id,
+        type: 'MESSAGE_SENT_FROM_PHONE',
+        metadata: { messageId: input.messageId },
+      },
+    })
+    return ticket
+  })
+
+  if (result) {
+    whatsAppRealtime.publish(input.workspaceId, { type: 'ticket.updated' })
+    await emitTicketEvent('ticket.updated', {
+      workspaceId: input.workspaceId,
+      ticketId: result.id,
+      source: 'WHATSAPP_PHONE',
+    })
+  }
+  return result
 }

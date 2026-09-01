@@ -210,13 +210,10 @@ export class TicketService {
 
   async updateStatus(actor: TicketActor, id: string, status: string) {
     const ticket = await this.findOperableRecord(actor, id)
-    const closesConversation = status === 'CLOSED'
     const wasClosed = ticket.status === 'CLOSED'
-    const nextActiveKey = closesConversation
-      ? null
-      : ticket.whatsappChatId
-        ? ticketActiveKey(actor.workspaceId, ticket.whatsappChatId)
-        : null
+    const nextActiveKey = ticket.whatsappChatId
+      ? ticketActiveKey(actor.workspaceId, ticket.whatsappChatId)
+      : null
 
     try {
       await db.$transaction([
@@ -249,7 +246,7 @@ export class TicketService {
         }),
       ])
     } catch (error: any) {
-      if (error?.code === 'P2002' && !closesConversation) {
+      if (error?.code === 'P2002') {
         throw new AppError(409, 'Ya existe otro ticket activo para esta conversacion.', 'ACTIVE_TICKET_EXISTS')
       }
       throw error

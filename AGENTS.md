@@ -71,7 +71,7 @@ pnpm acceptance
 - Dinero: Prisma `Decimal`; exponer y enviar montos como strings. PYG no admite fracciones. No sumar monedas distintas ni convertir automáticamente.
 - Fechas de negocio: días calendario de Paraguay; no usar `toISOString()` para producir fechas locales.
 - Cliente: `Company` se expone como `Client`; `Contact` representa personas/teléfonos y puede vincularse al cliente.
-- Tickets: sólo uno activo por conversación; CLOSED libera la conversación, RESOLVED no. La toma es compare-and-set atómica.
+- Tickets: sólo uno activo por conversación; `CLOSED` y `RESOLVED` conservan la conversación y un nuevo mensaje entrante reabre el mismo ticket. La toma es compare-and-set atómica.
 - Un mensaje entrante aceptado por el canal QR debe persistirse y generar/actualizar ticket. Los envíos directos sin `ticketId` están bloqueados.
 - Eventos vivos/webhooks: `ticket.created`, `ticket.updated`, `collection.updated`, `checklist.updated` además de los históricos.
 - Archivos: multipart protegido, límites configurables, ruta contenida, MIME/extensión/magic bytes y descarga autenticada.

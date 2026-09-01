@@ -967,7 +967,7 @@ export interface Ticket {
   lastMessagePreview?: string | null
   messages?: TicketMessage[]
   comments?: Array<{ id: string; body: string; createdAt: string; author?: AssigneeSummary | null }>
-  events?: Array<{ id: string; type: string; createdAt: string; actor?: AssigneeSummary | null }>
+  events?: Array<{ id: string; type: string; fromValue?: string | null; toValue?: string | null; createdAt: string; actor?: AssigneeSummary | null }>
   _count?: { messages: number; comments: number }
   createdAt: string
   updatedAt: string

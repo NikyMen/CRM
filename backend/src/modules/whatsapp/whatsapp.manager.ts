@@ -11,7 +11,7 @@ import {
   isManagerRole,
   validateAssignee,
 } from '../tickets/ticket.assignment'
-import { ensureTicketForInboundMessage } from '../tickets/ticket.inbound'
+import { attachOutboundMessageToActiveTicket, ensureTicketForInboundMessage } from '../tickets/ticket.inbound'
 import { emitTicketEvent } from '../tickets/ticket.events'
 import { reconcilePendingTicketState } from '../tickets/ticket.reconcile'
 import { whatsAppRealtime } from './whatsapp.events'
@@ -2613,6 +2613,19 @@ export class WhatsAppManager {
         } catch (error) {
           console.error('[whatsapp] ticket inbound pendiente de reintento durable:', error)
         }
+      }
+    }
+
+    if (fromMe && !chat.isGroup && (options?.ensureTicket || options?.allowHistorical)) {
+      try {
+        await attachOutboundMessageToActiveTicket({
+          workspaceId,
+          chatId: chat.id,
+          messageId: persistedWithMedia.id,
+          sentAt,
+        })
+      } catch (error) {
+        console.error('[whatsapp] no se pudo vincular el mensaje enviado desde el teléfono:', error)
       }
     }
 

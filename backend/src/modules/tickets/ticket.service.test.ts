@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { AppError } from '../../types'
 import { assignChatAndRelatedRecords } from './ticket.assignment'
-import { ensureTicketForInboundMessage, ticketActiveKey } from './ticket.inbound'
+import { attachOutboundMessageToActiveTicket, ensureTicketForInboundMessage, ticketActiveKey } from './ticket.inbound'
 import { buildTicketVisibilityScope, TicketService } from './ticket.service'
 import {
   createReplyReservationMetadata,
@@ -32,7 +32,17 @@ function createInboundDatabase() {
 
   const ticketApi = {
     findUnique: async ({ where }: any) => state.tickets.find((ticket) => ticket.activeKey === where.activeKey) ?? null,
-    findFirst: async ({ where }: any) => state.tickets.find((ticket) => ticket.id === where.id) ?? null,
+    findFirst: async ({ where }: any) => state.tickets.find((ticket) => {
+      if (where.id) return ticket.id === where.id
+      if (where.whatsappChatId) {
+        return ticket.workspaceId === where.workspaceId
+          && ticket.whatsappChatId === where.whatsappChatId
+          && (where.status === undefined || ticket.status === where.status)
+          && (where.activeKey === undefined
+            || (where.activeKey === null ? ticket.activeKey === null : ticket.activeKey !== null))
+      }
+      return false
+    }) ?? null,
     aggregate: async () => ({ _max: { number: Math.max(0, ...state.tickets.map((ticket) => ticket.number)) || null } }),
     create: async ({ data }: any) => {
       const ticket = { id: `ticket-${++id}`, createdAt: new Date(), updatedAt: new Date(), ...data }
@@ -137,7 +147,7 @@ test('dos mensajes simultaneos comparten un unico ticket activo', async () => {
   assert.equal(fixture.state.messages.get('message-2')?.ticketId, fixture.state.tickets[0].id)
 })
 
-test('un mensaje posterior a un ticket cerrado crea un ticket nuevo', async () => {
+test('un mensaje posterior a un ticket cerrado reabre el mismo ticket', async () => {
   const fixture = createInboundDatabase()
   fixture.addMessage('message-1')
   await ensureTicketForInboundMessage({
@@ -157,12 +167,14 @@ test('un mensaje posterior a un ticket cerrado crea un ticket nuevo', async () =
     sentAt: new Date('2026-08-30T12:00:00Z'),
   }, fixture.database)
 
-  assert.equal(fixture.state.tickets.length, 2)
-  assert.equal(fixture.state.tickets[1].number, 2)
+  assert.equal(fixture.state.tickets.length, 1)
+  assert.equal(fixture.state.tickets[0].status, 'OPEN')
+  assert.equal(fixture.state.tickets[0].closedAt, null)
   assert.equal(
-    fixture.state.tickets[1].activeKey,
+    fixture.state.tickets[0].activeKey,
     ticketActiveKey(fixture.workspaceId, fixture.chatId)
   )
+  assert.equal(fixture.state.messages.get('message-2')?.ticketId, fixture.state.tickets[0].id)
 })
 
 test('un mensaje posterior a resuelto reabre el mismo ticket', async () => {
@@ -188,6 +200,29 @@ test('un mensaje posterior a resuelto reabre el mismo ticket', async () => {
   assert.equal(fixture.state.tickets.length, 1)
   assert.equal(fixture.state.tickets[0].status, 'OPEN')
   assert.equal(fixture.state.tickets[0].resolvedAt, null)
+})
+
+test('un mensaje enviado desde el teléfono se vincula al ticket activo', async () => {
+  const fixture = createInboundDatabase()
+  fixture.addMessage('message-1')
+  await ensureTicketForInboundMessage({
+    workspaceId: fixture.workspaceId,
+    chatId: fixture.chatId,
+    messageId: 'message-1',
+    sentAt: new Date('2026-08-29T12:00:00Z'),
+  }, fixture.database)
+
+  fixture.addMessage('message-phone')
+  await attachOutboundMessageToActiveTicket({
+    workspaceId: fixture.workspaceId,
+    chatId: fixture.chatId,
+    messageId: 'message-phone',
+    sentAt: new Date('2026-08-29T12:05:00Z'),
+  }, fixture.database)
+
+  assert.equal(fixture.state.messages.get('message-phone')?.ticketId, fixture.state.tickets[0].id)
+  assert.equal(fixture.state.tickets[0].lastMessageAt.toISOString(), '2026-08-29T12:05:00.000Z')
+  assert.equal(fixture.state.events.at(-1)?.type, 'MESSAGE_SENT_FROM_PHONE')
 })
 
 test('member ve propios y libres; viewer solo propios', () => {
