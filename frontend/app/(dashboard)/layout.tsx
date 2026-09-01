@@ -11,7 +11,6 @@ import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
 import { UserAvatar } from '@/components/UserAvatar'
-import { ThemeToggle } from '@/components/theme-toggle'
 
 type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[] }
 
@@ -46,10 +45,10 @@ function Navigation({ items, pathname, onNavigate, collapsed = false }: { items:
         const paths = [item.href, ...(item.aliases ?? [])]
         const active = item.exact ? pathname === item.href : paths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
         return (
-          <Link key={item.href} href={item.href} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} className={clsx('group flex min-h-11 items-center rounded-lg border text-[13px] font-bold', collapsed ? 'justify-center px-0' : 'gap-3 px-3', active ? 'border-white/18 bg-white text-[var(--brand-navy)]' : 'border-transparent text-white/66 hover:border-white/10 hover:bg-white/[0.055] hover:text-white')}>
+          <Link key={item.href} href={item.href} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} className={clsx('group relative flex min-h-11 items-center rounded-lg border text-[13px] font-bold', collapsed ? 'justify-center px-0' : 'gap-3 px-3', active ? 'border-white/18 bg-white text-[var(--brand-navy)]' : 'border-transparent text-white/66 hover:border-white/10 hover:bg-white/[0.055] hover:text-white')}>
             <Icon size={17} strokeWidth={active ? 2.5 : 2} />
             {!collapsed ? <span className="truncate">{item.label}</span> : null}
-            {item.href === '/tickets' ? <span className={clsx('ml-auto h-1.5 w-1.5 rounded-full', active ? 'bg-[var(--brand-blue)]' : 'bg-[#82a4e2]')} aria-hidden="true" /> : null}
+            {item.href === '/tickets' ? <span className={clsx('absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-[var(--sidebar-background)]', active ? 'bg-[var(--brand-blue)]' : 'bg-[#82a4e2]')} aria-label="Tickets con notificaciones" /> : null}
           </Link>
         )
       })}
@@ -61,16 +60,15 @@ function Sidebar({ items, pathname, user, onLogout, onClose, collapsed = false, 
   return (
     <div className="flex h-full flex-col border-r border-white/10 bg-[var(--sidebar-background)]">
       <div className={clsx('relative flex min-h-[82px] items-center border-b border-white/10', collapsed ? 'justify-center px-2' : 'justify-between px-4')}><Brand collapsed={collapsed} />{onClose ? <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-white/8 hover:text-white md:hidden" aria-label="Cerrar menú"><X size={19} /></button> : null}{onToggle ? <button type="button" onClick={onToggle} className="absolute -right-3.5 z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-[var(--sidebar-background)] text-white/75 shadow-sm hover:bg-[var(--brand-navy)] hover:text-white md:flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>{collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}</button> : null}</div>
-      <div className="px-5 pt-5"><p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/36">Mesa de trabajo</p></div>
+
       <Navigation items={items} pathname={pathname} onNavigate={onClose} collapsed={collapsed} />
       <div className="border-t border-white/10 p-4">
         <div className="mb-3 flex items-center gap-3">
           <UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" />
           {!collapsed ? <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{user?.firstName} {user?.lastName}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-white/42">{user?.role}</p></div> : null}
-          <ThemeToggle />
         </div>
         <button type="button" onClick={onLogout} title={collapsed ? 'Cerrar sesión' : undefined} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 text-xs font-bold text-white/62 hover:bg-white/[0.055] hover:text-white"><LogOut size={15} />{!collapsed ? ' Cerrar sesión' : null}</button>
-        {!collapsed ? <div className="mt-4 flex items-center justify-center gap-2 border-t border-white/10 pt-4"><span className="text-[8px] font-bold uppercase tracking-[0.1em] text-white/34">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={88} height={20} className="h-5 w-auto object-contain opacity-80" /></div> : null}
+        {!collapsed ? <div className="mt-4 flex flex-col items-center justify-center gap-0.5 border-t border-white/10 pt-4"><span className="text-[8px] font-bold uppercase tracking-[0.1em] text-white/34">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={132} height={30} className="h-[30px] w-auto object-contain opacity-80" /></div> : null}
       </div>
     </div>
   )
@@ -123,7 +121,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--line)] bg-[var(--paper)] px-4 md:hidden">
           <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><div><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p><p className="text-[7px] font-bold uppercase tracking-wide text-[var(--ink-tertiary)]">Desarrollado por Consultoría Digital</p></div></div>
-          <ThemeToggle />
         </header>
         {checking ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : children}
       </main>

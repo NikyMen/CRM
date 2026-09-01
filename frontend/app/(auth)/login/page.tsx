@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import Image from 'next/image'
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Mail } from 'lucide-react'
 import { authApi } from '@/lib/api'
@@ -76,11 +75,11 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="paper-panel space-y-5 p-5 sm:p-7">
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Correo electrónico</span>
-              <span className="relative block"><Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@romez.com.py" required /></span>
+              <span className="relative block">{!email ? <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@romez.com.py" required /></span>
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Contraseña</span>
-              <span className="relative block"><LockKeyhole size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="ctrl-input pl-10" placeholder="Tu contraseña" required /></span>
+              <span className="relative block">{!password ? <LockKeyhole size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="ctrl-input pl-10" placeholder="Tu contraseña" required /></span>
             </label>
 
             {error ? <div className="flex gap-2 rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] px-3 py-2.5 text-xs font-semibold text-[var(--danger)]" role="alert"><AlertCircle size={16} className="mt-px shrink-0" />{error}</div> : null}
@@ -88,7 +87,6 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? <><LoaderCircle size={16} className="animate-spin" /> Validando acceso…</> : <>Ingresar <ArrowRight size={16} /></>}
             </button>
-            <div className="text-center"><Link href="/forgot-password" className="text-xs font-bold text-[var(--brand-blue)] hover:underline">Olvidé mi contraseña</Link></div>
           </form>
           <DevelopedBy />
         </div>

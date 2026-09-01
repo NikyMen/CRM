@@ -6,7 +6,7 @@ import { pipelinesApi } from '@/lib/api'
 import type { Pipeline } from '@/types'
 import {
   Plus, Trash2, Pencil, Check, X,
-  ArrowDown, ArrowUp, Loader2, ChevronRight, Layers,
+  ArrowDown, ArrowUp, Loader2, Layers, GripVertical,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { usePathname, useRouter } from 'next/navigation'
@@ -46,7 +46,7 @@ export default function PipelinesPage() {
 
   const [editingPipeline, setEditingPipeline]     = useState<string | null>(null)
   const [editingPipelineName, setEditingPipelineName] = useState('')
-  const [expandedPipeline, setExpandedPipeline]   = useState<string | null>(null)
+  const [draggedStageId, setDraggedStageId] = useState<string | null>(null)
   const [newStageName, setNewStageName]           = useState('')
   const [newStageColor, setNewStageColor]         = useState('#6366f1')
   const [editingStage, setEditingStage]           = useState<string | null>(null)
@@ -132,18 +132,6 @@ export default function PipelinesPage() {
 
               {/* Header del pipeline */}
               <div className="flex items-center gap-4 p-5">
-                <button
-                  onClick={() => setExpandedPipeline(
-                    expandedPipeline === pipeline.id ? null : pipeline.id
-                  )}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-all shrink-0"
-                >
-                  <ChevronRight
-                    size={20}
-                    className={clsx('transition-transform duration-200', expandedPipeline === pipeline.id && 'rotate-90')}
-                  />
-                </button>
-
                 {editingPipeline === pipeline.id ? (
                   <div className="flex items-center gap-3 flex-1">
                     <input
@@ -167,7 +155,6 @@ export default function PipelinesPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 flex-1 min-w-0"
-                       onClick={() => setExpandedPipeline(expandedPipeline === pipeline.id ? null : pipeline.id)}
                        style={{ cursor: 'pointer' }}
                   >
                     <span className="text-slate-900 font-bold text-lg truncate">{pipeline.name}</span>
@@ -193,12 +180,12 @@ export default function PipelinesPage() {
               </div>
 
               {/* Etapas expandidas */}
-              {expandedPipeline === pipeline.id && (
+              {true && (
                 <div className="border-t border-slate-100 p-5 bg-slate-50/50">
-                  <div className="space-y-3 mb-6">
+                  <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
                     {/* Lista de etapas */}
                     {pipeline.stages.map((stage, stageIndex) => (
-                      <div key={stage.id} className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-3 group">
+                      <div key={stage.id} draggable={editingStage !== stage.id} onDragStart={() => setDraggedStageId(stage.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (!draggedStageId || draggedStageId === stage.id) return; const ids = pipeline.stages.map((item) => item.id); const from = ids.indexOf(draggedStageId); const to = ids.indexOf(stage.id); ids.splice(from, 1); ids.splice(to, 0, draggedStageId); reorderStages.mutate({ pipelineId: pipeline.id, stageIds: ids }); setDraggedStageId(null) }} className="group flex min-h-28 min-w-[210px] flex-col items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         {editingStage === stage.id ? (
                           <div className="flex items-center gap-3 flex-1 flex-wrap">
                             <input
@@ -228,6 +215,7 @@ export default function PipelinesPage() {
                           </div>
                         ) : (
                           <>
+                            <GripVertical size={16} className="shrink-0 cursor-grab text-slate-300" aria-label="Arrastrar etapa" />
                             <div
                               className="w-4 h-4 rounded-full shrink-0 shadow-inner"
                               style={{ backgroundColor: stage.color }}

@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ImagePlus, Key, KanbanSquare, Loader2, RefreshCcw, Save, Settings,
-  Shield, SlidersHorizontal, Smartphone, Unplug, Users, Webhook, Wifi, WifiOff,
+  AlertTriangle, Check, ImagePlus, Key, Loader2, RefreshCcw, Save, Settings,
+  Shield, SlidersHorizontal, Smartphone, Unplug, Webhook, Wifi, WifiOff,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import NextImage from 'next/image'
@@ -16,11 +16,9 @@ import { formatDateTime, getErrorMessage } from '@/lib/format'
 import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
-import TeamPage from '../team/page'
-import PipelinesPage from '../pipelines/page'
 import { PillNav } from '@/components/react-bits/PillNav'
 
-type SettingsTab = 'profile' | 'whatsapp' | 'kanban' | 'webhooks' | 'api-keys' | 'team'
+type SettingsTab = 'profile' | 'webhooks' | 'api-keys'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -32,11 +30,8 @@ const TAB_ITEMS: {
   adminOnly?: boolean
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
-  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true },
-  { id: 'kanban', label: 'Gestión comercial', icon: KanbanSquare, adminOnly: true },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
   { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
-  { id: 'team', label: 'Equipo', icon: Users, adminOnly: true },
 ]
 
 type EditorState = {
@@ -497,11 +492,8 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
-      {canManageSettings && activeTab === 'whatsapp' && <WhatsAppSettingsPanel />}
-      {canManageSettings && activeTab === 'kanban' && <PipelinesPage />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
       {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
-      {canManageSettings && activeTab === 'team' && <TeamPage />}
       {!canManageSettings && (
         <div className="mx-auto mt-6 max-w-5xl px-6">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
