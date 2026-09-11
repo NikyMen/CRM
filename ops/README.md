@@ -87,9 +87,15 @@ Configuración → Módulos (owner/admin) y el registro vive en
 El flag histórico `stockVisible` se sigue leyendo para no perder la
 configuración de workspaces anteriores.
 
-Apagar un módulo sólo lo saca del menú y bloquea sus rutas en el frontend; los
-datos quedan intactos. El único módulo que además rechaza sus endpoints del
-backend es Ventas (`requireModule('sales')`).
+El registro cubre los diez módulos apagables: Clientes, Ventas, Gestión
+comercial, Cobranzas, Atención al cliente, Tickets, Chat interno, Stock, Equipo
+e Integraciones (Webhooks, API Keys y el endpoint de Meta API). Inicio y
+Configuración nunca se apagan, para que siempre haya forma de volver atrás.
+
+Apagar un módulo lo saca del menú y de las pestañas de Configuración, y bloquea
+sus rutas del frontend; los datos quedan intactos. Ventas, Stock, Webhooks y
+Meta API además rechazan sus endpoints del backend con `requireModule`. Los
+demás siguen respondiendo por API porque otros módulos dependen de ellos.
 
 ## Migración de servidor
 

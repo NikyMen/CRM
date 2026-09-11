@@ -10,6 +10,8 @@ export const MODULE_KEYS = [
   'tickets',
   'internal-chat',
   'stock',
+  'team',
+  'integrations',
 ] as const
 
 export type ModuleKey = typeof MODULE_KEYS[number]
@@ -31,6 +33,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'tickets', label: 'Tickets', description: 'Pedidos internos y seguimiento.', defaultEnabled: true },
   { key: 'internal-chat', label: 'Chat interno', description: 'Mensajería entre el equipo.', defaultEnabled: true },
   { key: 'stock', label: 'Stock', description: 'Inventario, movimientos y caja.', defaultEnabled: false },
+  { key: 'team', label: 'Equipo', description: 'Miembros del estudio, invitaciones y roles.', defaultEnabled: true },
+  { key: 'integrations', label: 'Integraciones', description: 'Webhooks, API Keys y el endpoint de Meta API.', defaultEnabled: true },
 ]
 
 export const DEFAULT_MODULE_STATE: ModuleState = MODULE_DEFINITIONS.reduce((state, definition) => {
@@ -38,16 +42,21 @@ export const DEFAULT_MODULE_STATE: ModuleState = MODULE_DEFINITIONS.reduce((stat
   return state
 }, {} as ModuleState)
 
-/** Rutas del dashboard que dependen de cada módulo. */
+/**
+ * Rutas del dashboard que dependen de cada módulo. Cubre todas las páginas
+ * salvo Inicio y Configuración, que nunca se apagan.
+ */
 export const MODULE_PATHS: Record<ModuleKey, string[]> = {
   clients: ['/clients'],
   sales: ['/sales'],
-  commercial: ['/commercial', '/leads', '/deals', '/pipelines'],
+  commercial: ['/commercial', '/leads', '/deals', '/pipelines', '/contacts'],
   collections: ['/collections'],
-  'customer-service': ['/customer-service', '/whatsapp', '/messenger-instagram', '/channels'],
+  'customer-service': ['/customer-service', '/whatsapp', '/inbox', '/channels', '/messenger-instagram'],
   tickets: ['/tickets'],
   'internal-chat': ['/internal-chat'],
   stock: ['/stock'],
+  team: ['/team'],
+  integrations: ['/webhooks', '/api-keys', '/api-meta'],
 }
 
 export function normalizeModuleState(value: unknown): ModuleState {

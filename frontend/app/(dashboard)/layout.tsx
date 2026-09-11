@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Boxes, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -25,7 +25,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/customer-service', label: 'Atención al cliente', icon: Headphones, module: 'customer-service' },
   { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets' },
   { href: '/internal-chat', label: 'Chat interno', icon: MessageCircleMore, module: 'internal-chat' },
-  { href: '/team', label: 'Equipo', icon: UsersRound, roles: ['owner', 'admin'] },
+  { href: '/stock', label: 'Stock', icon: Boxes, roles: ['owner', 'admin', 'member'], module: 'stock' },
+  { href: '/team', label: 'Equipo', icon: UsersRound, roles: ['owner', 'admin'], module: 'team' },
   { href: '/settings', label: 'Configuración', icon: Settings, roles: ['owner', 'admin'] },
 ]
 

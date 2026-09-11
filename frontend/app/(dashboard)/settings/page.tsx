@@ -18,7 +18,7 @@ import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
 import { PillNav } from '@/components/react-bits/PillNav'
 import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleState } from '@/lib/modules'
-import { WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
+import { useWorkspaceModules, WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
 
 type SettingsTab = 'profile' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
@@ -30,12 +30,14 @@ const TAB_ITEMS: {
   label: string
   icon: typeof Settings
   adminOnly?: boolean
+  /** Pestaña que sigue el interruptor de su módulo en Configuración → Módulos. */
+  module?: ModuleKey
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
   { id: 'modules', label: 'Módulos', icon: LayoutGrid, adminOnly: true },
-  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
-  { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true, module: 'customer-service' },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true, module: 'integrations' },
+  { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true, module: 'integrations' },
 ]
 
 type EditorState = {
@@ -533,6 +535,7 @@ function SessionDatum({ label, value }: { label: string; value: string }) {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [user, setUser] = useState<StoredAuth | null>(null)
+  const { modules } = useWorkspaceModules()
 
   useEffect(() => {
     setUser(auth.get())
@@ -549,9 +552,14 @@ export default function SettingsPage() {
   }, [activeTab, canManageSettings])
 
   const visibleTabs = useMemo(
-    () => TAB_ITEMS.filter((item) => !item.adminOnly || canManageSettings),
-    [canManageSettings]
+    () => TAB_ITEMS.filter((item) => (!item.adminOnly || canManageSettings) && (!item.module || modules[item.module])),
+    [canManageSettings, modules]
   )
+
+  // Si el módulo de la pestaña abierta se apaga, volvemos a Perfil.
+  useEffect(() => {
+    if (!visibleTabs.some((item) => item.id === activeTab)) setActiveTab('profile')
+  }, [activeTab, visibleTabs])
 
   return (
     <div className="min-h-full">
@@ -579,7 +587,7 @@ export default function SettingsPage() {
         <div className="mx-auto mt-6 max-w-5xl px-6">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
             <Shield size={16} className="mr-2 inline" />
-            Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
+            Módulos, Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
           </div>
         </div>
       )}

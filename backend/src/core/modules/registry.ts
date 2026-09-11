@@ -12,6 +12,8 @@ export const MODULE_KEYS = [
   'tickets',
   'internal-chat',
   'stock',
+  'team',
+  'integrations',
 ] as const
 
 export type ModuleKey = typeof MODULE_KEYS[number]
@@ -33,7 +35,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'tickets', label: 'Tickets', description: 'Pedidos internos y seguimiento.', defaultEnabled: true },
   { key: 'internal-chat', label: 'Chat interno', description: 'Mensajería entre el equipo.', defaultEnabled: true },
   { key: 'stock', label: 'Stock', description: 'Inventario, movimientos y caja.', defaultEnabled: false },
+  { key: 'team', label: 'Equipo', description: 'Miembros del estudio, invitaciones y roles.', defaultEnabled: true },
+  { key: 'integrations', label: 'Integraciones', description: 'Webhooks, API Keys y el endpoint de Meta API.', defaultEnabled: true },
 ]
+
+/** Inicio y Configuración no se pueden apagar: sin ellos no hay forma de volver. */
+export const ALWAYS_ON_PATHS = ['/dashboard', '/settings'] as const
 
 const DEFINITION_BY_KEY = new Map(MODULE_DEFINITIONS.map((item) => [item.key, item]))
 

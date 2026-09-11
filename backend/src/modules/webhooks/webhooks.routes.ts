@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db } from '../../core/database'
 import type { CRMEvent } from '../../types'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireModule } from '../../core/modules/require-module'
 import { requireRole } from '../../core/auth/require-role'
 
 // Todos los eventos disponibles para suscribirse
@@ -53,6 +54,7 @@ export async function webhookRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     await authenticate(req)
   })
+  app.addHook('onRequest', requireModule('integrations'))
 
   // Todos los endpoints de webhooks son solo para owner y admin
   app.addHook('preHandler', requireRole('owner', 'admin'))

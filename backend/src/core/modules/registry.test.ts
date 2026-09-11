@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeModuleState, readModuleState, writeModuleState } from './registry'
+import { MODULE_DEFINITIONS, MODULE_KEYS, mergeModuleState, readModuleState, writeModuleState } from './registry'
 
 test('sin configuración guardada cada módulo toma su valor por defecto', () => {
   const state = readModuleState(null)
   assert.equal(state.clients, true)
   assert.equal(state.sales, true)
+  assert.equal(state.team, true)
+  assert.equal(state.integrations, true)
   assert.equal(state.stock, false)
+})
+
+test('el registro cubre todos los módulos apagables del producto', () => {
+  const state = readModuleState(null)
+  assert.deepEqual(Object.keys(state).sort(), [...MODULE_KEYS].sort())
+  assert.equal(MODULE_DEFINITIONS.length, MODULE_KEYS.length)
 })
 
 test('el flag histórico stockVisible sigue mandando si no hay estado nuevo de stock', () => {

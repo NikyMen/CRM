@@ -351,6 +351,34 @@ Recién cuando VPS-B lleve dos semanas estable:
 
 ---
 
+---
+
+## Camino corto: migrar sin conservar los datos
+
+Si lo que hay en el servidor actual son pruebas y no hace falta conservarlo, la
+migración se reduce mucho. Se saltean la Fase 0.1, la Fase 2 completa y los
+pasos 2 a 6 de la Fase 4: no hay respaldo, ni transferencia, ni restauración, ni
+comparación de conteos. `JWT_SECRET` se genera nuevo en vez de copiarse, y la
+sesión de WhatsApp se vuelve a vincular con el QR.
+
+Lo que sigue siendo obligatorio:
+
+1. Publicar el código que va a producción. Los `.env` no están en Git, así que
+   se crean a mano desde `ops/production.env.example`, y hay que confirmar qué
+   rama se clona: si el trabajo vive en una rama, clonar `main` no lo trae.
+2. Fase 1 completa, de 1.1 a 1.6: paquetes, clonado, usuario de servicio,
+   secretos, Postgres y Redis en Docker, y build.
+3. `prisma migrate deploy` sobre la base vacía.
+4. Crear el owner con `ops/scripts/bootstrap-owner.sh`.
+5. Fase 3 completa: Nginx, certificado y firewall.
+6. Arrancar PM2 y verificar los dos health checks.
+7. Mover el DNS y escanear el QR de WhatsApp.
+
+Dejá el servidor viejo prendido hasta confirmar que el nuevo anda. Como no hay
+datos que perder, la vuelta atrás es devolver el registro A a la IP anterior.
+
+---
+
 ## Checklist de verificación
 
 Después de migrar, probá cada módulo con un usuario real:

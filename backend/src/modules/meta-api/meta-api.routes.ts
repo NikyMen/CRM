@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { config } from '../../core/config'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireModule } from '../../core/modules/require-module'
 import { requireRole } from '../../core/auth/require-role'
 import type { EventBus } from '../../core/event-bus'
 import { NotFoundError } from '../../types'
@@ -208,6 +209,7 @@ export async function metaApiRoutes(
     privateApp.addHook('onRequest', async (req) => {
       await authenticate(req)
     })
+    privateApp.addHook('onRequest', requireModule('integrations'))
 
     privateApp.get('/status', {
       preHandler: requireRole('owner', 'admin'),
