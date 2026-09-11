@@ -735,6 +735,39 @@ export interface AssigneeSummary {
   avatar?: string | null
 }
 
+export interface InternalChatMember extends AssigneeSummary {
+  email: string
+  role: Role
+  joinedAt: string
+  isCurrentUser: boolean
+}
+
+export interface InternalChatMessage {
+  id: string
+  conversationId: string
+  senderId: string
+  body: string
+  createdAt: string
+  updatedAt: string
+  sender: AssigneeSummary & { email: string }
+}
+
+export interface InternalChatConversation {
+  id: string
+  type: 'GENERAL' | 'DIRECT'
+  title?: string | null
+  otherParticipant?: (AssigneeSummary & { email: string }) | null
+  participantCount: number
+  lastMessageAt?: string | null
+  lastMessage?: InternalChatMessage | null
+  unreadCount: number
+}
+
+export interface InternalChatMessagesPage {
+  items: InternalChatMessage[]
+  nextCursor?: string | null
+}
+
 export type ClientPersonType = 'INDIVIDUAL' | 'LEGAL_ENTITY'
 export type ClientStatus = 'PROSPECT' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'
 
@@ -1012,4 +1045,42 @@ export interface ClientNote {
   content: string
   author?: AssigneeSummary | null
   createdAt: string
+}
+
+export type SaleStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+
+export interface SaleItem {
+  id: string
+  description: string
+  quantity: string
+  unitPrice: string
+  total: string
+  position: number
+}
+
+export interface Sale {
+  id: string
+  number: number
+  companyId: string
+  status: SaleStatus
+  soldAt: string
+  currency: string
+  subtotal: string
+  discount: string
+  taxAmount: string
+  total: string
+  reference?: string | null
+  notes?: string | null
+  confirmedAt?: string | null
+  cancelledAt?: string | null
+  createdAt: string
+  updatedAt: string
+  company?: { id: string; name: string; ruc?: string | null; tradeName?: string | null }
+  createdBy?: AssigneeSummary | null
+  items: SaleItem[]
+}
+
+export interface SaleSummary {
+  draftCount: number
+  currencies: Array<{ currency: string; confirmedCount: number; confirmedTotal: string }>
 }

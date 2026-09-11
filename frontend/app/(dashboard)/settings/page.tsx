@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ImagePlus, Key, Loader2, RefreshCcw, Save, Settings,
+  AlertTriangle, Check, ImagePlus, Key, LayoutGrid, Loader2, RefreshCcw, Save, Settings,
   Shield, SlidersHorizontal, Smartphone, Unplug, Webhook, Wifi, WifiOff,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -17,8 +17,10 @@ import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
 import { PillNav } from '@/components/react-bits/PillNav'
+import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleState } from '@/lib/modules'
+import { WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
 
-type SettingsTab = 'profile' | 'webhooks' | 'api-keys'
+type SettingsTab = 'profile' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -30,6 +32,8 @@ const TAB_ITEMS: {
   adminOnly?: boolean
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
+  { id: 'modules', label: 'Módulos', icon: LayoutGrid, adminOnly: true },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
   { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
 ]
@@ -447,6 +451,81 @@ function WhatsAppSettingsPanel() {
   </div>
 }
 
+
+function ModulesSettingsPanel() {
+  const queryClient = useQueryClient()
+  const [pending, setPending] = useState<ModuleKey | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const settingsQuery = useQuery({
+    queryKey: WORKSPACE_MODULES_KEY,
+    queryFn: () => authApi.getWorkspaceSettings().then((response) => response.data),
+  })
+
+  const toggle = useMutation({
+    mutationFn: (input: { key: ModuleKey; enabled: boolean }) =>
+      authApi.updateWorkspaceSettings({ modules: { [input.key]: input.enabled } as Partial<Record<ModuleKey, boolean>> }).then((response) => response.data),
+    onMutate: (input) => { setPending(input.key); setError(null) },
+    onSuccess: (data) => { queryClient.setQueryData(WORKSPACE_MODULES_KEY, data) },
+    onError: (mutationError) => setError(getErrorMessage(mutationError, 'No pudimos guardar el cambio.')),
+    onSettled: () => setPending(null),
+  })
+
+  const definitions = settingsQuery.data?.definitions?.length ? settingsQuery.data.definitions : MODULE_DEFINITIONS
+  const modules: ModuleState = normalizeModuleState(settingsQuery.data?.modules)
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6">
+      <div>
+        <p className="section-label">Espacio de trabajo</p>
+        <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">Módulos visibles</h2>
+        <p className="mt-1 text-sm text-[var(--ink-tertiary)]">
+          Apagá lo que el estudio no usa. El módulo desaparece del menú para todo el equipo; los datos quedan guardados.
+        </p>
+      </div>
+
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+          <AlertTriangle size={16} className="mr-2 inline" />{error}
+        </div>
+      ) : null}
+
+      <section className="paper-panel divide-y divide-[var(--line-soft)] overflow-hidden">
+        {settingsQuery.isLoading ? (
+          <div className="flex items-center gap-2 p-5 text-sm font-bold text-[var(--ink-tertiary)]">
+            <Loader2 size={16} className="animate-spin" /> Cargando módulos…
+          </div>
+        ) : definitions.map((definition) => {
+          const enabled = modules[definition.key]
+          const busy = pending === definition.key
+          return (
+            <div key={definition.key} className="flex items-center justify-between gap-4 p-5">
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-[var(--ink-primary)]">{definition.label}</p>
+                <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{definition.description}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-label={(enabled ? 'Desactivar ' : 'Activar ') + definition.label}
+                disabled={busy || toggle.isPending}
+                onClick={() => toggle.mutate({ key: definition.key, enabled: !enabled })}
+                className={clsx(
+                  'relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50',
+                  enabled ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]' : 'border-[var(--line)] bg-[var(--line-soft)]'
+                )}
+              >
+                <span className={clsx('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', enabled ? 'left-6' : 'left-0.5')} />
+              </button>
+            </div>
+          )
+        })}
+      </section>
+    </div>
+  )
+}
+
 function SessionDatum({ label, value }: { label: string; value: string }) {
   return <div className="border-b border-[var(--line-soft)] p-5 odd:sm:border-r"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt><dd className="mt-2 text-sm font-bold text-[var(--ink-primary)]">{value}</dd></div>
 }
@@ -492,6 +571,8 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
+      {canManageSettings && activeTab === 'modules' && <ModulesSettingsPanel />}
+      {canManageSettings && activeTab === 'whatsapp' && <WhatsAppSettingsPanel />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
       {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
       {!canManageSettings && (

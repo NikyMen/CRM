@@ -88,7 +88,7 @@ export default function LoginPage() {
               {loading ? <><LoaderCircle size={16} className="animate-spin" /> Validando acceso…</> : <>Ingresar <ArrowRight size={16} /></>}
             </button>
           </form>
-          <DevelopedBy />
+          <DevelopedBy prominent />
         </div>
       </section>
     </main>

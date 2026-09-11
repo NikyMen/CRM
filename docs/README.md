@@ -5,5 +5,6 @@ La documentación canónica vive en [`docs/obsidian`](obsidian/00%20-%20Inicio.m
 - [Inicio del vault](obsidian/00%20-%20Inicio.md)
 - [Configuración local y GitHub](local-setup-github.md)
 - [Operación productiva](../ops/README.md)
+- [Migración a un VPS dedicado](migracion-vps-dedicado.md)
 
 No se guardan contraseñas, tokens, claves SSH, respaldos ni datos de WhatsApp dentro del vault.

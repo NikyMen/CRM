@@ -9,6 +9,6 @@ export function AuthBrand({ title, subtitle }: { title: string; subtitle: string
   </div>
 }
 
-export function DevelopedBy() {
-  return <div className="mt-6 flex flex-col items-center justify-center gap-1"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={234} height={54} className="h-[54px] w-auto object-contain" /></div>
+export function DevelopedBy({ prominent = false }: { prominent?: boolean }) {
+  return <div className="mt-6 flex flex-col items-center justify-center gap-1"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por</span>{prominent ? <Image src="/brand/consultoria-digital.jpeg" alt="Consultoría Digital" width={1080} height={1080} className="h-[150px] w-full max-w-[340px] object-cover" /> : <Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={234} height={54} className="h-[54px] w-auto object-contain" />}</div>
 }

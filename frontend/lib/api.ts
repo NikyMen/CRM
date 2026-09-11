@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { auth } from './auth'
+import type { ModuleDefinition, ModuleKey, ModuleState } from './modules'
 import type {
   ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
@@ -9,7 +10,15 @@ import type {
   AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
   ClientNote, ClientSummary, CollectionPayment, CollectionSummary, CustomerServiceSummary,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
+  InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
+  Sale, SaleStatus, SaleSummary,
 } from '@/types'
+
+export type WorkspaceSettingsResponse = {
+  modules: ModuleState
+  definitions: ModuleDefinition[]
+  stockVisible: boolean
+}
 
 // Apunta al backend que ya tenemos corriendo
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
@@ -69,10 +78,10 @@ export const authApi = {
   me: () => api.get('/auth/me'),
 
   getWorkspaceSettings: () =>
-    api.get<{ stockVisible: boolean }>('/auth/workspace-settings'),
+    api.get<WorkspaceSettingsResponse>('/auth/workspace-settings'),
 
-  updateWorkspaceSettings: (data: { stockVisible: boolean }) =>
-    api.patch<{ stockVisible: boolean }>('/auth/workspace-settings', data),
+  updateWorkspaceSettings: (data: { modules?: Partial<Record<ModuleKey, boolean>>; stockVisible?: boolean }) =>
+    api.patch<WorkspaceSettingsResponse>('/auth/workspace-settings', data),
 
   updateAvatar: (avatar: string | null) =>
     api.patch('/auth/me/avatar', { avatar }),
@@ -552,6 +561,26 @@ export const teamApi = {
     api.delete(`/auth/team/${memberId}`),
 }
 
+export const internalChatApi = {
+  listMembers: () =>
+    api.get<InternalChatMember[]>('/internal-chat/members'),
+
+  listConversations: () =>
+    api.get<InternalChatConversation[]>('/internal-chat/conversations'),
+
+  createDirect: (userId: string) =>
+    api.post<{ id: string }>('/internal-chat/conversations/direct', { userId }),
+
+  listMessages: (conversationId: string, params?: { limit?: number; cursor?: string }) =>
+    api.get<InternalChatMessagesPage>(`/internal-chat/conversations/${conversationId}/messages`, { params }),
+
+  sendMessage: (conversationId: string, body: string) =>
+    api.post<InternalChatMessage>(`/internal-chat/conversations/${conversationId}/messages`, { body }),
+
+  markRead: (conversationId: string, messageId?: string) =>
+    api.post(`/internal-chat/conversations/${conversationId}/read`, { messageId }),
+}
+
 
 // Inbox / Canales
 export const inboxApi = {
@@ -667,4 +696,55 @@ export const chatwootApi = {
 
   sendMessage: (conversationId: number, data: { content: string }) =>
     api.post<ChatwootMessage>(`/chatwoot/conversations/${conversationId}/messages`, data),
+}
+
+// Ventas
+type SaleFiltersQuery = {
+  companyId?: string
+  status?: SaleStatus
+  currency?: string
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+export type SalePayload = {
+  companyId: string
+  soldAt?: string
+  currency?: string
+  discount?: string
+  taxAmount?: string
+  reference?: string | null
+  notes?: string | null
+  items: Array<{ description: string; quantity: string; unitPrice: string }>
+}
+
+export const salesApi = {
+  summary: (params?: { from?: string; to?: string }) =>
+    api.get<SaleSummary>('/sales/summary', { params }),
+
+  list: (params?: SaleFiltersQuery) =>
+    api.get<PaginatedResult<Sale>>('/sales', { params }),
+
+  get: (id: string) =>
+    api.get<Sale>(`/sales/${id}`),
+
+  create: (data: SalePayload) =>
+    api.post<Sale>('/sales', data),
+
+  update: (id: string, data: Partial<SalePayload>) =>
+    api.patch<Sale>(`/sales/${id}`, data),
+
+  confirm: (id: string) =>
+    api.post<Sale>(`/sales/${id}/confirm`),
+
+  cancel: (id: string, reason?: string) =>
+    api.post<Sale>(`/sales/${id}/cancel`, { reason }),
+
+  remove: (id: string) =>
+    api.delete(`/sales/${id}`),
+
+  export: (params?: Omit<SaleFiltersQuery, 'page' | 'limit'>) =>
+    api.get('/sales/export', { params, responseType: 'blob' }),
 }

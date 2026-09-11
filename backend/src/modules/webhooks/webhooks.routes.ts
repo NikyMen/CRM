@@ -28,6 +28,9 @@ export const ALL_EVENTS: CRMEvent[] = [
   'ticket.updated',
   'collection.updated',
   'checklist.updated',
+  'sale.created',
+  'sale.confirmed',
+  'sale.cancelled',
   'automation.triggered',
 ]
 

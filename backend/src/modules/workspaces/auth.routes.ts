@@ -5,6 +5,14 @@ import { AuthService, authenticate, normalizeAuthEmail } from '../../core/auth/a
 import { requireRole } from '../../core/auth/require-role'
 import { INVITABLE_ROLES } from '../../core/auth/roles'
 import { config } from '../../core/config'
+import { Prisma } from '@prisma/client'
+import {
+  MODULE_DEFINITIONS,
+  mergeModuleState,
+  readModuleState,
+  writeModuleState,
+} from '../../core/modules/registry'
+import { invalidateModuleCache } from '../../core/modules/require-module'
 
 const authService = new AuthService()
 const authEmailSchema = z.string().transform(normalizeAuthEmail).pipe(z.string().email())
@@ -17,29 +25,40 @@ export async function authRoutes(app: FastifyInstance) {
       where: { id: ctx.workspaceId },
       select: { settings: true },
     })
-    const settings = workspace?.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
-      ? workspace.settings as Record<string, unknown>
-      : {}
-    return reply.send({ stockVisible: settings.stockVisible !== false })
+    const modules = readModuleState(workspace?.settings)
+    return reply.send({
+      modules,
+      definitions: MODULE_DEFINITIONS,
+      stockVisible: modules.stock,
+    })
   })
 
   app.patch('/workspace-settings', {
     preHandler: [authenticate, requireRole('owner', 'admin')],
   }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
-    const body = z.object({ stockVisible: z.boolean() }).parse(req.body)
+    const body = z.object({
+      stockVisible: z.boolean().optional(),
+      modules: z.record(z.string(), z.boolean()).optional(),
+    }).parse(req.body)
+
     const workspace = await db.workspace.findUnique({
       where: { id: ctx.workspaceId },
       select: { settings: true },
     })
-    const current = workspace?.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
-      ? workspace.settings as Record<string, unknown>
-      : {}
+    const patch: Record<string, boolean> = { ...(body.modules ?? {}) }
+    if (typeof body.stockVisible === 'boolean' && patch.stock === undefined) {
+      patch.stock = body.stockVisible
+    }
+
+    const modules = mergeModuleState(readModuleState(workspace?.settings), patch)
     await db.workspace.update({
       where: { id: ctx.workspaceId },
-      data: { settings: { ...current, stockVisible: body.stockVisible } },
+      data: { settings: writeModuleState(workspace?.settings, modules) as Prisma.InputJsonValue },
     })
-    return reply.send(body)
+    invalidateModuleCache(ctx.workspaceId)
+
+    return reply.send({ modules, definitions: MODULE_DEFINITIONS, stockVisible: modules.stock })
   })
 
   // ─── POST /auth/register ───────────────────────────────────────

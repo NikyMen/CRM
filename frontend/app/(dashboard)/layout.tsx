@@ -6,24 +6,48 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Headphones, Home, LogOut, Menu, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
 import { UserAvatar } from '@/components/UserAvatar'
+import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
+import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
 
-type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[] }
+type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true },
-  { href: '/clients', label: 'Clientes', icon: Building2 },
-  { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'] },
-  { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign },
-  { href: '/customer-service', label: 'Atención al cliente', icon: Headphones },
-  { href: '/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/clients', label: 'Clientes', icon: Building2, module: 'clients' },
+  { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },
+  { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
+  { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign, module: 'collections' },
+  { href: '/customer-service', label: 'Atención al cliente', icon: Headphones, module: 'customer-service' },
+  { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets' },
+  { href: '/internal-chat', label: 'Chat interno', icon: MessageCircleMore, module: 'internal-chat' },
   { href: '/team', label: 'Equipo', icon: UsersRound, roles: ['owner', 'admin'] },
   { href: '/settings', label: 'Configuración', icon: Settings, roles: ['owner', 'admin'] },
 ]
+
+function DisabledModuleNotice({ canManage }: { canManage: boolean }) {
+  return (
+    <div className="grid min-h-[70vh] place-items-center px-6">
+      <div className="max-w-md text-center">
+        <Lock className="mx-auto mb-4 text-[var(--ink-tertiary)]" size={28} />
+        <p className="text-lg font-extrabold text-[var(--ink-primary)]">Módulo desactivado</p>
+        <p className="mt-2 text-sm text-[var(--ink-tertiary)]">
+          Este módulo está apagado para tu espacio de trabajo.
+          {canManage ? ' Podés volver a activarlo desde Configuración.' : ' Pedile a un administrador que lo active.'}
+        </p>
+        {canManage ? (
+          <Link href="/settings?tab=modules" className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[var(--brand-navy)] px-4 text-sm font-bold text-white">
+            Ir a Configuración
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
@@ -68,7 +92,7 @@ function Sidebar({ items, pathname, user, onLogout, onClose, collapsed = false, 
           {!collapsed ? <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{user?.firstName} {user?.lastName}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-white/42">{user?.role}</p></div> : null}
         </div>
         <button type="button" onClick={onLogout} title={collapsed ? 'Cerrar sesión' : undefined} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 text-xs font-bold text-white/62 hover:bg-white/[0.055] hover:text-white"><LogOut size={15} />{!collapsed ? ' Cerrar sesión' : null}</button>
-        {!collapsed ? <div className="mt-4 flex flex-col items-center justify-center gap-0.5 border-t border-white/10 pt-4"><span className="text-[8px] font-bold uppercase tracking-[0.1em] text-white/34">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={132} height={30} className="h-[30px] w-auto object-contain opacity-80" /></div> : null}
+        {!collapsed ? <div className="mt-4 flex flex-col items-center justify-center gap-1 border-t border-white/10 pt-4"><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-white/48">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={600} height={400} className="h-12 w-full max-w-[208px] object-cover" /></div> : null}
       </div>
     </div>
   )
@@ -108,8 +132,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => setMobileOpen(false), [pathname])
 
   const role = (user?.role ?? 'viewer') as Role
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+  const { modules } = useWorkspaceModules(Boolean(user))
+  const visibleItems = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && (!item.module || modules[item.module]))
   const logout = () => { auth.clear(); router.replace('/login') }
+  const blockedModule = moduleForPath(pathname) && !isPathEnabled(pathname, modules)
 
   return (
     <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)] md:flex md:h-screen md:overflow-hidden">
@@ -122,7 +148,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><div><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p><p className="text-[7px] font-bold uppercase tracking-wide text-[var(--ink-tertiary)]">Desarrollado por Consultoría Digital</p></div></div>
         </header>
-        {checking ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : children}
+        {checking ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}
       </main>
     </div>
   )

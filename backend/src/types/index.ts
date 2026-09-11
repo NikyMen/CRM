@@ -106,6 +106,10 @@ export type CRMEvent =
   // Gestión contable
   | 'collection.updated'
   | 'checklist.updated'
+  // Ventas
+  | 'sale.created'
+  | 'sale.confirmed'
+  | 'sale.cancelled'
   // Automatización
   | 'automation.triggered'
 

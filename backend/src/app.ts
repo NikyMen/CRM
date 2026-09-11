@@ -40,6 +40,8 @@ import { customerServiceRoutes } from './modules/customer-service'
 import { clientRoutes } from './modules/clients/client.routes'
 import { collectionRoutes } from './modules/collections/collection.routes'
 import { checklistRoutes } from './modules/checklists/checklist.routes'
+import { internalChatRoutes } from './modules/internal-chat/internal-chat.routes'
+import { saleRoutes } from './modules/sales/sale.routes'
 
 export async function buildApp() {
   initSentry()
@@ -192,6 +194,8 @@ export async function buildApp() {
   await app.register(clientRoutes, { prefix: `${API}/clients`, eventBus })
   await app.register(collectionRoutes, { prefix: `${API}/collections`, eventBus })
   await app.register(checklistRoutes, { prefix: API, eventBus })
+  await app.register(internalChatRoutes, { prefix: `${API}/internal-chat` })
+  await app.register(saleRoutes, { prefix: `${API}/sales`, eventBus })
 
   app.addHook('onReady', async () => {
     await whatsAppManager.startBackgroundRuntime()

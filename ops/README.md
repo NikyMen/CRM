@@ -78,3 +78,20 @@ sudo nginx -t
 Orden mínimo: detener `crm-backend`, ejecutar backup, verificarlo, descargar una segunda copia, verificarla y ejecutar `test-restore.sh`. El backend actual puede reiniciarse si la publicación todavía no va a continuar.
 
 Evidencia vigente: el respaldo canónico `romez-pre-reset-20260830T020857Z` fue verificado en el VPS, descargado y restaurado temporalmente. Las 10 migraciones actuales también fueron aplicadas sobre una base vacía (41 tablas). No intentar una actualización in-place del dump histórico: su registro `_prisma_migrations` tiene deriva; la publicación ROMEZ usa una base nueva limpia.
+
+## Módulos visibles
+
+`workspace.settings.modules` decide qué módulos ve el equipo. Se editan desde
+Configuración → Módulos (owner/admin) y el registro vive en
+`backend/src/core/modules/registry.ts`, con un espejo en `frontend/lib/modules.ts`.
+El flag histórico `stockVisible` se sigue leyendo para no perder la
+configuración de workspaces anteriores.
+
+Apagar un módulo sólo lo saca del menú y bloquea sus rutas en el frontend; los
+datos quedan intactos. El único módulo que además rechaza sus endpoints del
+backend es Ventas (`requireModule('sales')`).
+
+## Migración de servidor
+
+El paso a paso para mover el proyecto a un VPS dedicado está en
+[`docs/migracion-vps-dedicado.md`](../docs/migracion-vps-dedicado.md).

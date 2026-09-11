@@ -19,6 +19,9 @@ test('expone y acepta todos los eventos de gestión ROMEZ', () => {
     'ticket.updated',
     'collection.updated',
     'checklist.updated',
+    'sale.created',
+    'sale.confirmed',
+    'sale.cancelled',
   ]
 
   for (const event of expected) {
