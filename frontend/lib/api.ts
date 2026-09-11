@@ -1,12 +1,24 @@
 import axios from 'axios'
 import { auth } from './auth'
+import type { ModuleDefinition, ModuleKey, ModuleState } from './modules'
 import type {
-  ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal, Webhook,
+  ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
   EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
+  AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
+  ClientNote, ClientSummary, CollectionPayment, CollectionSummary, CustomerServiceSummary,
+  Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
+  InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
+  Sale, SaleStatus, SaleSummary,
 } from '@/types'
+
+export type WorkspaceSettingsResponse = {
+  modules: ModuleState
+  definitions: ModuleDefinition[]
+  stockVisible: boolean
+}
 
 // Apunta al backend que ya tenemos corriendo
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
@@ -44,7 +56,7 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401 && !isAuthRoute) {
       auth.clear()
-      window.location.href = '/login'
+      window.location.replace('/login')
     }
     return Promise.reject(error)
   }
@@ -66,10 +78,10 @@ export const authApi = {
   me: () => api.get('/auth/me'),
 
   getWorkspaceSettings: () =>
-    api.get<{ stockVisible: boolean }>('/auth/workspace-settings'),
+    api.get<WorkspaceSettingsResponse>('/auth/workspace-settings'),
 
-  updateWorkspaceSettings: (data: { stockVisible: boolean }) =>
-    api.patch<{ stockVisible: boolean }>('/auth/workspace-settings', data),
+  updateWorkspaceSettings: (data: { modules?: Partial<Record<ModuleKey, boolean>>; stockVisible?: boolean }) =>
+    api.patch<WorkspaceSettingsResponse>('/auth/workspace-settings', data),
 
   updateAvatar: (avatar: string | null) =>
     api.patch('/auth/me/avatar', { avatar }),
@@ -140,6 +152,9 @@ export const dealsApi = {
 
   move: (id: string, stageId: string, position?: number) =>
     api.patch(`/deals/${id}/move`, { stageId, position }),
+
+  convertToClient: (id: string, clientId?: string) =>
+    api.post<{ client: Client; deal: Deal; created: boolean }>(`/deals/${id}/convert-to-client`, clientId ? { clientId } : {}),
 
   delete: (id: string) =>
     api.delete(`/deals/${id}`),
@@ -212,6 +227,178 @@ export const notesApi = {
 // Dashboard
 export const dashboardApi = {
   get: () => api.get('/dashboard'),
+}
+
+// Clientes contables (Company se mantiene como detalle interno del backend)
+export const clientsApi = {
+  list: (params?: {
+    search?: string
+    status?: string
+    ownerId?: string
+    hasDebt?: boolean
+    page?: number
+    limit?: number
+  }) => api.get<PaginatedResult<Client>>('/clients', { params }),
+
+  get: (id: string) => api.get<Client>(`/clients/${id}`),
+
+  summary: (id: string) => api.get<ClientSummary>(`/clients/${id}/summary`),
+
+  create: (data: Partial<Client> & { name: string }) => api.post<Client>('/clients', data),
+
+  update: (id: string, data: Partial<Omit<Client, 'assignments'>> & {
+    assignments?: Array<{ userId: string; area?: string }>
+  }) => api.patch<Client>(`/clients/${id}`, data),
+
+  listContacts: (id: string) => api.get<Contact[]>(`/clients/${id}/contacts`),
+
+  claim: (id: string) => api.post<Client>(`/clients/${id}/claim`),
+
+  release: (id: string) => api.post<Client>(`/clients/${id}/release`),
+
+  import: (file: File, commit = false) => {
+    const body = new FormData()
+    body.append('file', file)
+    return api.post('/clients/import', body, { params: { commit }, headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  listDocuments: (id: string) => api.get<ClientDocument[]>(`/clients/${id}/documents`),
+
+  uploadDocument: (id: string, file: File, category?: string) => {
+    const body = new FormData()
+    body.append('file', file)
+    if (category) body.append('category', category)
+    return api.post<ClientDocument>(`/clients/${id}/documents`, body, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  downloadDocument: (id: string, documentId: string) =>
+    api.get<Blob>(`/clients/${id}/documents/${documentId}/download`, { responseType: 'blob' }),
+
+  listNotes: (id: string) => api.get<ClientNote[]>(`/clients/${id}/notes`),
+
+  addNote: (id: string, content: string) => api.post<ClientNote>(`/clients/${id}/notes`, { content }),
+
+  account: (id: string) => api.get<AccountSummary[]>(`/clients/${id}/account`),
+}
+
+export const checklistsApi = {
+  summary: () => api.get<ChecklistSummary>('/checklists/summary'),
+
+  listTemplates: (params?: { page?: number; limit?: number; includeInactive?: boolean }) =>
+    api.get<PaginatedResult<ChecklistTemplate>>('/checklist-templates', { params }),
+
+  createTemplate: (data: Pick<ChecklistTemplate, 'name' | 'description' | 'periodicity'> & {
+    items: Array<Pick<ChecklistTemplate['items'][number], 'title' | 'description' | 'isRequired'>>
+  }) => api.post<ChecklistTemplate>('/checklist-templates', data),
+
+  listForClient: (clientId: string, params?: { periodKey?: string; status?: string; page?: number; limit?: number }) =>
+    api.get<PaginatedResult<ClientChecklist>>(`/clients/${clientId}/checklists`, { params }),
+
+  createForClient: (clientId: string, data: { templateId: string; periodKey: string; dueDate?: string; assignedToUserId?: string | null }) =>
+    api.post<ClientChecklist>(`/clients/${clientId}/checklists`, data),
+
+  updateItem: (clientId: string, checklistId: string, itemId: string, isCompleted: boolean, notes?: string | null) =>
+    api.patch<ClientChecklist>(`/clients/${clientId}/checklists/${checklistId}/items/${itemId}`, { isCompleted, ...(notes !== undefined ? { notes } : {}) }),
+}
+
+export const collectionsApi = {
+  summary: () => api.get<CollectionSummary>('/collections/summary'),
+
+  listReceivables: (params?: {
+    status?: string
+    companyId?: string
+    currency?: string
+    page?: number
+    limit?: number
+  }) => api.get<PaginatedResult<Receivable>>('/collections/receivables', { params }),
+
+  exportReceivables: (params?: { status?: string; companyId?: string; currency?: string }) =>
+    api.get<Blob>('/collections/receivables/export', { params, responseType: 'blob' }),
+
+  createReceivable: (data: {
+    companyId: string
+    description: string
+    periodKey?: string
+    currency?: string
+    amount: string
+    dueDate: string
+    reference?: string
+  }) => api.post<Receivable>('/collections/receivables', data),
+
+  listPayments: (params?: { companyId?: string; currency?: string; includeVoided?: boolean; page?: number; limit?: number }) =>
+    api.get<PaginatedResult<CollectionPayment>>('/collections/payments', { params }),
+
+  createPayment: (data: {
+    companyId: string
+    currency?: string
+    amount: string
+    paidAt?: string
+    method?: string
+    reference?: string
+    notes?: string
+    allocations?: Array<{ receivableId: string; amount: string }>
+  }) => api.post<CollectionPayment>('/collections/payments', data),
+
+  import: (file: File, commit = false) => {
+    const body = new FormData()
+    body.append('file', file)
+    return api.post('/collections/import', body, { params: { commit }, headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  listRecurring: (params?: { companyId?: string; page?: number; limit?: number }) => api.get<PaginatedResult<RecurringCharge>>('/collections/recurring-charges', { params }),
+
+  createRecurring: (data: {
+    companyId: string
+    name: string
+    description?: string
+    amount: string
+    currency?: string
+    frequency?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+    dayOfMonth?: number
+    startDate: string
+    endDate?: string | null
+    isActive?: boolean
+  }) => api.post<RecurringCharge>('/collections/recurring-charges', data),
+
+  generateRecurring: (periodKey: string) => api.post('/collections/recurring-charges/generate', { periodKey }),
+}
+
+export const ticketsApi = {
+  list: (params?: {
+    inbox?: 'free' | 'mine' | 'all'
+    search?: string
+    status?: TicketStatus | ''
+    priority?: TicketPriority | ''
+    page?: number
+    limit?: number
+  }) => api.get<PaginatedResult<Ticket>>('/tickets', {
+    params: params ? {
+      ...params,
+      status: params.status || undefined,
+      priority: params.priority || undefined,
+    } : undefined,
+  }),
+
+  get: (id: string) => api.get<Ticket>(`/tickets/${id}`),
+
+  update: (id: string, data: Partial<Pick<Ticket, 'subject' | 'priority' | 'category' | 'dueAt'>>) =>
+    api.patch<Ticket>(`/tickets/${id}`, data),
+
+  assign: (id: string, assignedToUserId: string | null) =>
+    api.patch<Ticket>(`/tickets/${id}/assign`, { assignedToUserId }),
+
+  updateStatus: (id: string, status: TicketStatus) =>
+    api.patch<Ticket>(`/tickets/${id}/status`, { status }),
+
+  reply: (id: string, text: string) => api.post<Ticket>(`/tickets/${id}/reply`, { text }),
+
+  listComments: (id: string) => api.get<Array<{ id: string; body: string; createdAt: string }>>(`/tickets/${id}/comments`),
+
+  addComment: (id: string, body: string) => api.post(`/tickets/${id}/comments`, { body }),
+}
+
+export const customerServiceApi = {
+  summary: () => api.get<CustomerServiceSummary>('/customer-service/summary'),
 }
 
 export const stockApi = {
@@ -316,10 +503,10 @@ export const stockApi = {
 
 export const whatsappApi = {
   getSession: () =>
-    api.get('/whatsapp/session'),
+    api.get<WhatsAppSessionSnapshot>('/whatsapp/session'),
 
   connect: () =>
-    api.post('/whatsapp/connect', { mode: 'qr' }),
+    api.post<WhatsAppSessionSnapshot>('/whatsapp/connect', { mode: 'qr' }),
 
   disconnect: () =>
     api.post('/whatsapp/disconnect'),
@@ -345,6 +532,9 @@ export const whatsappApi = {
   syncHistory: (jid: string, params?: { count?: number }) =>
     api.post(`/whatsapp/chats/${encodeURIComponent(jid)}/history`, undefined, { params }),
 
+  getMessageMedia: (messageId: string) =>
+    api.get<Blob>(`/whatsapp/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
+
   sendMessage: (jid: string, data: {
     text?: string
     file?: {
@@ -369,6 +559,26 @@ export const teamApi = {
 
   remove: (memberId: string) =>
     api.delete(`/auth/team/${memberId}`),
+}
+
+export const internalChatApi = {
+  listMembers: () =>
+    api.get<InternalChatMember[]>('/internal-chat/members'),
+
+  listConversations: () =>
+    api.get<InternalChatConversation[]>('/internal-chat/conversations'),
+
+  createDirect: (userId: string) =>
+    api.post<{ id: string }>('/internal-chat/conversations/direct', { userId }),
+
+  listMessages: (conversationId: string, params?: { limit?: number; cursor?: string }) =>
+    api.get<InternalChatMessagesPage>(`/internal-chat/conversations/${conversationId}/messages`, { params }),
+
+  sendMessage: (conversationId: string, body: string) =>
+    api.post<InternalChatMessage>(`/internal-chat/conversations/${conversationId}/messages`, { body }),
+
+  markRead: (conversationId: string, messageId?: string) =>
+    api.post(`/internal-chat/conversations/${conversationId}/read`, { messageId }),
 }
 
 
@@ -486,4 +696,55 @@ export const chatwootApi = {
 
   sendMessage: (conversationId: number, data: { content: string }) =>
     api.post<ChatwootMessage>(`/chatwoot/conversations/${conversationId}/messages`, data),
+}
+
+// Ventas
+type SaleFiltersQuery = {
+  companyId?: string
+  status?: SaleStatus
+  currency?: string
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+export type SalePayload = {
+  companyId: string
+  soldAt?: string
+  currency?: string
+  discount?: string
+  taxAmount?: string
+  reference?: string | null
+  notes?: string | null
+  items: Array<{ description: string; quantity: string; unitPrice: string }>
+}
+
+export const salesApi = {
+  summary: (params?: { from?: string; to?: string }) =>
+    api.get<SaleSummary>('/sales/summary', { params }),
+
+  list: (params?: SaleFiltersQuery) =>
+    api.get<PaginatedResult<Sale>>('/sales', { params }),
+
+  get: (id: string) =>
+    api.get<Sale>(`/sales/${id}`),
+
+  create: (data: SalePayload) =>
+    api.post<Sale>('/sales', data),
+
+  update: (id: string, data: Partial<SalePayload>) =>
+    api.patch<Sale>(`/sales/${id}`, data),
+
+  confirm: (id: string) =>
+    api.post<Sale>(`/sales/${id}/confirm`),
+
+  cancel: (id: string, reason?: string) =>
+    api.post<Sale>(`/sales/${id}/cancel`, { reason }),
+
+  remove: (id: string) =>
+    api.delete(`/sales/${id}`),
+
+  export: (params?: Omit<SaleFiltersQuery, 'page' | 'limit'>) =>
+    api.get('/sales/export', { params, responseType: 'blob' }),
 }

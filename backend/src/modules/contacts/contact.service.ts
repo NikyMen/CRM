@@ -3,6 +3,7 @@ import { EventBus } from '../../core/event-bus'
 import { LeadScoringEngine } from './lead-scoring.engine'
 import {
   NotFoundError,
+  ForbiddenError,
   ConflictError,
   ValidationError,
   paginate,
@@ -12,8 +13,20 @@ import {
   customDataSchema,
   contactChannelsSchema,
   type ContactChannel,
+  type WorkspaceContext,
 } from '../../types'
 import { type Prisma } from '@prisma/client'
+import {
+  assignContactAndRelatedRecords,
+  assertAssignmentAllowed,
+  validateAssignee,
+} from '../tickets/ticket.assignment'
+import { whatsAppRealtime } from '../whatsapp/whatsapp.events'
+import {
+  contactFilterVisibilityWhere,
+  contactWriteVisibilityWhere,
+} from '../../core/auth/portfolio-visibility'
+import { clientVisibilityWhere } from '../clients/client-visibility'
 
 type Contact = Prisma.ContactGetPayload<object>
 
@@ -32,8 +45,8 @@ export interface CreateContactDto {
   status?: string
   source?: string
   tags?: string[]
-  companyId?: string
-  ownerId?: string
+  companyId?: string | null
+  ownerId?: string | null
   customData?: Record<string, unknown>
   channels?: ContactChannel[]
 }
@@ -51,6 +64,8 @@ export interface ContactFilters extends PaginationQuery {
   scoreMax?: number
 }
 
+type ContactActor = Pick<WorkspaceContext, 'userId' | 'role'>
+
 // ─── Servicio ─────────────────────────────────────────────────────
 
 export class ContactService {
@@ -62,7 +77,8 @@ export class ContactService {
   async create(
     workspaceId: string,
     data: CreateContactDto,
-    userId?: string
+    userId?: string,
+    role?: WorkspaceContext['role']
   ): Promise<Contact> {
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
@@ -92,6 +108,18 @@ export class ContactService {
       }
     }
 
+    const actor = userId && role ? { userId, role } : undefined
+    const visibleCompany = data.companyId
+      ? await this.ensureVisibleCompany(workspaceId, data.companyId, actor)
+      : null
+    const ownerId = data.ownerId ?? visibleCompany?.ownerId ?? (role === 'member' ? userId : undefined)
+    if (ownerId) {
+      await validateAssignee(workspaceId, ownerId)
+      if (role && userId && ownerId !== visibleCompany?.ownerId) {
+        assertAssignmentAllowed({ userId, role }, null, ownerId)
+      }
+    }
+
     // 2. Crear en la base de datos
     const contact = await db.contact.create({
       data: {
@@ -105,7 +133,7 @@ export class ContactService {
         source: data.source ?? 'MANUAL',
         tags: data.tags ?? [],
         companyId: data.companyId,
-        ownerId: data.ownerId,
+        ownerId,
         channels: data.channels ? (data.channels as Prisma.InputJsonValue) : [],
         customData: (data.customData ?? {}) as Prisma.InputJsonValue,
       },
@@ -140,9 +168,14 @@ export class ContactService {
   }
 
   // ─── Buscar por ID ───────────────────────────────────────────────
-  async findById(workspaceId: string, id: string): Promise<Contact> {
+  async findById(workspaceId: string, id: string, actor?: ContactActor): Promise<Contact> {
     const contact = await db.contact.findFirst({
-      where: { id, workspaceId, isArchived: false },
+      where: {
+        id,
+        workspaceId,
+        isArchived: false,
+        ...this.assignmentScope(actor),
+      },
     })
     if (!contact) throw new NotFoundError('Contact', id)
     return contact
@@ -151,12 +184,13 @@ export class ContactService {
   // ─── Buscar con filtros ──────────────────────────────────────────
   async search(
     workspaceId: string,
-    filters: ContactFilters
+    filters: ContactFilters,
+    actor?: ContactActor
   ): Promise<PaginatedResult<Contact>> {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
 
-    const where = this.buildWhereClause(workspaceId, filters)
+    const where = this.buildWhereClause(workspaceId, filters, actor)
 
     const [items, total] = await Promise.all([
       db.contact.findMany({
@@ -176,10 +210,30 @@ export class ContactService {
     workspaceId: string,
     id: string,
     data: UpdateContactDto,
-    userId?: string
+    userId?: string,
+    role?: WorkspaceContext['role']
   ): Promise<Contact> {
     // Verificar que existe
-    await this.findById(workspaceId, id)
+    const actor = userId && role ? { userId, role } : undefined
+    const existing = await this.findById(workspaceId, id, actor)
+    if (
+      actor?.role === 'member' &&
+      existing.ownerId !== actor.userId &&
+      data.ownerId !== actor.userId
+    ) {
+      const canWriteAssignedClient = await db.contact.findFirst({
+        where: {
+          id,
+          workspaceId,
+          isArchived: false,
+          ...contactWriteVisibilityWhere(actor),
+        },
+        select: { id: true },
+      })
+      if (!canWriteAssignedClient) {
+        throw new ForbiddenError('Primero debes tomar el contacto para modificarlo.')
+      }
+    }
 
     // 0. Validar datos JSON
     if (data.customData !== undefined) {
@@ -193,6 +247,9 @@ export class ContactService {
       if (!result.success) {
         throw new ValidationError(`channels inválido: ${result.error.message}`)
       }
+    }
+    if (data.companyId) {
+      await this.ensureVisibleCompany(workspaceId, data.companyId, actor)
     }
 
     // Verificar duplicados si cambia email o phone
@@ -208,9 +265,7 @@ export class ContactService {
       }
     }
 
-    const contact = await db.contact.update({
-      where: { id, workspaceId },
-      data: {
+    const updateData = {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.email !== undefined && { email: data.email }),
@@ -220,16 +275,65 @@ export class ContactService {
         ...(data.source !== undefined && { source: data.source }),
         ...(data.tags !== undefined && { tags: data.tags }),
         ...(data.companyId !== undefined && { companyId: data.companyId }),
-        ...(data.ownerId !== undefined && { ownerId: data.ownerId }),
         ...(data.channels !== undefined && {
           channels: data.channels as Prisma.InputJsonValue,
         }),
         ...(data.customData !== undefined && {
           customData: data.customData as Prisma.InputJsonValue,
         }),
-      },
-    })
+      }
 
+    let contact: Contact
+    if (data.ownerId !== undefined) {
+      await validateAssignee(workspaceId, data.ownerId)
+      if (actor) assertAssignmentAllowed(actor, existing.ownerId, data.ownerId)
+      const assignment = await assignContactAndRelatedRecords({
+        workspaceId,
+        contactId: id,
+        expectedOwnerId: existing.ownerId,
+        ownerId: data.ownerId,
+        contactData: updateData,
+      })
+      for (const chat of assignment.whatsappChats) {
+        whatsAppRealtime.publish(workspaceId, { type: 'assignment.updated', jid: chat.jid })
+        whatsAppRealtime.publish(workspaceId, { type: 'ticket.updated', jid: chat.jid })
+        whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: chat.jid })
+      }
+      const activeTickets = assignment.whatsappChats.length
+        ? await db.ticket.findMany({
+            where: {
+              workspaceId,
+              whatsappChatId: { in: assignment.whatsappChats.map((chat) => chat.id) },
+              activeKey: { not: null },
+            },
+            select: { id: true },
+          })
+        : []
+      if (activeTickets.length) {
+        await db.ticketEvent.createMany({
+          data: activeTickets.map((ticket) => ({
+            workspaceId,
+            ticketId: ticket.id,
+            actorUserId: userId,
+            type: data.ownerId ? 'ASSIGNED' : 'RELEASED',
+            fromValue: existing.ownerId,
+            toValue: data.ownerId,
+            metadata: { source: 'CONTACT' },
+          })),
+        })
+      }
+      await Promise.all(activeTickets.map((ticket) => this.eventBus.emit('ticket.updated', {
+        workspaceId,
+        ticketId: ticket.id,
+        assignedToUserId: data.ownerId,
+      })))
+      contact = await db.contact.findUniqueOrThrow({ where: { id } })
+    } else {
+      contact = await db.contact.update({
+        where: { id, workspaceId },
+        data: updateData,
+      })
+    }
     // Recalcular score con los nuevos datos
     const score = this.scoring.calculate(contact)
     if (score !== contact.score) {
@@ -371,11 +475,13 @@ export class ContactService {
 
   private buildWhereClause(
     workspaceId: string,
-    f: ContactFilters
+    f: ContactFilters,
+    actor?: ContactActor
   ): Prisma.ContactWhereInput {
     const where: Prisma.ContactWhereInput = {
       workspaceId,
       isArchived: false,
+      ...this.assignmentScope(actor),
     }
 
     if (f.search) {
@@ -414,6 +520,25 @@ export class ContactService {
     }
 
     return where
+  }
+
+  private async ensureVisibleCompany(workspaceId: string, companyId: string, actor?: ContactActor) {
+    const company = await db.company.findFirst({
+      where: {
+        id: companyId,
+        workspaceId,
+        isArchived: false,
+        ...(!actor ? {} : clientVisibilityWhere({ workspaceId, ...actor })),
+      },
+      select: { id: true, ownerId: true },
+    })
+    if (!company) throw new NotFoundError('Cliente', companyId)
+    return company
+  }
+
+  private assignmentScope(actor?: ContactActor): Prisma.ContactWhereInput {
+    if (!actor) return {}
+    return contactFilterVisibilityWhere(actor)
   }
 
   private buildOrderBy(

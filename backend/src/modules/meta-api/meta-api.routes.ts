@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { config } from '../../core/config'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireModule } from '../../core/modules/require-module'
 import { requireRole } from '../../core/auth/require-role'
 import type { EventBus } from '../../core/event-bus'
 import { NotFoundError } from '../../types'
@@ -13,6 +14,7 @@ import type {
   RegisterWhatsAppPhoneInput,
 } from '../inbox/inbox.service'
 import { MetaWebhookAdapter } from '../inbox/meta.adapter'
+import { assertValidMetaWebhookSignature, installRawMetaWebhookCapture } from '../inbox/meta-webhook-security'
 
 const metaChannelSchema = z.enum(['whatsapp', 'instagram', 'messenger'])
 const connectionStatusSchema = z.enum(['disconnected', 'connected', 'error'])
@@ -156,6 +158,10 @@ export async function metaApiRoutes(
     meta: metaAdapter,
   })
 
+  installRawMetaWebhookCapture(app, (pathname) =>
+    pathname === '/webhook' || pathname.endsWith('/meta-api/webhook')
+  )
+
   app.get('/webhook', async (req, reply) => {
     const result = await metaAdapter.verifyWebhook({
       headers: req.headers,
@@ -171,6 +177,7 @@ export async function metaApiRoutes(
   })
 
   app.post('/webhook', async (req, reply) => {
+    assertValidMetaWebhookSignature(req)
     const envelope = {
       headers: req.headers,
       query: req.query as Record<string, unknown>,
@@ -202,9 +209,10 @@ export async function metaApiRoutes(
     privateApp.addHook('onRequest', async (req) => {
       await authenticate(req)
     })
+    privateApp.addHook('onRequest', requireModule('integrations'))
 
     privateApp.get('/status', {
-      preHandler: requireRole('owner', 'admin', 'member'),
+      preHandler: requireRole('owner', 'admin'),
     }, async (_req, reply) => reply.send(metaStatusPayload()))
 
     privateApp.get('/embedded-signup/config', {

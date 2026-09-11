@@ -2,6 +2,13 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireRole } from '../../core/auth/require-role'
+import {
+  activityDeleteWhere,
+  activityPortfolioWhere,
+  contactPortfolioWhere,
+} from '../../core/auth/portfolio-visibility'
+import { NotFoundError, type WorkspaceContext } from '../../types'
 
 const createActivitySchema = z.object({
   contactId:  z.string(),
@@ -19,7 +26,7 @@ export async function activityRoutes(app: FastifyInstance) {
 
   // GET /activities?contactId=xxx
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as WorkspaceContext
     const { contactId } = z.object({
       contactId: z.string().optional(),
     }).parse(req.query)
@@ -27,6 +34,7 @@ export async function activityRoutes(app: FastifyInstance) {
     const activities = await db.activity.findMany({
       where: {
         workspaceId: ctx.workspaceId,
+        ...activityPortfolioWhere(ctx),
         ...(contactId && { contactId }),
       },
       orderBy: { createdAt: 'desc' },
@@ -37,9 +45,19 @@ export async function activityRoutes(app: FastifyInstance) {
   })
 
   // POST /activities
-  app.post('/', async (req, reply) => {
-    const ctx  = req.user as { workspaceId: string; userId: string }
+  app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
     const body = createActivitySchema.parse(req.body)
+
+    const contact = await db.contact.findFirst({
+      where: {
+        id: body.contactId,
+        isArchived: false,
+        ...contactPortfolioWhere(ctx),
+      },
+      select: { id: true },
+    })
+    if (!contact) throw new NotFoundError('Contact', body.contactId)
 
     const activity = await db.activity.create({
         data: {
@@ -58,12 +76,13 @@ export async function activityRoutes(app: FastifyInstance) {
   })
 
   // DELETE /activities/:id
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+  app.delete<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
 
-    await db.activity.deleteMany({
-      where: { id: req.params.id, workspaceId: ctx.workspaceId },
+    const deleted = await db.activity.deleteMany({
+      where: activityDeleteWhere(ctx, req.params.id),
     })
+    if (deleted.count === 0) throw new NotFoundError('Activity', req.params.id)
 
     return reply.code(204).send()
   })

@@ -3,7 +3,16 @@ import { randomUUID } from 'node:crypto'
 
 export type WhatsAppRealtimeEvent = {
   id: string
-  type: 'session.updated' | 'chat.updated' | 'message.updated' | 'assignment.updated' | 'kanban.updated'
+  type:
+    | 'session.updated'
+    | 'chat.updated'
+    | 'message.updated'
+    | 'assignment.updated'
+    | 'kanban.updated'
+    | 'ticket.created'
+    | 'ticket.updated'
+    | 'collection.updated'
+    | 'checklist.updated'
   at: string
   jid?: string
 }

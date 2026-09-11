@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { authenticate } from '../../core/auth/auth.service'
+import {
+  activityPortfolioWhere,
+  contactPortfolioWhere,
+  dealPortfolioWhere,
+} from '../../core/auth/portfolio-visibility'
+import type { WorkspaceContext } from '../../types'
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
@@ -8,8 +14,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
   })
 
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
+    const ctx = req.user as WorkspaceContext
     const { workspaceId } = ctx
+    const contactScope = contactPortfolioWhere(ctx)
+    const dealScope = dealPortfolioWhere(ctx)
 
     // Ejecutar todas las queries en paralelo para mayor velocidad
     const [
@@ -19,37 +27,36 @@ export async function dashboardRoutes(app: FastifyInstance) {
       dealsByStage,
       recentActivities,
       recentContacts,
-      stockProducts,
     ] = await Promise.all([
 
       // Total de contactos activos
       db.contact.count({
-        where: { workspaceId, isArchived: false },
+        where: { ...contactScope, isArchived: false },
       }),
 
       // Contactos agrupados por estado
       db.contact.groupBy({
         by:     ['status'],
-        where:  { workspaceId, isArchived: false },
+        where:  { ...contactScope, isArchived: false },
         _count: { id: true },
       }),
 
       // Total de deals abiertos
       db.deal.count({
-        where: { workspaceId, isArchived: false, status: 'OPEN' },
+        where: { ...dealScope, isArchived: false, status: 'OPEN' },
       }),
 
       // Deals agrupados por stage con valor total
       db.deal.groupBy({
         by:     ['stageId'],
-        where:  { workspaceId, isArchived: false, status: 'OPEN' },
+        where:  { ...dealScope, isArchived: false, status: 'OPEN' },
         _count: { id: true },
         _sum:   { value: true },
       }),
 
       // Últimas 10 actividades
       db.activity.findMany({
-        where:   { workspaceId },
+        where:   { workspaceId, ...activityPortfolioWhere(ctx) },
         orderBy: { createdAt: 'desc' },
         take:    10,
         include: {
@@ -61,7 +68,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
       // Últimos 5 contactos creados
       db.contact.findMany({
-        where:   { workspaceId, isArchived: false },
+        where:   { ...contactScope, isArchived: false },
         orderBy: { createdAt: 'desc' },
         take:    5,
         select: {
@@ -74,25 +81,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
         },
       }),
 
-      db.stockProduct.findMany({
-        where: { workspaceId, isArchived: false },
-        orderBy: { updatedAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-          price: true,
-          stockQuantity: true,
-          minStock: true,
-          updatedAt: true,
-        },
-      }),
     ])
 
     // Enriquecer dealsByStage con el nombre de la etapa
     const stageIds = dealsByStage.map((d: any) => d.stageId)
     const stages   = await db.stage.findMany({
-      where:  { id: { in: stageIds } },
+      where:  { id: { in: stageIds }, pipeline: { workspaceId } },
       select: { id: true, name: true, color: true },
     })
 
@@ -101,19 +95,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
     // Valor total en pipeline
     const pipelineValue = dealsByStage.reduce(
       (sum: any, d: any) => sum + Number(d._sum.value ?? 0), 0
-    )
-
-    const lowStockProducts = stockProducts
-      .filter((p: any) => p.stockQuantity > 0 && p.stockQuantity <= p.minStock)
-      .sort((a: any, b: any) => a.stockQuantity - b.stockQuantity)
-    const outOfStockProducts = stockProducts.filter((p: any) => p.stockQuantity <= 0)
-    const unitsInStock = stockProducts.reduce(
-      (sum: number, p: any) => sum + Number(p.stockQuantity ?? 0),
-      0
-    )
-    const inventoryValue = stockProducts.reduce(
-      (sum: number, p: any) => sum + Number(p.price ?? 0) * Number(p.stockQuantity ?? 0),
-      0
     )
 
     return reply.send({
@@ -134,21 +115,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
           color:     stagesMap[d.stageId]?.color ?? '#6366f1',
           count:     d._count.id,
           value:     d._sum.value ?? 0,
-        })),
-      },
-      stock: {
-        totalProducts: stockProducts.length,
-        unitsInStock,
-        lowStockProducts: lowStockProducts.length,
-        outOfStockProducts: outOfStockProducts.length,
-        inventoryValue,
-        criticalProducts: lowStockProducts.slice(0, 5).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          stockQuantity: p.stockQuantity,
-          minStock: p.minStock,
-          updatedAt: p.updatedAt,
         })),
       },
       recentActivities: recentActivities.map((a: any) => ({

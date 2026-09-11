@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
-import clsx from 'clsx'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 

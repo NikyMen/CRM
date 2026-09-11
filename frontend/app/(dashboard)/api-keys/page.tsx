@@ -136,7 +136,7 @@ export default function ApiKeysPage() {
           <Key size={56} className="text-slate-300 mx-auto mb-4" strokeWidth={1.5} />
           <p className="text-slate-500 font-medium text-lg">No hay API Keys generadas</p>
           <p className="text-slate-400 text-sm mt-1">
-            Creá una credencial para automatizar el CRM con otros servicios.
+            Creá una credencial para automatizar Gestión ROMEZ con otros servicios.
           </p>
         </div>
       ) : (
@@ -209,12 +209,12 @@ export default function ApiKeysPage() {
             <Key size={16} className="text-primary-500" strokeWidth={2.5}/> Cómo autenticar consultas API
         </h3>
         <p className="text-slate-600 text-sm font-medium mb-3">
-          Deberás incluir un encabezado HTTP personalizado en cada petición que hagas a los servidores del CRM:
+          Deberás incluir un encabezado HTTP personalizado en cada petición que hagas al sistema:
         </p>
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm text-sm">
             <span className="font-bold text-slate-400">Header:</span> <code className="font-bold text-slate-900">X-API-Key</code>
             <br />
-            <span className="font-bold text-slate-400">Value:</span> <code className="font-bold text-primary-600">crm_tu_token_seguro_aqui</code>
+            <span className="font-bold text-slate-400">Value:</span> <code className="font-bold text-primary-600">tu_clave_segura_aqui</code>
         </div>
       </div>
 

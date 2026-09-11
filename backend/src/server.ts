@@ -5,8 +5,8 @@ async function startServer() {
   const app = await buildApp()
 
   try {
-    await app.listen({ port: config.PORT, host: '0.0.0.0' })
-    app.log.info(`🚀 CRM corriendo en http://localhost:${config.PORT}`)
+    await app.listen({ port: config.PORT, host: config.HOST })
+    app.log.info(`🚀 Gestión ROMEZ disponible en http://${config.HOST}:${config.PORT}`)
   } catch (err) {
     app.log.error(err)
     process.exit(1)

@@ -6,6 +6,7 @@ import { config } from '../../core/config'
 import { ValidationError } from '../../types'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
 import { whatsAppRealtime } from './whatsapp.events'
+import { sseCorsHeaders } from '../../core/cors'
 
 const connectSchema = z.object({
   mode: z.literal('qr').optional().default('qr'),
@@ -57,6 +58,23 @@ const updateIdentitySchema = z.object({
 const maintenanceQuerySchema = z.object({
   days: z.coerce.number().min(1).max(30).default(2),
 })
+
+const INLINE_MEDIA_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/mp4',
+  'video/mp4',
+  'video/webm',
+])
+
+function safeDownloadName(value: string) {
+  return value.replace(/[\\\r\n"]/g, '').trim() || 'archivo'
+}
 
 function isLocalRequest(ip?: string | null) {
   if (!ip) return false
@@ -113,7 +131,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     await authenticate(req)
   })
 
-  app.get('/session', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+  app.get('/session', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string }
     return reply.send(await whatsAppManager.getSessionSnapshot(ctx.workspaceId))
   })
@@ -134,12 +152,16 @@ export async function whatsappRoutes(app: FastifyInstance) {
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      ...sseCorsHeaders(req.headers.origin, config.FRONTEND_URL),
     })
     reply.raw.write(': connected\n\n')
 
     const unsubscribe = whatsAppRealtime.subscribe(ctx.workspaceId, (event) => {
       if (!reply.raw.destroyed) {
-        reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+        const visibleEvent = ctx.role === 'owner' || ctx.role === 'admin'
+          ? event
+          : { ...event, jid: undefined }
+        reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(visibleEvent)}\n\n`)
       }
     })
     const heartbeat = setInterval(() => {
@@ -199,12 +221,19 @@ export async function whatsappRoutes(app: FastifyInstance) {
     return reply.status(204).send()
   })
 
-  app.get<{ Params: { messageId: string } }>('/messages/:messageId/media', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
-    const media = await whatsAppManager.getMessageMedia(ctx.workspaceId, req.params.messageId)
+  app.get<{ Params: { messageId: string } }>('/messages/:messageId/media', {
+    preHandler: requireRole('owner', 'admin', 'member'),
+  }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
+    const media = await whatsAppManager.getMessageMedia(ctx.workspaceId, req.params.messageId, ctx)
+    const mediaType = media.mimeType.toLowerCase().split(';', 1)[0].trim()
+    const inline = INLINE_MEDIA_TYPES.has(mediaType)
+    const fileName = safeDownloadName(media.fileName)
     reply.header('Cache-Control', 'private, max-age=300')
-    reply.header('Content-Disposition', `inline; filename="${media.fileName.replace(/"/g, '')}"`)
-    return reply.type(media.mimeType).send(media.buffer)
+    reply.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`)
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('Content-Security-Policy', "sandbox; default-src 'none'")
+    return reply.type(inline ? mediaType : 'application/octet-stream').send(media.buffer)
   })
 
   app.post<{ Params: { jid: string } }>('/chats/:jid/history', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {

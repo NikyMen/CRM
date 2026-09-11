@@ -1,101 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { authApi } from '@/lib/api'
 import Link from 'next/link'
-import { Loader2, ArrowLeft, Mail } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, LoaderCircle, Mail } from 'lucide-react'
+import { authApi } from '@/lib/api'
 import { AuthBrand, DevelopedBy } from '@/components/AuthBrand'
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail]     = useState('')
-  const [sent, setSent]       = useState(false)
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [error, setError] = useState('')
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setLoading(true)
     setError('')
-    try {
-      await authApi.forgotPassword(email)
-      setSent(true)
-    } catch {
-      setError('Ocurrió un error. Intentá de nuevo.')
-    } finally {
-      setLoading(false)
-    }
+    try { await authApi.forgotPassword(email); setSent(true) }
+    catch { setError('No pudimos procesar la solicitud. Intentá nuevamente.') }
+    finally { setLoading(false) }
   }
 
-  if (sent) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950 p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600/20 border border-indigo-500/30">
-            <Mail size={28} className="text-indigo-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Revisá tu email</h1>
-          <p className="text-gray-400 mb-6">
-            Si el email <span className="text-white font-medium">{email}</span> está registrado,
-            vas a recibir un link para restablecer tu contraseña.
-          </p>
-          <Link
-            href="/login"
-            className="text-indigo-400 hover:text-indigo-300 text-sm flex items-center justify-center gap-2"
-          >
-            <ArrowLeft size={16} /> Volver al login
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] p-4">
-      <div className="interactive-card w-full max-w-md p-8">
-        <AuthBrand title="Recuperar acceso" subtitle="Te enviaremos un enlace seguro" />
-        <div className="mb-8">
-          <Link
-            href="/login"
-            className="text-gray-400 hover:text-white text-sm flex items-center gap-2 mb-6"
-          >
-            <ArrowLeft size={16} /> Volver al login
-          </Link>
-          <h1 className="text-2xl font-bold text-white">Olvidaste tu contraseña?</h1>
-          <p className="text-gray-400 mt-1 text-sm">
-            Ingresá tu email y te enviamos un link para restablecerla.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-              required
-              className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
-            />
-          </div>
-
-          {error && (
-            <p className="text-red-400 text-sm">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={!email || loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 size={16} className="animate-spin" />}
-            Enviar link de recuperación
-          </button>
-        </form>
-        <DevelopedBy />
-      </div>
-    </div>
-  )
+  return <main className="flex min-h-[100dvh] items-center justify-center bg-[var(--paper-soft)] p-5"><div className="w-full max-w-md">{sent ? <div className="paper-panel p-7 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-lg border border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]"><CheckCircle2 size={22} /></span><h1 className="mt-5 font-display text-xl font-extrabold text-[var(--ink-primary)]">Revisá tu correo</h1><p className="mt-3 text-sm leading-6 text-[var(--ink-secondary)]">Si <strong>{email}</strong> está registrado, vas a recibir un enlace seguro para restablecer tu contraseña.</p><Link href="/login" className="btn-secondary mt-6"><ArrowLeft size={15} /> Volver al ingreso</Link></div> : <><AuthBrand title="Recuperar acceso" subtitle="Te enviaremos un enlace seguro" /><form onSubmit={handleSubmit} className="paper-panel space-y-5 p-6"><label className="block"><span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Correo electrónico</span><span className="relative block"><Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@romez.com.py" required /></span></label>{error ? <p className="rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] p-3 text-xs font-semibold text-[var(--danger)]">{error}</p> : null}<button type="submit" disabled={!email || loading} className="btn-primary w-full">{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Mail size={16} />}{loading ? 'Enviando…' : 'Enviar enlace'}</button><Link href="/login" className="flex items-center justify-center gap-2 text-xs font-bold text-[var(--brand-blue)]"><ArrowLeft size={14} /> Volver al ingreso</Link></form></>}<DevelopedBy /></div></main>
 }

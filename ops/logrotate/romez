@@ -1,0 +1,12 @@
+/home/romez/.pm2/logs/*.log {
+    su romez romez
+    daily
+    maxsize 20M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 0600 romez romez
+}

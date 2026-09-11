@@ -8,6 +8,8 @@ import { initSentry, Sentry } from './core/monitoring/sentry'
 import { config } from './core/config'
 import { EventBus } from './core/event-bus'
 import { AppError } from './types'
+import { httpClientErrorCode, isHttpClientError } from './core/http-errors'
+import { isAllowedCorsOrigin } from './core/cors'
 
 function isAppErrorLike(error: any): error is AppError {
   return error instanceof AppError || (
@@ -31,9 +33,16 @@ import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { inboxRoutes } from './modules/inbox/inbox.routes'
 import { whatsappRoutes } from './modules/whatsapp/whatsapp.routes'
 import { whatsAppManager } from './modules/whatsapp/whatsapp.manager'
-import { stockRoutes } from './modules/stock/stock.routes'
 import { chatwootRoutes } from './modules/chatwoot/chatwoot.routes'
 import { metaApiRoutes } from './modules/meta-api/meta-api.routes'
+import { ticketRoutes } from './modules/tickets'
+import { customerServiceRoutes } from './modules/customer-service'
+import { clientRoutes } from './modules/clients/client.routes'
+import { collectionRoutes } from './modules/collections/collection.routes'
+import { checklistRoutes } from './modules/checklists/checklist.routes'
+import { internalChatRoutes } from './modules/internal-chat/internal-chat.routes'
+import { saleRoutes } from './modules/sales/sale.routes'
+import { stockRoutes } from './modules/stock/stock.routes'
 
 export async function buildApp() {
   initSentry()
@@ -41,6 +50,15 @@ export async function buildApp() {
   const app = Fastify({ 
     logger: { level: 'info' },
     bodyLimit: 1048576,
+    trustProxy: (address) => {
+      const ip = address.replace(/^::ffff:/, '')
+      return ip === '::1'
+        || ip.startsWith('127.')
+        || ip.startsWith('10.')
+        || ip.startsWith('192.168.')
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+        || /^(fc|fd)[0-9a-f]{2}:/i.test(ip)
+    },
   })
 
   // ─── Rate Limiting Global ────────────────────────────────────────
@@ -62,7 +80,7 @@ export async function buildApp() {
 
   await app.register(fastifyRateLimit, {
     global: true,
-    max: 300, // Máximo 300 peticiones globales 
+    max: config.GLOBAL_RATE_LIMIT_MAX,
     timeWindow: '1 minute', // por minuto
     keyGenerator: (req) => {
       // Limitar por usuario autenticado o por IP
@@ -83,12 +101,7 @@ export async function buildApp() {
   // ─── Plugins ───────────────────────────────────────────────────
   await app.register(fastifyCors, {
     origin: (origin, cb) => {
-      const allowed = [
-        config.FRONTEND_URL,
-        'http://localhost:3001',
-        'http://localhost:3000',
-      ]
-      if (!origin || allowed.includes(origin)) {
+      if (isAllowedCorsOrigin(origin, config.FRONTEND_URL)) {
         cb(null, true)
       } else {
         cb(new Error('Not allowed by CORS'), false)
@@ -111,6 +124,7 @@ export async function buildApp() {
     // Reportar a Sentry solo errores inesperados 
     if (
       !isAppErrorLike(error) &&
+      !isHttpClientError(error) &&
       error.name !== 'ZodError' &&
       !(typeof error.code === 'string' && error.code.startsWith('FST_JWT_'))
     ) {
@@ -141,6 +155,15 @@ export async function buildApp() {
       })
     }
 
+    // Errores HTTP esperables de Fastify y sus plugins (por ejemplo 429).
+    // Sin este caso, el rate limiter terminaba convertido incorrectamente en 500.
+    if (isHttpClientError(error)) {
+      return reply.status(error.statusCode).send({
+        error: httpClientErrorCode(error),
+        message: error.message,
+      })
+    }
+
     // Error genérico
     req.log.error(error instanceof Error ? error.message : String(error))
     return reply.status(500).send({
@@ -162,9 +185,18 @@ export async function buildApp() {
   await app.register(noteRoutes, { prefix: `${API}/notes` })
   await app.register(dashboardRoutes, { prefix: `${API}/dashboard` })
   await app.register(whatsappRoutes, { prefix: `${API}/whatsapp` })
-  await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
-  await app.register(metaApiRoutes, { prefix: `${API}/meta-api`, eventBus })
-  await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
+  if (config.ENABLE_LEGACY_CHANNELS) {
+    await app.register(inboxRoutes, { prefix: `${API}/inbox`, eventBus })
+    await app.register(metaApiRoutes, { prefix: `${API}/meta-api`, eventBus })
+    await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
+  }
+  await app.register(ticketRoutes, { prefix: `${API}/tickets`, eventBus })
+  await app.register(customerServiceRoutes, { prefix: `${API}/customer-service` })
+  await app.register(clientRoutes, { prefix: `${API}/clients`, eventBus })
+  await app.register(collectionRoutes, { prefix: `${API}/collections`, eventBus })
+  await app.register(checklistRoutes, { prefix: API, eventBus })
+  await app.register(internalChatRoutes, { prefix: `${API}/internal-chat` })
+  await app.register(saleRoutes, { prefix: `${API}/sales`, eventBus })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
 
   app.addHook('onReady', async () => {

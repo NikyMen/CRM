@@ -6,14 +6,23 @@
     "dev": "concurrently \"pnpm --filter crm dev\" \"pnpm --filter frontend dev\"",
     "dev:backend": "pnpm --filter crm dev",
     "dev:frontend": "pnpm --filter frontend dev",
-    "build": "pnpm --filter crm build && pnpm --filter frontend build"
+    "build": "pnpm --filter crm build && pnpm --filter frontend build",
+    "acceptance": "pnpm --filter crm acceptance",
+    "vps": "node scripts/vps.mjs",
+    "vps:check": "node scripts/vps.mjs check",
+    "vps:status": "node scripts/vps.mjs status",
+    "vps:logs": "node scripts/vps.mjs logs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
   },
   "pnpm": {
     "overrides": {
-      "zod": "3.23.8"
+      "zod": "3.23.8",
+      "eslint-plugin-react-hooks>zod": "3.25.76",
+      "ws@8": "8.21.3",
+      "protobufjs@7": "7.6.6",
+      "brace-expansion@1": "1.1.18"
     }
   }
 }

@@ -11,10 +11,12 @@
     "db:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:push": "prisma db push --schema=prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:bootstrap": "tsx prisma/seed.ts",
+    "db:seed": "pnpm db:bootstrap",
     "db:studio": "prisma studio --schema=prisma/schema.prisma",
     "backup": "tsx scripts/backup.ts",
-    "test": "tsx --test src/modules/deals/lead-number.test.ts"
+    "acceptance": "tsx scripts/acceptance.ts",
+    "test": "tsx --test src/core/auth/portfolio-visibility.test.ts src/core/cors.test.ts src/core/modules/registry.test.ts src/core/http-errors.test.ts src/modules/deals/lead-number.test.ts src/modules/deals/deal-commercial.test.ts src/modules/tickets/ticket.service.test.ts src/modules/clients/client.test.ts src/modules/checklists/checklist.test.ts src/modules/collections/collection.test.ts src/modules/bootstrap/bootstrap.test.ts src/modules/workspaces/auth.routes.test.ts src/modules/inbox/meta-webhook-security.test.ts src/modules/pipelines/pipeline-stage-security.test.ts src/modules/inbound/inbound-security.test.ts src/modules/webhooks/webhooks.routes.test.ts src/modules/internal-chat/internal-chat.service.test.ts src/modules/sales/sale-calculations.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +30,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
-    "@fastify/jwt": "^10.0.0",
+    "@fastify/jwt": "^10.2.2",
+    "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "5.22.0",
     "@sentry/node": "^10.45.0",
@@ -36,7 +39,8 @@
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.69.3",
     "dotenv": "^17.3.1",
-    "fastify": "^5.7.4",
+    "exceljs": "^4.4.0",
+    "fastify": "^5.12.1",
     "ioredis": "^5.9.3",
     "pino-pretty": "^13.1.3",
     "zod": "3.23.8"

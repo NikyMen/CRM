@@ -10,11 +10,12 @@ import {
   Plus, Trash2, MessageSquare, Clock,
   PhoneCall, Calendar, CheckSquare, Send,
   Pencil, Save, X,
+  type LucideIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 // ─── Ícono por tipo de actividad ──────────────────────────────────
-const ACTIVITY_ICONS: Record<string, any> = {
+const ACTIVITY_ICONS: Record<string, LucideIcon> = {
   CALL:    PhoneCall,
   EMAIL:   Send,
   MEETING: Calendar,

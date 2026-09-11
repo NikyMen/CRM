@@ -16,13 +16,6 @@ const ROLE_LABELS: Record<Role, string> = {
   viewer: 'Viewer',
 }
 
-const ROLE_COLORS: Record<Role, string> = {
-  owner:  'bg-amber-50 text-amber-600 border-amber-200',
-  admin:  'bg-primary-50 text-primary-600 border-primary-200',
-  member: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-  viewer: 'bg-slate-50 text-slate-600 border-slate-200',
-}
-
 type Member = {
   id:       string
   role:     Role
@@ -45,6 +38,7 @@ export default function TeamPage() {
     lastName:  '',
     email:     '',
     password:  '',
+    confirmPassword: '',
     role:      'member' as 'admin' | 'member' | 'viewer',
   })
 
@@ -58,7 +52,7 @@ export default function TeamPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] })
       setShowInvite(false)
-      setForm({ firstName: '', lastName: '', email: '', password: '', role: 'member' })
+      setForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', role: 'member' })
     },
   })
 
@@ -90,7 +84,7 @@ export default function TeamPage() {
           className="btn-primary"
         >
           <UserPlus size={18} strokeWidth={2.5} />
-          Invitar usuario
+          Crear usuario
         </button>
       </div>
 
@@ -107,7 +101,8 @@ export default function TeamPage() {
               { key: 'firstName', placeholder: 'Nombre *' },
               { key: 'lastName',  placeholder: 'Apellido'  },
               { key: 'email',     placeholder: 'Email corporativo *'   },
-              { key: 'password',  placeholder: 'Contraseña temporal * (mín. 8 caracteres)' },
+              { key: 'password',  placeholder: 'Contraseña * (mín. 8 caracteres)' },
+              { key: 'confirmPassword', placeholder: 'Repetir contraseña *' },
             ].map(({ key, placeholder }) => (
               <input
                 key={key}
@@ -136,11 +131,11 @@ export default function TeamPage() {
 
             <button
               onClick={() => inviteMutation.mutate()}
-              disabled={!form.firstName || !form.email || !form.password || inviteMutation.isPending}
+              disabled={!form.firstName || !form.email || !form.password || form.password !== form.confirmPassword || inviteMutation.isPending}
               className="btn-primary py-2.5"
             >
               {inviteMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-              Enviar invitación
+              Crear usuario
             </button>
             <button
               onClick={() => setShowInvite(false)}
@@ -150,6 +145,7 @@ export default function TeamPage() {
             </button>
           </div>
 
+          {form.password && form.confirmPassword && form.password !== form.confirmPassword ? <p className="mt-3 text-sm font-semibold text-[var(--danger)]">Las contraseñas no coinciden.</p> : null}
           {inviteMutation.isError && (
             <div className="bg-red-50 border border-red-100 text-red-600 rounded-xl px-4 py-3 mt-4 text-sm font-medium animate-slide-up flex items-start gap-2">
                 <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -232,7 +228,7 @@ export default function TeamPage() {
                   {isOwner && !isOwnerMember && !isMe ? (
                     <button
                       onClick={() => {
-                        if (confirm(`¿Eliminar a ${member.user.firstName} del workspace?`)) {
+                        if (confirm(`¿Eliminar a ${member.user.firstName} del espacio de trabajo?`)) {
                           removeMutation.mutate(member.id)
                         }
                       }}
@@ -263,7 +259,7 @@ export default function TeamPage() {
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-admin mb-2 inline-block">Admin</span>
-            <p className="leading-relaxed">Gestiona contactos, leads, webhooks y pipelines. Puede invitar nuevos Members y Viewers a la plataforma.</p>
+            <p className="leading-relaxed">Gestiona clientes, oportunidades, tickets e integraciones. Puede invitar integrantes y usuarios de consulta.</p>
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-member mb-2 inline-block">Member</span>
@@ -271,7 +267,7 @@ export default function TeamPage() {
           </div>
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
             <span className="badge-viewer mb-2 inline-block">Viewer</span>
-            <p className="leading-relaxed">Solo lectura. Puede revisar auditorías, contactos y leads pero no tiene capacidad de modificar ni interactuar.</p>
+            <p className="leading-relaxed">Solo lectura. Puede consultar la cartera y sus registros asignados, sin capacidad de modificar ni responder.</p>
           </div>
         </div>
       </div>

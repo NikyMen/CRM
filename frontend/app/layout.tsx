@@ -8,9 +8,12 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const poppins = Poppins({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-poppins' })
 
 export const metadata: Metadata = {
-  title: 'CRM · Consultoría Digital',
-  description: 'Consola operativa de Consultoría Digital',
-  icons: { icon: '/brand/favicon.png' },
+  title: {
+    default: 'Gestión ROMEZ',
+    template: '%s · Gestión ROMEZ',
+  },
+  description: 'Gestión contable, clientes, cobranzas y atención de ROMEZ Servicios Contables.',
+  icons: { icon: '/favicon.ico', apple: '/brand/romez-navy.jpg' },
 }
 
 export default function RootLayout({
@@ -19,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es-PY" suppressHydrationWarning>
       <head>
         <ThemeScript />
       </head>

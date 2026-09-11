@@ -45,12 +45,18 @@ desktop.ini
 # Editor
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
+
+# Backups and local secrets
+backups/
+.secrets/
 
 # Testing
 coverage/
 output/
+.playwright-cli/
 playwright-report/
 test-results/
 

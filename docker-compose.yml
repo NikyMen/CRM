@@ -4,15 +4,15 @@ services:
     container_name: crm_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: crm_user
-      POSTGRES_PASSWORD: crm_password
-      POSTGRES_DB: crm_db
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_db}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_user} -d ${POSTGRES_DB:-crm_db}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -21,17 +21,21 @@ services:
     image: redis:7-alpine
     container_name: crm_redis
     restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD requerido}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-56379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   backend:
+    profiles: ["app"]
     build:
       context: .
       dockerfile: backend/DockerFile
@@ -45,19 +49,22 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
-      - DIRECT_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - DIRECT_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - HOST=0.0.0.0
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       - WHATSAPP_AUTH_DIR=.data/whatsapp-auth
       - WHATSAPP_MEDIA_DIR=.data/whatsapp-media
     ports:
-      - "8080:3000"
+      - "127.0.0.1:18080:3000"
     volumes:
-      - ./.data/whatsapp-auth:/app/.data/whatsapp-auth
-      - ./.data/whatsapp-media:/app/.data/whatsapp-media
+      - ./backend/.data/whatsapp-auth:/app/backend/.data/whatsapp-auth
+      - ./backend/.data/whatsapp-media:/app/backend/.data/whatsapp-media
+      - ./backend/.data/client-documents:/app/backend/.data/client-documents
 
   frontend:
+    profiles: ["app"]
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -73,8 +80,10 @@ services:
       PORT: 3001
       HOSTNAME: 0.0.0.0
     ports:
-      - "8081:3001"
+      - "127.0.0.1:18081:3001"
 
 volumes:
   postgres_data:
+    name: crm_romez_postgres_data
   redis_data:
+    name: crm_romez_redis_data

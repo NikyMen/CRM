@@ -1,4 +1,4 @@
-# CRM frontend
+# Gestión ROMEZ · frontend
 
 El frontend se ejecuta en el VPS dentro de Docker junto con Fastify, PostgreSQL y Redis.
 

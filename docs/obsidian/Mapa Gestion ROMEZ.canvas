@@ -1,0 +1,32 @@
+{
+	"nodes":[
+		{"id":"inicio","type":"file","file":"00 - Inicio.md","x":0,"y":0,"width":320,"height":180},
+		{"id":"producto","type":"file","file":"01 - Producto y navegacion.md","x":-520,"y":-320,"width":340,"height":180},
+		{"id":"arquitectura","type":"file","file":"02 - Arquitectura y API.md","x":0,"y":-420,"width":340,"height":180},
+		{"id":"datos","type":"file","file":"03 - Modelo de datos.md","x":520,"y":-320,"width":340,"height":180},
+		{"id":"permisos","type":"file","file":"04 - Permisos y responsables.md","x":-620,"y":100,"width":340,"height":180},
+		{"id":"tickets","type":"file","file":"05 - Tickets y WhatsApp.md","x":-420,"y":460,"width":340,"height":180},
+		{"id":"cobranzas","type":"file","file":"06 - Cobranzas.md","x":0,"y":520,"width":340,"height":180},
+		{"id":"clientes","type":"file","file":"07 - Clientes y checklists.md","x":420,"y":460,"width":340,"height":180},
+		{"id":"deploy","type":"file","file":"08 - Despliegue.md","x":700,"y":60,"width":340,"height":180},
+		{"id":"backup","type":"file","file":"09 - Respaldo y restauracion.md","x":920,"y":400,"width":340,"height":180},
+		{"id":"pruebas","type":"file","file":"10 - Verificacion y estado.md","x":0,"y":900,"width":340,"height":180},
+		{"id":"seguridad","type":"file","file":"11 - Integraciones y seguridad.md","x":-900,"y":440,"width":340,"height":180}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"inicio","fromSide":"left","toNode":"producto","toSide":"right"},
+		{"id":"e2","fromNode":"inicio","fromSide":"top","toNode":"arquitectura","toSide":"bottom"},
+		{"id":"e3","fromNode":"inicio","fromSide":"right","toNode":"datos","toSide":"left"},
+		{"id":"e4","fromNode":"producto","fromSide":"bottom","toNode":"permisos","toSide":"top"},
+		{"id":"e5","fromNode":"permisos","fromSide":"bottom","toNode":"tickets","toSide":"top"},
+		{"id":"e6","fromNode":"permisos","fromSide":"right","toNode":"clientes","toSide":"left"},
+		{"id":"e7","fromNode":"datos","fromSide":"bottom","toNode":"cobranzas","toSide":"top"},
+		{"id":"e8","fromNode":"datos","fromSide":"bottom","toNode":"clientes","toSide":"top"},
+		{"id":"e9","fromNode":"arquitectura","fromSide":"right","toNode":"deploy","toSide":"top"},
+		{"id":"e10","fromNode":"deploy","fromSide":"bottom","toNode":"backup","toSide":"top"},
+		{"id":"e11","fromNode":"tickets","fromSide":"bottom","toNode":"pruebas","toSide":"left"},
+		{"id":"e12","fromNode":"cobranzas","fromSide":"bottom","toNode":"pruebas","toSide":"top"},
+		{"id":"e13","fromNode":"clientes","fromSide":"bottom","toNode":"pruebas","toSide":"right"},
+		{"id":"e14","fromNode":"tickets","fromSide":"left","toNode":"seguridad","toSide":"right"}
+	]
+}

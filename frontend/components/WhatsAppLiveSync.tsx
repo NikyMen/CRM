@@ -6,7 +6,16 @@ import { auth } from '@/lib/auth'
 import { BASE_URL } from '@/lib/api'
 
 type RealtimeEvent = {
-  type?: 'session.updated' | 'chat.updated' | 'message.updated' | 'assignment.updated' | 'kanban.updated'
+  type?:
+    | 'session.updated'
+    | 'chat.updated'
+    | 'message.updated'
+    | 'assignment.updated'
+    | 'kanban.updated'
+    | 'ticket.created'
+    | 'ticket.updated'
+    | 'collection.updated'
+    | 'checklist.updated'
   jid?: string
 }
 
@@ -31,6 +40,26 @@ export function WhatsAppLiveSync() {
       if (!kind || ['kanban', 'message', 'assignment'].includes(kind)) {
         queryClient.invalidateQueries({ queryKey: ['kanban'] })
       }
+      if (!kind || kind === 'ticket') {
+        queryClient.invalidateQueries({ queryKey: ['tickets'] })
+        queryClient.invalidateQueries({ queryKey: ['ticket'] })
+        queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['clients'] })
+        queryClient.invalidateQueries({ queryKey: ['client-summary'] })
+      }
+      if (!kind || kind === 'collection') {
+        queryClient.invalidateQueries({ queryKey: ['collections-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['receivables'] })
+        queryClient.invalidateQueries({ queryKey: ['payments'] })
+        queryClient.invalidateQueries({ queryKey: ['recurring-charges'] })
+        queryClient.invalidateQueries({ queryKey: ['clients'] })
+        queryClient.invalidateQueries({ queryKey: ['client-summary'] })
+      }
+      if (!kind || kind === 'checklist') {
+        queryClient.invalidateQueries({ queryKey: ['checklists-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['clients'] })
+        queryClient.invalidateQueries({ queryKey: ['client-summary'] })
+      }
     }
 
     async function connect() {
@@ -48,7 +77,7 @@ export function WhatsAppLiveSync() {
         })
         if (response.status === 401) {
           auth.clear()
-          window.location.href = '/login'
+          window.location.replace('/login')
           return
         }
         if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`)

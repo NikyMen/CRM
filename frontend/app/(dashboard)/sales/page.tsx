@@ -1,0 +1,376 @@
+'use client'
+
+import { useDeferredValue, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus, Search, Trash2, X } from 'lucide-react'
+import clsx from 'clsx'
+import { auth } from '@/lib/auth'
+import { clientsApi, salesApi, type SalePayload } from '@/lib/api'
+import type { Client, PaginatedResult, Sale, SaleStatus, SaleSummary } from '@/types'
+import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
+import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
+
+const PAGE_SIZE = 25
+
+const STATUS_LABEL: Record<SaleStatus, string> = {
+  DRAFT: 'Borrador',
+  CONFIRMED: 'Confirmada',
+  CANCELLED: 'Anulada',
+}
+
+const STATUS_TONE: Record<SaleStatus, 'warning' | 'success' | 'danger'> = {
+  DRAFT: 'warning',
+  CONFIRMED: 'success',
+  CANCELLED: 'danger',
+}
+
+type DraftItem = { description: string; quantity: string; unitPrice: string }
+
+function paraguayBusinessDate() {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Asuncion', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+const BUSINESS_DATE = paraguayBusinessDate()
+const EMPTY_ITEM: DraftItem = { description: '', quantity: '1', unitPrice: '' }
+const EMPTY_FORM = {
+  companyId: '',
+  soldAt: BUSINESS_DATE,
+  currency: 'PYG',
+  discount: '',
+  taxAmount: '',
+  reference: '',
+  notes: '',
+}
+
+/** Subtotal en vivo del formulario; el backend vuelve a calcular al guardar. */
+function draftSubtotal(items: DraftItem[]) {
+  return items.reduce((total, item) => {
+    const quantity = Number(item.quantity.replace(',', '.'))
+    const unitPrice = Number(item.unitPrice.replace(',', '.'))
+    if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice)) return total
+    return total + quantity * unitPrice
+  }, 0)
+}
+
+export default function SalesPage() {
+  const queryClient = useQueryClient()
+  const role = auth.get()?.role
+  const canManage = role === 'owner' || role === 'admin'
+  const canWrite = Boolean(role && role !== 'viewer')
+
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [items, setItems] = useState<DraftItem[]>([{ ...EMPTY_ITEM }])
+  const [clientSearch, setClientSearch] = useState('')
+  const deferredClientSearch = useDeferredValue(clientSearch)
+
+  const summaryQuery = useQuery<SaleSummary>({
+    queryKey: ['sales-summary'],
+    queryFn: () => salesApi.summary().then((response) => response.data),
+  })
+
+  const salesQuery = useQuery<PaginatedResult<Sale>>({
+    queryKey: ['sales', { status, page }],
+    queryFn: () => salesApi.list({ status: (status || undefined) as SaleStatus | undefined, page, limit: PAGE_SIZE }).then((response) => response.data),
+  })
+
+  const clientsQuery = useQuery<PaginatedResult<Client>>({
+    queryKey: ['clients', 'sales-picker', { search: deferredClientSearch }],
+    queryFn: () => clientsApi.list({ search: deferredClientSearch || undefined, page: 0, limit: 20, status: 'ACTIVE' }).then((response) => response.data),
+    enabled: formOpen,
+  })
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['sales'] })
+    queryClient.invalidateQueries({ queryKey: ['sales-summary'] })
+  }
+
+  const closeForm = () => { setFormOpen(false); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]) }
+
+  const createSale = useMutation({
+    mutationFn: () => {
+      const payload: SalePayload = {
+        companyId: form.companyId,
+        soldAt: form.soldAt,
+        currency: form.currency,
+        discount: form.discount || undefined,
+        taxAmount: form.taxAmount || undefined,
+        reference: form.reference || null,
+        notes: form.notes || null,
+        items: items.map((item) => ({ description: item.description.trim(), quantity: item.quantity, unitPrice: item.unitPrice })),
+      }
+      return salesApi.create(payload)
+    },
+    onSuccess: () => { refresh(); closeForm() },
+  })
+
+  const confirmSale = useMutation({ mutationFn: (id: string) => salesApi.confirm(id), onSuccess: refresh })
+  const cancelSale = useMutation({ mutationFn: (id: string) => salesApi.cancel(id), onSuccess: refresh })
+  const removeSale = useMutation({ mutationFn: (id: string) => salesApi.remove(id), onSuccess: refresh })
+
+  const exportSales = useMutation({
+    mutationFn: () => salesApi.export({ status: (status || undefined) as SaleStatus | undefined }),
+    onSuccess: (response) => {
+      const url = URL.createObjectURL(response.data as Blob)
+      const anchor = window.document.createElement('a')
+      anchor.href = url
+      anchor.download = `ventas-romez-${BUSINESS_DATE}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    },
+  })
+
+  const visibleSales = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    const all = salesQuery.data?.items ?? []
+    if (!term) return all
+    return all.filter((sale) => [sale.company?.name, sale.company?.ruc, sale.reference, String(sale.number)]
+      .some((value) => value?.toLowerCase().includes(term)))
+  }, [salesQuery.data?.items, search])
+
+  const subtotal = draftSubtotal(items)
+  const total = subtotal - Number(form.discount || 0) + Number(form.taxAmount || 0)
+  const formReady = Boolean(form.companyId) && items.every((item) => item.description.trim() && item.quantity && item.unitPrice) && total > 0
+
+  return (
+    <PageFrame>
+      <PageHeader
+        eyebrow="Facturación"
+        title="Ventas"
+        description="Registrá ventas por cliente, confirmalas y llevá el total facturado por moneda."
+        action={(
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary" disabled={exportSales.isPending} onClick={() => exportSales.mutate()}>
+              <Download size={15} /> {exportSales.isPending ? 'Exportando…' : 'Exportar CSV'}
+            </button>
+            {canWrite ? (
+              <button type="button" className="btn-primary" onClick={() => setFormOpen(true)}>
+                <Plus size={15} /> Nueva venta
+              </button>
+            ) : null}
+          </div>
+        )}
+      />
+
+      {summaryQuery.isError ? (
+        <ErrorState message={getErrorMessage(summaryQuery.error)} retry={() => summaryQuery.refetch()} />
+      ) : (
+        <section className="grid overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 xl:grid-cols-4">
+          {(summaryQuery.data?.currencies ?? []).map((row) => (
+            <SaleMetric key={row.currency} label={`Facturado ${row.currency}`} value={formatMoney(row.confirmedTotal, row.currency)} />
+          ))}
+          <SaleMetric label="Ventas confirmadas" value={String((summaryQuery.data?.currencies ?? []).reduce((count, row) => count + row.confirmedCount, 0))} />
+          <SaleMetric label="Borradores" value={String(summaryQuery.data?.draftCount ?? 0)} tone={(summaryQuery.data?.draftCount ?? 0) > 0 ? 'warning' : undefined} />
+        </section>
+      )}
+
+      {formOpen ? (
+        <SectionPanel
+          title="Nueva venta"
+          description="Se guarda como borrador: podés revisarla y confirmarla después."
+          action={<button type="button" className="btn-secondary" onClick={closeForm}><X size={14} /> Cerrar</button>}
+        >
+          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2 sm:col-span-2">
+              <Field label="Buscar cliente">
+                <span className="relative block">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
+                  <input className="ctrl-input pl-9" value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Nombre, RUC o teléfono…" />
+                </span>
+              </Field>
+              <Field label="Cliente">
+                <select className="ctrl-input" value={form.companyId} disabled={clientsQuery.isLoading} onChange={(event) => setForm((current) => ({ ...current, companyId: event.target.value }))}>
+                  <option value="">{clientsQuery.isLoading ? 'Buscando…' : 'Seleccionar cliente…'}</option>
+                  {(clientsQuery.data?.items ?? []).map((client) => (
+                    <option key={client.id} value={client.id}>{client.name}{client.ruc ? ` · ${client.ruc}` : ''}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <Field label="Fecha">
+              <input type="date" className="ctrl-input" value={form.soldAt} onChange={(event) => setForm((current) => ({ ...current, soldAt: event.target.value }))} />
+            </Field>
+            <Field label="Moneda">
+              <select className="ctrl-input" value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}>
+                <option value="PYG">PYG</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+            <Field label="Descuento">
+              <input type="number" min="0" className="ctrl-input" value={form.discount} onChange={(event) => setForm((current) => ({ ...current, discount: event.target.value }))} />
+            </Field>
+            <Field label="Impuesto (IVA)">
+              <input type="number" min="0" className="ctrl-input" value={form.taxAmount} onChange={(event) => setForm((current) => ({ ...current, taxAmount: event.target.value }))} />
+            </Field>
+            <Field label="Referencia / comprobante">
+              <input className="ctrl-input" value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} placeholder="001-001-0000123" />
+            </Field>
+            <Field label="Notas">
+              <input className="ctrl-input" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
+            </Field>
+          </div>
+
+          <div className="border-t border-[var(--line-soft)] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-bold text-[var(--ink-secondary)]">Ítems de la venta</p>
+              <button type="button" className="btn-secondary" onClick={() => setItems((current) => [...current, { ...EMPTY_ITEM }])}>
+                <Plus size={14} /> Agregar ítem
+              </button>
+            </div>
+            <div className="space-y-2">
+              {items.map((item, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_110px_150px_40px]">
+                  <input className="ctrl-input" placeholder="Descripción" value={item.description} onChange={(event) => setItems((current) => current.map((row, position) => position === index ? { ...row, description: event.target.value } : row))} />
+                  <input className="ctrl-input" type="number" min="0" step="0.001" placeholder="Cant." value={item.quantity} onChange={(event) => setItems((current) => current.map((row, position) => position === index ? { ...row, quantity: event.target.value } : row))} />
+                  <input className="ctrl-input" type="number" min="0" placeholder="Precio unitario" value={item.unitPrice} onChange={(event) => setItems((current) => current.map((row, position) => position === index ? { ...row, unitPrice: event.target.value } : row))} />
+                  <button type="button" className="btn-secondary justify-center" disabled={items.length === 1} onClick={() => setItems((current) => current.filter((_, position) => position !== index))} aria-label={`Quitar ítem ${index + 1}`}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <dl className="mt-4 flex flex-wrap gap-6 text-sm">
+              <Total label="Subtotal" value={formatMoney(subtotal, form.currency)} />
+              <Total label="Descuento" value={formatMoney(Number(form.discount || 0), form.currency)} />
+              <Total label="Impuesto" value={formatMoney(Number(form.taxAmount || 0), form.currency)} />
+              <Total label="Total" value={formatMoney(total, form.currency)} strong />
+            </dl>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            {createSale.error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(createSale.error, 'No pudimos guardar la venta.')}</p> : <span />}
+            <div className="flex gap-2">
+              <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
+              <button type="button" className="btn-primary" disabled={!formReady || createSale.isPending} onClick={() => createSale.mutate()}>
+                {createSale.isPending ? 'Guardando…' : 'Guardar borrador'}
+              </button>
+            </div>
+          </div>
+        </SectionPanel>
+      ) : null}
+
+      <SectionPanel title="Historial de ventas">
+        <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] p-3 sm:flex-row">
+          <label className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
+            <input className="ctrl-input pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrar esta página…" />
+          </label>
+          <select className="ctrl-input sm:w-44" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}>
+            <option value="">Todos los estados</option>
+            <option value="DRAFT">Borradores</option>
+            <option value="CONFIRMED">Confirmadas</option>
+            <option value="CANCELLED">Anuladas</option>
+          </select>
+        </div>
+
+        {salesQuery.isLoading ? <LoadingState /> : null}
+        {salesQuery.isError ? <ErrorState message={getErrorMessage(salesQuery.error)} retry={() => salesQuery.refetch()} /> : null}
+
+        {!salesQuery.isLoading && !salesQuery.isError ? (
+          visibleSales.length ? (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Estado</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleSales.map((sale) => (
+                    <tr key={sale.id}>
+                      <td className="font-mono text-xs font-bold tabular-nums">{String(sale.number).padStart(5, '0')}</td>
+                      <td>{formatDate(sale.soldAt)}</td>
+                      <td>
+                        {sale.company ? (
+                          <Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${sale.company.id}`}>{sale.company.name}</Link>
+                        ) : '—'}
+                        <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">{sale.reference || `${sale.items.length} ítem${sale.items.length === 1 ? '' : 's'}`}</p>
+                      </td>
+                      <td><StatusPill tone={STATUS_TONE[sale.status]}>{STATUS_LABEL[sale.status]}</StatusPill></td>
+                      <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(sale.total, sale.currency)}</td>
+                      <td>
+                        <div className="flex justify-end gap-1">
+                          {canWrite && sale.status === 'DRAFT' ? (
+                            <button type="button" className="btn-secondary" disabled={confirmSale.isPending} onClick={() => confirmSale.mutate(sale.id)}>
+                              <CheckCircle2 size={14} /> Confirmar
+                            </button>
+                          ) : null}
+                          {canManage && sale.status === 'CONFIRMED' ? (
+                            <button type="button" className="btn-secondary" disabled={cancelSale.isPending} onClick={() => cancelSale.mutate(sale.id)}>
+                              <Ban size={14} /> Anular
+                            </button>
+                          ) : null}
+                          {canManage && sale.status === 'DRAFT' ? (
+                            <button type="button" className="btn-secondary" disabled={removeSale.isPending} onClick={() => removeSale.mutate(sale.id)} aria-label={`Eliminar venta ${sale.number}`}>
+                              <Trash2 size={14} />
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="Sin ventas registradas" description="Cargá la primera venta para empezar a ver el facturado del estudio." />
+          )
+        ) : null}
+
+        {cancelSale.error || removeSale.error || confirmSale.error ? (
+          <p className="border-t border-[var(--line-soft)] px-5 py-3 text-xs font-semibold text-[var(--danger)]">
+            {getErrorMessage(cancelSale.error ?? removeSale.error ?? confirmSale.error, 'No pudimos actualizar la venta.')}
+          </p>
+        ) : null}
+
+        <Pager data={salesQuery.data} page={page} setPage={setPage} />
+      </SectionPanel>
+    </PageFrame>
+  )
+}
+
+function SaleMetric({ label, value, tone }: { label: string; value: string; tone?: 'warning' }) {
+  return (
+    <div className="bg-[var(--paper)] p-5">
+      <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p>
+      <p className={clsx('mt-2 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]', tone === 'warning' && 'text-[var(--warning)]')}>{value}</p>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block"><span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">{label}</span>{children}</label>
+}
+
+function Total({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt>
+      <dd className={clsx('mt-1 font-mono tabular-nums', strong ? 'text-lg font-bold text-[var(--ink-primary)]' : 'text-[var(--ink-secondary)]')}>{value}</dd>
+    </div>
+  )
+}
+
+function Pager({ data, page, setPage }: { data?: PaginatedResult<Sale>; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {
+  if (!data || data.totalPages <= 1) return null
+  return (
+    <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-4 py-3 text-xs text-[var(--ink-tertiary)] sm:flex-row sm:items-center sm:justify-between">
+      <p><strong className="text-[var(--ink-primary)]">{data.total}</strong> ventas · página {data.page + 1} de {data.totalPages}</p>
+      <div className="flex gap-2">
+        <button type="button" className="btn-secondary" disabled={page <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Anterior</button>
+        <button type="button" className="btn-secondary" disabled={page + 1 >= data.totalPages} onClick={() => setPage((current) => current + 1)}>Siguiente <ChevronRight size={14} /></button>
+      </div>
+    </div>
+  )
+}

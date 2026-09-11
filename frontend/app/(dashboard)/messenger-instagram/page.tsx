@@ -29,8 +29,9 @@ type StatusFilter = 'open' | 'pending' | 'resolved' | 'all'
 const ALLOWED_ROLES: Role[] = ['owner', 'admin', 'member']
 const REFRESH_MS = 10000
 
-function toErrorMessage(error: any) {
-  return error?.response?.data?.message ?? error?.response?.data?.error ?? error?.message ?? 'Error inesperado'
+function toErrorMessage(error: unknown) {
+  const value = error as { response?: { data?: { message?: string; error?: string } }; message?: string }
+  return value?.response?.data?.message ?? value?.response?.data?.error ?? value?.message ?? 'Error inesperado'
 }
 
 function formatDate(value?: string | null) {

@@ -11,6 +11,8 @@ import {
 import { Prisma } from '@prisma/client'
 import type { Role } from './roles'
 
+export const normalizeAuthEmail = (email: string): string => email.trim().toLowerCase()
+
 
 export class AuthService {
 
@@ -22,9 +24,11 @@ export class AuthService {
     lastName?: string
     workspaceName: string
   }) {
+    const email = normalizeAuthEmail(data.email)
+
     // 1. Verificar que el email no esté registrado
     const existing = await db.user.findUnique({
-      where: { email: data.email }
+      where: { email }
     })
     if (existing) {
       throw new ConflictError('El email ya está registrado')
@@ -53,7 +57,7 @@ export class AuthService {
       result = await db.$transaction(async (tx) => {
         const user = await tx.user.create({
           data: {
-            email: data.email,
+            email,
             passwordHash,
             firstName: data.firstName,
             lastName: data.lastName,
@@ -110,8 +114,10 @@ export class AuthService {
 
   // ─── Login ───────────────────────────────────────────────────────
   async login(email: string, password: string) {
+    const normalizedEmail = normalizeAuthEmail(email)
+
     // 1. Buscar el usuario
-    const user = await db.user.findUnique({ where: { email } })
+    const user = await db.user.findUnique({ where: { email: normalizedEmail } })
     if (!user) {
       // Importante: no decir "usuario no encontrado" para no
       // revelar qué emails están registrados
@@ -214,15 +220,17 @@ export class AuthService {
     role:        Role
     password:    string
   }) {
+    const email = normalizeAuthEmail(data.email)
+
     // Verificar si el email ya tiene cuenta global
-    let user = await db.user.findUnique({ where: { email: data.email } })
+    let user = await db.user.findUnique({ where: { email } })
 
     if (!user) {
       // Crear usuario nuevo
       const passwordHash = await bcrypt.hash(data.password, 12)
       user = await db.user.create({
         data: {
-          email:        data.email,
+          email,
           passwordHash,
           firstName:    data.firstName,
           lastName:     data.lastName,
@@ -274,13 +282,16 @@ export class AuthService {
   }
 
   // ─── Cambiar rol de un miembro ────────────────────────────────────
-  async updateMemberRole(workspaceId: string, memberId: string, newRole: Role) {
+  async updateMemberRole(workspaceId: string, memberId: string, newRole: Role, actorRole: string) {
     const member = await db.workspaceUser.findFirst({
       where: { id: memberId, workspaceId },
     })
     if (!member) throw new NotFoundError('WorkspaceMember', memberId)
     if (member.role === 'owner') {
       throw new ForbiddenError('No se puede cambiar el rol del owner')
+    }
+    if (actorRole !== 'owner' && (member.role === 'admin' || newRole === 'admin')) {
+      throw new ForbiddenError('Solo el owner puede promover o modificar administradores')
     }
 
     return db.workspaceUser.update({
@@ -299,7 +310,40 @@ export class AuthService {
       throw new ForbiddenError('No se puede eliminar al owner del workspace')
     }
 
-    await db.workspaceUser.delete({ where: { id: memberId } })
+    await db.$transaction([
+      db.clientAssignment.deleteMany({
+        where: { workspaceId, userId: member.userId },
+      }),
+      db.company.updateMany({
+        where: { workspaceId, ownerId: member.userId },
+        data: { ownerId: null },
+      }),
+      db.contact.updateMany({
+        where: { workspaceId, ownerId: member.userId },
+        data: { ownerId: null },
+      }),
+      db.deal.updateMany({
+        where: { workspaceId, ownerId: member.userId, isArchived: false },
+        data: { ownerId: null },
+      }),
+      db.whatsAppChat.updateMany({
+        where: { workspaceId, assignedToUserId: member.userId },
+        data: { assignedToUserId: null },
+      }),
+      db.ticket.updateMany({
+        where: {
+          workspaceId,
+          assignedToUserId: member.userId,
+          status: { in: ['NEW', 'OPEN', 'WAITING_CUSTOMER', 'RESOLVED'] },
+        },
+        data: { assignedToUserId: null },
+      }),
+      db.clientChecklist.updateMany({
+        where: { workspaceId, assignedToUserId: member.userId },
+        data: { assignedToUserId: null },
+      }),
+      db.workspaceUser.delete({ where: { id: memberId } }),
+    ])
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────
@@ -314,29 +358,41 @@ export class AuthService {
   }
 
   // ─── Hook de autenticación ────────────────────────────────────────
-  // Acepta JWT o API Key. Método estático para no instanciar
-  // AuthService innecesariamente en cada request.
+  // Las rutas de usuario aceptan exclusivamente JWT. Las API keys se
+  // verifican de forma explícita dentro de `/inbound`, con alcance acotado.
   static async authenticate(req: any): Promise<void> {
-    // 1. Intentar API Key primero
-    const rawKey = req.headers['x-api-key'] as string | undefined
-    if (rawKey) {
-      const authService = new AuthService()
-      const result = await authService.verifyApiKey(rawKey)
-      if (!result) throw { statusCode: 401, message: 'API Key inválida' }
+    await req.jwtVerify()
 
-      // Simular el mismo formato que el JWT para que el resto del código funcione
-      req.user = {
-        sub:         'api-key',
-        userId:      'api-key',
-        workspaceId: result.workspaceId,
-        role:        'api',
-        type:        'api-key',
-      }
-      return
+    const token = req.user as {
+      sub?: string
+      userId?: string
+      workspaceId?: string
+      type?: string
+    }
+    const userId = token.userId ?? token.sub
+    if (!userId || !token.workspaceId || token.type !== 'access') {
+      throw new UnauthorizedError('Sesión inválida')
     }
 
-    // 2. Si no hay API Key, intentar JWT
-    await req.jwtVerify()
+    const membership = await db.workspaceUser.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: token.workspaceId,
+          userId,
+        },
+      },
+      select: { role: true },
+    })
+    if (!membership) throw new UnauthorizedError('La sesión ya no tiene acceso a este espacio')
+
+    req.user = {
+      ...token,
+      sub: userId,
+      userId,
+      workspaceId: token.workspaceId,
+      role: membership.role,
+      type: 'access',
+    }
   }
 }
 // Re-exportacion para compatibilidad con los modulos de rutas que

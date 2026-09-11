@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { pipelinesApi } from '@/lib/api'
-import type { Pipeline, Stage } from '@/types'
+import type { Pipeline } from '@/types'
 import {
   Plus, Trash2, Pencil, Check, X,
-  ArrowDown, ArrowUp, Loader2, ChevronRight, Layers, Star,
+  ArrowDown, ArrowUp, Loader2, Layers, GripVertical,
 } from 'lucide-react'
 import clsx from 'clsx'
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 
 const COLORS = [
@@ -40,7 +39,6 @@ export default function PipelinesPage() {
   const pathname = usePathname()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [newPipelineName, setNewPipelineName]     = useState('')
 
   useEffect(() => {
     if (pathname === '/pipelines') router.replace('/settings?tab=kanban')
@@ -48,7 +46,7 @@ export default function PipelinesPage() {
 
   const [editingPipeline, setEditingPipeline]     = useState<string | null>(null)
   const [editingPipelineName, setEditingPipelineName] = useState('')
-  const [expandedPipeline, setExpandedPipeline]   = useState<string | null>(null)
+  const [draggedStageId, setDraggedStageId] = useState<string | null>(null)
   const [newStageName, setNewStageName]           = useState('')
   const [newStageColor, setNewStageColor]         = useState('#6366f1')
   const [editingStage, setEditingStage]           = useState<string | null>(null)
@@ -59,25 +57,12 @@ export default function PipelinesPage() {
     queryFn:  () => pipelinesApi.list().then((r) => r.data),
   })
 
-  const createPipeline = useMutation({
-    mutationFn: () => pipelinesApi.create({ name: newPipelineName }),
-    onSuccess:  () => {
-      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      setNewPipelineName('')
-    },
-  })
-
   const updatePipeline = useMutation({
     mutationFn: (id: string) => pipelinesApi.update(id, { name: editingPipelineName }),
     onSuccess:  () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       setEditingPipeline(null)
     },
-  })
-
-  const deletePipeline = useMutation({
-    mutationFn: (id: string) => pipelinesApi.delete(id),
-    onSuccess:  () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
   })
 
   const createStage = useMutation({
@@ -105,11 +90,6 @@ export default function PipelinesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
   })
 
-  const setDefault = useMutation({
-    mutationFn: (id: string) => pipelinesApi.update(id, { isDefault: true }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
-  })
-
   const reorderStages = useMutation({
     mutationFn: ({ pipelineId, stageIds }: { pipelineId: string; stageIds: string[] }) => pipelinesApi.reorderStages(pipelineId, stageIds),
     onSuccess: () => {
@@ -134,61 +114,24 @@ export default function PipelinesPage() {
     )
   }
 
+  const editablePipeline = pipelines?.find((pipeline) => pipeline.isDefault) ?? pipelines?.[0]
+
   return (
     <div className="p-6 max-w-5xl mx-auto animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Embudo de Ventas (Pipelines)</h1>
-        <p className="text-slate-500 font-medium mt-1">Configurá las etapas por las que pasan tus leads</p>
-      </div>
-
-      {/* Crear pipeline */}
-      <div className="interactive-card p-5 mb-8 flex gap-3 shadow-sm shadow-slate-200/50">
-        <input
-          value={newPipelineName}
-          onChange={(e) => setNewPipelineName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && newPipelineName && createPipeline.mutate()}
-          placeholder="Nombre del nuevo embudo (Ej: Proceso B2B)..."
-          className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 font-medium rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 transition-all"
-        />
-        <button
-          onClick={() => createPipeline.mutate()}
-          disabled={!newPipelineName || createPipeline.isPending}
-          className="btn-primary whitespace-nowrap px-6"
-        >
-          {createPipeline.isPending
-            ? <Loader2 size={16} className="animate-spin" />
-            : <Plus size={18} strokeWidth={2.5}/>
-          }
-          Crear embudo
-        </button>
-      </div>
-
       {/* Lista de pipelines */}
       {pipelines?.length === 0 ? (
         <div className="text-center py-24 bg-slate-50/50 border border-dashed border-slate-200 rounded-2xl">
           <Layers size={56} className="text-slate-300 mx-auto mb-4" strokeWidth={1.5} />
-          <p className="text-slate-500 font-medium text-lg">No tenés embudos configurados</p>
-          <p className="text-slate-400 text-sm mt-1">Creá uno arriba para empezar a organizar tus ventas</p>
+          <p className="text-slate-500 font-medium text-lg">No hay un tablero comercial disponible</p>
+          <p className="text-slate-400 text-sm mt-1">El tablero debe configurarse desde la administración del sistema</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {pipelines?.map((pipeline) => (
+          {editablePipeline ? [editablePipeline].map((pipeline) => (
             <div key={pipeline.id} className="interactive-card overflow-hidden">
 
               {/* Header del pipeline */}
               <div className="flex items-center gap-4 p-5">
-                <button
-                  onClick={() => setExpandedPipeline(
-                    expandedPipeline === pipeline.id ? null : pipeline.id
-                  )}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-all shrink-0"
-                >
-                  <ChevronRight
-                    size={20}
-                    className={clsx('transition-transform duration-200', expandedPipeline === pipeline.id && 'rotate-90')}
-                  />
-                </button>
-
                 {editingPipeline === pipeline.id ? (
                   <div className="flex items-center gap-3 flex-1">
                     <input
@@ -212,7 +155,6 @@ export default function PipelinesPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 flex-1 min-w-0"
-                       onClick={() => setExpandedPipeline(expandedPipeline === pipeline.id ? null : pipeline.id)}
                        style={{ cursor: 'pointer' }}
                   >
                     <span className="text-slate-900 font-bold text-lg truncate">{pipeline.name}</span>
@@ -224,13 +166,6 @@ export default function PipelinesPage() {
                 )}
 
                 <div className="flex items-center gap-2 shrink-0 ml-auto">
-                  {!pipeline.isDefault && <button onClick={() => setDefault.mutate(pipeline.id)} className="p-1.5 text-slate-400 hover:text-primary-700" title="Usar como predeterminado"><Star size={16} /></button>}
-                  <Link
-                      href={`/leads/${pipeline.id}`}
-                    className="text-xs font-bold text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-primary-100 mr-2"
-                  >
-                    Ver tablero Kanban
-                  </Link>
                   <button
                     onClick={() => {
                       setEditingPipeline(pipeline.id)
@@ -241,27 +176,16 @@ export default function PipelinesPage() {
                   >
                     <Pencil size={16} />
                   </button>
-                  <button
-                    onClick={() => {
-                        if (confirm(`¿Eliminar todo el embudo "${pipeline.name}"?`)) {
-                            deletePipeline.mutate(pipeline.id)
-                        }
-                    }}
-                    className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
-                    title="Eliminar embudo"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
               </div>
 
               {/* Etapas expandidas */}
-              {expandedPipeline === pipeline.id && (
+              {true && (
                 <div className="border-t border-slate-100 p-5 bg-slate-50/50">
-                  <div className="space-y-3 mb-6">
+                  <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
                     {/* Lista de etapas */}
                     {pipeline.stages.map((stage, stageIndex) => (
-                      <div key={stage.id} className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-3 group">
+                      <div key={stage.id} draggable={editingStage !== stage.id} onDragStart={() => setDraggedStageId(stage.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (!draggedStageId || draggedStageId === stage.id) return; const ids = pipeline.stages.map((item) => item.id); const from = ids.indexOf(draggedStageId); const to = ids.indexOf(stage.id); ids.splice(from, 1); ids.splice(to, 0, draggedStageId); reorderStages.mutate({ pipelineId: pipeline.id, stageIds: ids }); setDraggedStageId(null) }} className="group flex min-h-28 min-w-[210px] flex-col items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         {editingStage === stage.id ? (
                           <div className="flex items-center gap-3 flex-1 flex-wrap">
                             <input
@@ -291,6 +215,7 @@ export default function PipelinesPage() {
                           </div>
                         ) : (
                           <>
+                            <GripVertical size={16} className="shrink-0 cursor-grab text-slate-300" aria-label="Arrastrar etapa" />
                             <div
                               className="w-4 h-4 rounded-full shrink-0 shadow-inner"
                               style={{ backgroundColor: stage.color }}
@@ -360,7 +285,7 @@ export default function PipelinesPage() {
                 </div>
               )}
             </div>
-          ))}
+          )) : null}
         </div>
       )}
     </div>

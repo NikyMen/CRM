@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireModule } from '../../core/modules/require-module'
 import { requireRole } from '../../core/auth/require-role'
 import {
   StockService,
@@ -86,6 +87,7 @@ export async function stockRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     await authenticate(req)
   })
+  app.addHook('onRequest', requireModule('stock'))
 
   app.get('/dashboard', async (req, reply) => {
     const ctx = req.user as { workspaceId: string }

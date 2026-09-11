@@ -4,6 +4,7 @@ import { ContactService } from './contact.service'
 import type { EventBus } from '../../core/event-bus'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
+import type { WorkspaceContext } from '../../types'
 
 // Schemas de validación con Zod
 // Zod valida los datos que llegan en el body del request
@@ -20,8 +21,8 @@ const createContactSchema = z.object({
   ]).optional(),
   source:     z.string().optional(),
   tags:       z.array(z.string()).optional(),
-  companyId:  z.string().optional(),
-  ownerId:    z.string().optional(),
+  companyId:  z.string().nullable().optional(),
+  ownerId:    z.string().nullable().optional(),
   customData: z.record(z.unknown()).optional(),
 })
 
@@ -56,38 +57,39 @@ export async function contactRoutes(
   // ─── GET /contacts ─────────────────────────────────────────────
   // Todos los roles pueden leer contactos
   app.get('/', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as WorkspaceContext
     const filters = filtersSchema.parse(req.query)
-    const result = await service.search(ctx.workspaceId, filters)
+    const result = await service.search(ctx.workspaceId, filters, ctx)
     return reply.send(result)
   })
 
   // ─── POST /contacts ────────────────────────────────────────────
   // viewer no puede crear contactos
   app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as WorkspaceContext
     const body = createContactSchema.parse(req.body) as Parameters<typeof service.create>[1]
-    const contact = await service.create(ctx.workspaceId, body, ctx.userId)
+    const contact = await service.create(ctx.workspaceId, body, ctx.userId, ctx.role)
     return reply.status(201).send(contact)
   })
 
   // ─── GET /contacts/:id ─────────────────────────────────────────
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ctx = req.user as { workspaceId: string }
-    const contact = await service.findById(ctx.workspaceId, req.params.id)
+    const ctx = req.user as WorkspaceContext
+    const contact = await service.findById(ctx.workspaceId, req.params.id, ctx)
     return reply.send(contact)
   })
 
   // ─── PATCH /contacts/:id ───────────────────────────────────────
   // viewer no puede editar contactos
   app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; userId: string }
+    const ctx = req.user as WorkspaceContext
     const body = updateContactSchema.parse(req.body)
     const contact = await service.update(
       ctx.workspaceId,
       req.params.id,
       body,
-      ctx.userId
+      ctx.userId,
+      ctx.role
     )
     return reply.send(contact)
   })

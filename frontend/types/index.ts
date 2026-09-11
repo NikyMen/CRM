@@ -725,3 +725,362 @@ export interface ChatwootMessage {
     thumbUrl?: string | null
   }>
 }
+
+// Gestión ROMEZ
+export interface AssigneeSummary {
+  id: string
+  firstName: string
+  lastName?: string | null
+  email?: string
+  avatar?: string | null
+}
+
+export interface InternalChatMember extends AssigneeSummary {
+  email: string
+  role: Role
+  joinedAt: string
+  isCurrentUser: boolean
+}
+
+export interface InternalChatMessage {
+  id: string
+  conversationId: string
+  senderId: string
+  body: string
+  createdAt: string
+  updatedAt: string
+  sender: AssigneeSummary & { email: string }
+}
+
+export interface InternalChatConversation {
+  id: string
+  type: 'GENERAL' | 'DIRECT'
+  title?: string | null
+  otherParticipant?: (AssigneeSummary & { email: string }) | null
+  participantCount: number
+  lastMessageAt?: string | null
+  lastMessage?: InternalChatMessage | null
+  unreadCount: number
+}
+
+export interface InternalChatMessagesPage {
+  items: InternalChatMessage[]
+  nextCursor?: string | null
+}
+
+export type ClientPersonType = 'INDIVIDUAL' | 'LEGAL_ENTITY'
+export type ClientStatus = 'PROSPECT' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'
+
+export interface ClientAssignment {
+  id: string
+  userId: string
+  area: string
+  user: AssigneeSummary
+  createdAt: string
+}
+
+export interface Client {
+  id: string
+  workspaceId: string
+  name: string
+  legalName?: string | null
+  tradeName?: string | null
+  personType: ClientPersonType
+  ruc?: string | null
+  dv?: string | null
+  email?: string | null
+  phone?: string | null
+  website?: string | null
+  activity?: string | null
+  address?: string | null
+  city?: string | null
+  department?: string | null
+  country: string
+  taxObligations: string[]
+  tags: string[]
+  status: ClientStatus
+  ownerId?: string | null
+  owner?: AssigneeSummary | null
+  assignments: ClientAssignment[]
+  contacts?: Contact[]
+  _count?: { contacts: number; deals: number; tickets: number; checklists: number }
+  balances?: Array<{ currency: string; balance: string; overdueBalance: string }>
+  hasDebt?: boolean
+  pendingChecklists?: number
+  pendingChecklistItems?: number
+  openTickets?: number
+  isArchived: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AccountSummary {
+  currency: string
+  billed: string
+  paid: string
+  balance: string
+  count: number
+}
+
+export interface ClientSummary {
+  client: Client
+  account: AccountSummary[]
+  recentPayments: CollectionPayment[]
+  checklists: ClientChecklist[]
+  tickets: Ticket[]
+  contacts: Contact[]
+  documents: ClientDocument[]
+  notes: ClientNote[]
+}
+
+export type ChecklistStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE'
+
+export interface ChecklistTemplateItem {
+  id: string
+  title: string
+  description?: string | null
+  position: number
+  isRequired: boolean
+}
+
+export interface ChecklistTemplate {
+  id: string
+  name: string
+  description?: string | null
+  periodicity: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'ON_DEMAND'
+  items: ChecklistTemplateItem[]
+  isActive: boolean
+}
+
+export interface ClientChecklistItem {
+  id: string
+  title: string
+  isCompleted: boolean
+  isRequired: boolean
+  notes?: string | null
+  completedAt?: string | null
+  completedBy?: AssigneeSummary | null
+}
+
+export interface ClientChecklist {
+  id: string
+  companyId: string
+  templateId: string
+  template: ChecklistTemplate
+  assignedToUserId?: string | null
+  assignedTo?: AssigneeSummary | null
+  periodKey: string
+  dueDate?: string | null
+  status: ChecklistStatus
+  items: ClientChecklistItem[]
+}
+
+export interface ChecklistSummary {
+  pending: number
+  inProgress: number
+  overdue: number
+  completed: number
+  upcoming: Array<ClientChecklist & { company: Pick<Client, 'id' | 'name' | 'ruc' | 'dv'> }>
+}
+
+export type ReceivableStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOID'
+
+export interface Receivable {
+  id: string
+  companyId: string
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'ownerId'>
+  description: string
+  periodKey?: string | null
+  currency: string
+  amount: string
+  paidAmount: string
+  balance?: string
+  outstanding: string
+  dueDate: string
+  status: ReceivableStatus
+  reference?: string | null
+  createdAt: string
+}
+
+export interface CollectionPayment {
+  id: string
+  companyId: string
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv'>
+  currency: string
+  amount: string
+  method?: string | null
+  reference?: string | null
+  notes?: string | null
+  allocations?: Array<{ id: string; receivableId: string; amount: string }>
+  paidAt: string
+  createdAt: string
+}
+
+export interface CollectionSummary {
+  currencies: Array<{
+    currency: string
+    billed: string
+    applied: string
+    outstanding: string
+    received: string
+    receivableCount: number
+    paymentCount: number
+  }>
+  overdueCount: number
+}
+
+export interface RecurringCharge {
+  id: string
+  companyId: string
+  company?: Pick<Client, 'id' | 'name' | 'ruc'>
+  name: string
+  description?: string | null
+  amount: string
+  currency: string
+  frequency: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  dayOfMonth: number
+  startDate: string
+  endDate?: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type TicketStatus = 'NEW' | 'OPEN' | 'WAITING_CUSTOMER' | 'RESOLVED' | 'CLOSED'
+export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+
+export interface TicketMessage {
+  id: string
+  messageId?: string
+  direction?: 'INBOUND' | 'OUTBOUND'
+  fromMe?: boolean
+  text?: string | null
+  mediaUrl?: string | null
+  mediaMimeType?: string | null
+  mediaFileName?: string | null
+  mediaSizeBytes?: number | null
+  mediaDurationSeconds?: number | null
+  messageType?: string | null
+  status?: string | null
+  pushName?: string | null
+  sentAt: string
+  senderName?: string | null
+  quotedMessageId?: string | null
+  quotedText?: string | null
+  quotedMessageType?: string | null
+}
+
+export interface Ticket {
+  id: string
+  number?: string | number | null
+  subject?: string | null
+  status: TicketStatus
+  priority: TicketPriority
+  category?: string | null
+  source?: string | null
+  activeKey?: string | null
+  channel?: 'WHATSAPP' | 'INSTAGRAM' | 'MESSENGER' | string
+  clientId?: string | null
+  client?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'owner'> | null
+  companyId?: string | null
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'owner'> | null
+  contactId?: string | null
+  contact?: Pick<Contact, 'id' | 'firstName' | 'lastName' | 'phone'> | null
+  assignedToUserId?: string | null
+  assignee?: AssigneeSummary | null
+  assignedTo?: AssigneeSummary | null
+  whatsappChat?: Pick<WhatsAppChat, 'id' | 'jid' | 'displayName' | 'phoneNumber' | 'lastMessagePreview'> | null
+  unreadCount?: number
+  openedAt?: string | null
+  firstResponseAt?: string | null
+  dueAt?: string | null
+  resolvedAt?: string | null
+  closedAt?: string | null
+  lastMessageAt?: string | null
+  lastMessagePreview?: string | null
+  messages?: TicketMessage[]
+  comments?: Array<{ id: string; body: string; createdAt: string; author?: AssigneeSummary | null }>
+  events?: Array<{ id: string; type: string; fromValue?: string | null; toValue?: string | null; createdAt: string; actor?: AssigneeSummary | null }>
+  _count?: { messages: number; comments: number }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomerServiceSummary {
+  openTotal: number
+  unassigned: number
+  mine: number
+  waitingCustomer: number
+  resolvedToday: number
+  avgFirstResponseMinutes: number | null
+  whatsapp: {
+    status: WhatsAppConnectionStatus
+    phoneNumber?: string | null
+    pushName?: string | null
+    lastConnectedAt?: string | null
+    lastError?: string | null
+  } | null
+  byAssignee: Array<{
+    userId?: string | null
+    user?: AssigneeSummary | null
+    count: number
+  }>
+}
+
+export interface ClientDocument {
+  id: string
+  companyId: string
+  clientId?: string
+  name: string
+  category?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  url?: string | null
+  createdAt: string
+}
+
+export interface ClientNote {
+  id: string
+  clientId: string
+  content: string
+  author?: AssigneeSummary | null
+  createdAt: string
+}
+
+export type SaleStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+
+export interface SaleItem {
+  id: string
+  description: string
+  quantity: string
+  unitPrice: string
+  total: string
+  position: number
+}
+
+export interface Sale {
+  id: string
+  number: number
+  companyId: string
+  status: SaleStatus
+  soldAt: string
+  currency: string
+  subtotal: string
+  discount: string
+  taxAmount: string
+  total: string
+  reference?: string | null
+  notes?: string | null
+  confirmedAt?: string | null
+  cancelledAt?: string | null
+  createdAt: string
+  updatedAt: string
+  company?: { id: string; name: string; ruc?: string | null; tradeName?: string | null }
+  createdBy?: AssigneeSummary | null
+  items: SaleItem[]
+}
+
+export interface SaleSummary {
+  draftCount: number
+  currencies: Array<{ currency: string; confirmedCount: number; confirmedTotal: string }>
+}

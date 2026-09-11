@@ -2,21 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Check, ImagePlus, Key, KanbanSquare, Loader2, Package, Save, Settings, Shield, SlidersHorizontal,
-  Users, Webhook,
+  AlertTriangle, Check, ImagePlus, Key, LayoutGrid, Loader2, RefreshCcw, Save, Settings,
+  Shield, SlidersHorizontal, Smartphone, Unplug, Webhook, Wifi, WifiOff,
 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import NextImage from 'next/image'
+import QRCode from 'qrcode'
 import clsx from 'clsx'
 import { auth, type StoredAuth } from '@/lib/auth'
-import { authApi } from '@/lib/api'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { authApi, whatsappApi } from '@/lib/api'
+import type { WhatsAppSessionSnapshot } from '@/types'
+import { formatDateTime, getErrorMessage } from '@/lib/format'
 import { DEFAULT_AVATARS, UserAvatar } from '@/components/UserAvatar'
 import WebhooksPage from '../webhooks/page'
 import ApiKeysPage from '../api-keys/page'
-import TeamPage from '../team/page'
-import PipelinesPage from '../pipelines/page'
 import { PillNav } from '@/components/react-bits/PillNav'
+import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleState } from '@/lib/modules'
+import { useWorkspaceModules, WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
 
-type SettingsTab = 'profile' | 'kanban' | 'modules' | 'webhooks' | 'api-keys' | 'team'
+type SettingsTab = 'profile' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -26,25 +30,15 @@ const TAB_ITEMS: {
   label: string
   icon: typeof Settings
   adminOnly?: boolean
+  /** Pestaña que sigue el interruptor de su módulo en Configuración → Módulos. */
+  module?: ModuleKey
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
-  { id: 'kanban', label: 'Kanban', icon: KanbanSquare, adminOnly: true },
-  { id: 'modules', label: 'Módulos', icon: Package, adminOnly: true },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true },
-  { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true },
-  { id: 'team', label: 'Equipo', icon: Users, adminOnly: true },
+  { id: 'modules', label: 'Módulos', icon: LayoutGrid, adminOnly: true },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true, module: 'customer-service' },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true, module: 'integrations' },
+  { id: 'api-keys', label: 'API Keys', icon: Key, adminOnly: true, module: 'integrations' },
 ]
-
-function ModulesPanel() {
-  const queryClient = useQueryClient()
-  const settings = useQuery({ queryKey: ['workspace-settings'], queryFn: () => authApi.getWorkspaceSettings().then((response) => response.data) })
-  const update = useMutation({
-    mutationFn: (stockVisible: boolean) => authApi.updateWorkspaceSettings({ stockVisible }),
-    onSuccess: (response) => queryClient.setQueryData(['workspace-settings'], response.data),
-  })
-  const visible = settings.data?.stockVisible !== false
-  return <div className="mx-auto max-w-5xl p-6"><div className="identity-line flex items-center justify-between gap-4 rounded-2xl p-5"><div><p className="font-display font-black text-[var(--ink-primary)]">Módulo Stock</p><p className="mt-1 text-sm font-medium text-[var(--ink-secondary)]">Oculta Stock de la navegación sin borrar datos ni bloquear su URL o API.</p></div><button type="button" role="switch" aria-checked={visible} disabled={settings.isLoading || update.isPending} onClick={() => update.mutate(!visible)} className={clsx('relative h-7 w-12 shrink-0 rounded-full transition', visible ? 'bg-[#c5ed1b]' : 'bg-slate-300')}><span className={clsx('absolute top-1 h-5 w-5 rounded-full bg-[#0c1015] transition-transform', visible ? 'translate-x-1' : '-translate-x-5')} /></button></div></div>
-}
 
 type EditorState = {
   src: string
@@ -185,8 +179,8 @@ function AvatarSettingsPanel() {
       setUser((current) => current ? { ...current, ...updated } : current)
       setSelectedAvatar(updated.avatar || DEFAULT_AVATARS[0].value)
       setMessage('Avatar actualizado.')
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'No se pudo guardar el avatar.')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'No se pudo guardar el avatar.'))
     } finally {
       setSaving(false)
     }
@@ -280,17 +274,17 @@ function AvatarSettingsPanel() {
           </div>
 
           <div className="interactive-card static-card p-6">
-            <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-primary-100 bg-primary-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="section-label">Imagen personalizada</p>
                 <p className="mt-1 text-sm font-medium text-slate-500">
-                  Subi un logo o foto, ajusta zoom y posicion, y confirmala.
+                  Tu identidad visual, lista para usar en todo ROMEZ.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="btn-secondary"
+                className="btn-primary w-full shrink-0 sm:w-auto"
               >
                 <ImagePlus size={16} />
                 Subir imagen
@@ -368,9 +362,10 @@ function AvatarSettingsPanel() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center">
+              <div className="rounded-2xl border border-dashed border-primary-200 bg-primary-50/30 px-6 py-12 text-center">
                 <ImagePlus size={34} className="mx-auto mb-3 text-slate-300" />
-                <p className="text-sm font-bold text-slate-500">No hay imagen en edicion.</p>
+                <p className="text-sm font-bold text-slate-600">Todavía no hay una imagen personalizada</p>
+                <p className="mx-auto mt-1 max-w-sm text-xs font-medium leading-5 text-slate-400">Subí una foto o logo para previsualizarlo, ajustarlo y guardarlo como tu avatar.</p>
               </div>
             )}
           </div>
@@ -380,9 +375,167 @@ function AvatarSettingsPanel() {
   )
 }
 
+const WHATSAPP_STATUS: Record<WhatsAppSessionSnapshot['status'], string> = {
+  CONNECTED: 'Conectado',
+  CONNECTING: 'Conectando',
+  PAIRING: 'Esperando vinculación',
+  ERROR: 'Con error',
+  DISCONNECTED: 'Desconectado',
+}
+
+function WhatsAppSettingsPanel() {
+  const queryClient = useQueryClient()
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
+  const sessionQuery = useQuery<WhatsAppSessionSnapshot>({
+    queryKey: ['whatsapp-session'],
+    queryFn: () => whatsappApi.getSession().then((response) => response.data),
+    retry: false,
+    refetchInterval: (query) => ['PAIRING', 'CONNECTING'].includes(query.state.data?.status ?? '') ? 3_000 : 15_000,
+  })
+  const connect = useMutation({
+    mutationFn: () => whatsappApi.connect(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['whatsapp-session'] }),
+  })
+  const disconnect = useMutation({
+    mutationFn: () => whatsappApi.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-session'] })
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] })
+    },
+  })
+
+  useEffect(() => {
+    let active = true
+    const qrCode = sessionQuery.data?.qrCode
+    if (!qrCode) {
+      setQrImageUrl(null)
+      return () => { active = false }
+    }
+    QRCode.toDataURL(qrCode, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#062d65', light: '#ffffff' } })
+      .then((url) => { if (active) setQrImageUrl(url) })
+      .catch(() => { if (active) setQrImageUrl(null) })
+    return () => { active = false }
+  }, [sessionQuery.data?.qrCode])
+
+  if (sessionQuery.isLoading) return <div className="mx-auto max-w-5xl p-6"><div className="state-panel"><Loader2 size={24} className="animate-spin text-[var(--brand-blue)]" /><p className="text-sm font-semibold text-[var(--ink-secondary)]">Consultando el WhatsApp del estudio…</p></div></div>
+
+  const session = sessionQuery.data
+  const isConnected = session?.status === 'CONNECTED'
+  const runtimeReady = Boolean(session?.runtimeCompatible && session?.packageInstalled)
+  const busy = connect.isPending || disconnect.isPending
+  const error = sessionQuery.error || connect.error || disconnect.error
+
+  return <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">WhatsApp de ROMEZ</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
+
+    <section className="paper-panel overflow-hidden">
+      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-lg border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm('¿Desconectar el WhatsApp compartido de ROMEZ?')) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
+
+      {!runtimeReady ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p><strong>El servidor de WhatsApp no está disponible.</strong> Revisá que el proceso persistente y Baileys estén instalados antes de vincular el número.</p></div> : null}
+      {error || session?.lastError ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p>{session?.lastError || getErrorMessage(error, 'No pudimos consultar la sesión.')}</p></div> : null}
+
+      <div className="grid lg:grid-cols-[360px_1fr]">
+        <div className="border-b border-[var(--line-soft)] p-5 lg:border-b-0 lg:border-r">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Vinculación por QR</p>
+          {qrImageUrl ? <><div className="mt-4 grid place-items-center rounded-lg border border-[var(--line)] bg-white p-4"><NextImage unoptimized src={qrImageUrl} alt="Código QR para vincular WhatsApp" width={280} height={280} className="h-auto w-full max-w-[280px]" /></div><p className="mt-3 text-xs leading-5 text-[var(--ink-tertiary)]">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular dispositivo. El código se actualiza automáticamente mientras espera.</p></> : <div className="mt-4 grid min-h-64 place-items-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--paper-soft)] p-6 text-center"><div><Smartphone size={30} className="mx-auto text-[var(--brand-blue)]" /><p className="mt-3 text-sm font-bold text-[var(--ink-primary)]">{isConnected ? 'Número vinculado' : 'Todavía no hay un QR activo'}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{isConnected ? 'Los mensajes entrantes se convierten en tickets.' : 'Generá un código para conectar el único número del estudio.'}</p></div></div>}
+        </div>
+        <dl className="grid content-start sm:grid-cols-2">
+          <SessionDatum label="Número" value={session?.phoneNumber || 'Sin vincular'} />
+          <SessionDatum label="Nombre" value={session?.pushName || '—'} />
+          <SessionDatum label="Última conexión" value={formatDateTime(session?.lastConnectedAt)} />
+          <SessionDatum label="Conversaciones sincronizadas" value={String(session?.chatCount ?? 0)} />
+          <SessionDatum label="Sesión guardada" value={session?.authAvailable ? 'Sí' : 'No'} />
+          <SessionDatum label="Proceso activo" value={session?.hasActiveSocket ? 'Sí' : 'No'} />
+        </dl>
+      </div>
+    </section>
+  </div>
+}
+
+
+function ModulesSettingsPanel() {
+  const queryClient = useQueryClient()
+  const [pending, setPending] = useState<ModuleKey | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const settingsQuery = useQuery({
+    queryKey: WORKSPACE_MODULES_KEY,
+    queryFn: () => authApi.getWorkspaceSettings().then((response) => response.data),
+  })
+
+  const toggle = useMutation({
+    mutationFn: (input: { key: ModuleKey; enabled: boolean }) =>
+      authApi.updateWorkspaceSettings({ modules: { [input.key]: input.enabled } as Partial<Record<ModuleKey, boolean>> }).then((response) => response.data),
+    onMutate: (input) => { setPending(input.key); setError(null) },
+    onSuccess: (data) => { queryClient.setQueryData(WORKSPACE_MODULES_KEY, data) },
+    onError: (mutationError) => setError(getErrorMessage(mutationError, 'No pudimos guardar el cambio.')),
+    onSettled: () => setPending(null),
+  })
+
+  const definitions = settingsQuery.data?.definitions?.length ? settingsQuery.data.definitions : MODULE_DEFINITIONS
+  const modules: ModuleState = normalizeModuleState(settingsQuery.data?.modules)
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6">
+      <div>
+        <p className="section-label">Espacio de trabajo</p>
+        <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">Módulos visibles</h2>
+        <p className="mt-1 text-sm text-[var(--ink-tertiary)]">
+          Apagá lo que el estudio no usa. El módulo desaparece del menú para todo el equipo; los datos quedan guardados.
+        </p>
+      </div>
+
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+          <AlertTriangle size={16} className="mr-2 inline" />{error}
+        </div>
+      ) : null}
+
+      <section className="paper-panel divide-y divide-[var(--line-soft)] overflow-hidden">
+        {settingsQuery.isLoading ? (
+          <div className="flex items-center gap-2 p-5 text-sm font-bold text-[var(--ink-tertiary)]">
+            <Loader2 size={16} className="animate-spin" /> Cargando módulos…
+          </div>
+        ) : definitions.map((definition) => {
+          const enabled = modules[definition.key]
+          const busy = pending === definition.key
+          return (
+            <div key={definition.key} className="flex items-center justify-between gap-4 p-5">
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-[var(--ink-primary)]">{definition.label}</p>
+                <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{definition.description}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-label={(enabled ? 'Desactivar ' : 'Activar ') + definition.label}
+                disabled={busy || toggle.isPending}
+                onClick={() => toggle.mutate({ key: definition.key, enabled: !enabled })}
+                className={clsx(
+                  'relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50',
+                  enabled ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]' : 'border-[var(--line)] bg-[var(--line-soft)]'
+                )}
+              >
+                <span className={clsx('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', enabled ? 'left-6' : 'left-0.5')} />
+              </button>
+            </div>
+          )
+        })}
+      </section>
+    </div>
+  )
+}
+
+function SessionDatum({ label, value }: { label: string; value: string }) {
+  return <div className="border-b border-[var(--line-soft)] p-5 odd:sm:border-r"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt><dd className="mt-2 text-sm font-bold text-[var(--ink-primary)]">{value}</dd></div>
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [user, setUser] = useState<StoredAuth | null>(null)
+  const { modules } = useWorkspaceModules()
 
   useEffect(() => {
     setUser(auth.get())
@@ -399,34 +552,42 @@ export default function SettingsPage() {
   }, [activeTab, canManageSettings])
 
   const visibleTabs = useMemo(
-    () => TAB_ITEMS.filter((item) => !item.adminOnly || canManageSettings),
-    [canManageSettings]
+    () => TAB_ITEMS.filter((item) => (!item.adminOnly || canManageSettings) && (!item.module || modules[item.module])),
+    [canManageSettings, modules]
   )
+
+  // Si el módulo de la pestaña abierta se apaga, volvemos a Perfil.
+  useEffect(() => {
+    if (!visibleTabs.some((item) => item.id === activeTab)) setActiveTab('profile')
+  }, [activeTab, visibleTabs])
 
   return (
     <div className="min-h-full">
       <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[var(--background)]/90 px-4 py-3 backdrop-blur-xl md:top-0">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuracion</h1>
-            <p className="text-sm font-medium text-slate-500">Perfil, integraciones y acceso del workspace.</p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuración</h1>
+              <p className="mt-0.5 text-sm font-medium text-slate-500">Perfil, integraciones y acceso del espacio de trabajo.</p>
+            </div>
           </div>
 
-          <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
+          <div className="min-w-0 overflow-x-auto pb-0.5">
+            <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
+          </div>
         </div>
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
-      {canManageSettings && activeTab === 'kanban' && <PipelinesPage />}
-      {canManageSettings && activeTab === 'modules' && <ModulesPanel />}
+      {canManageSettings && activeTab === 'modules' && <ModulesSettingsPanel />}
+      {canManageSettings && activeTab === 'whatsapp' && <WhatsAppSettingsPanel />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
       {canManageSettings && activeTab === 'api-keys' && <ApiKeysPage />}
-      {canManageSettings && activeTab === 'team' && <TeamPage />}
       {!canManageSettings && (
         <div className="mx-auto mt-6 max-w-5xl px-6">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
             <Shield size={16} className="mr-2 inline" />
-            Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
+            Módulos, Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
           </div>
         </div>
       )}
