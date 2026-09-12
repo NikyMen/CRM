@@ -6,6 +6,8 @@ import { requireRole } from '../../core/auth/require-role'
 import { INVITABLE_ROLES } from '../../core/auth/roles'
 import { config } from '../../core/config'
 import { Prisma } from '@prisma/client'
+import { TeamAccessService } from './team-access.service'
+import type { WorkspaceContext } from '../../types'
 import {
   MODULE_DEFINITIONS,
   mergeModuleState,
@@ -16,8 +18,30 @@ import { invalidateModuleCache } from '../../core/modules/require-module'
 
 const authService = new AuthService()
 const authEmailSchema = z.string().transform(normalizeAuthEmail).pipe(z.string().email())
+const newPasswordSchema = z.string().min(8).max(72).refine((value) => Buffer.byteLength(value, 'utf8') <= 72, 'La contraseña admite hasta 72 bytes')
 
 export async function authRoutes(app: FastifyInstance) {
+  const teamAccess = new TeamAccessService()
+  app.post('/invitations', { preHandler: [authenticate, requireRole('owner')] }, async (req, reply) => {
+    const { role } = z.object({ role: z.enum(['admin', 'member', 'viewer']) }).parse(req.body)
+    reply.header('Cache-Control', 'no-store')
+    return reply.status(201).send(await teamAccess.createInvitation(req.user as WorkspaceContext, role))
+  })
+  app.post('/invitations/accept', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, async (req, reply) => {
+    const body = z.object({
+      token: z.string().regex(/^[a-f0-9]{64}$/),
+      email: authEmailSchema,
+      password: newPasswordSchema,
+      firstName: z.string().trim().min(1).max(100),
+      lastName: z.string().trim().min(1).max(100),
+    }).parse(req.body) as Parameters<TeamAccessService['acceptInvitation']>[0]
+    return reply.status(201).send(await teamAccess.acceptInvitation(body))
+  })
+  app.patch('/team/:id/password', { preHandler: [authenticate, requireRole('owner')], config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (req, reply) => {
+    const { password } = z.object({ password: newPasswordSchema }).parse(req.body)
+    await teamAccess.changePassword(req.user as WorkspaceContext, (req.params as { id: string }).id, password)
+    return reply.status(204).send()
+  })
 
   app.get('/workspace-settings', { preHandler: authenticate }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; role: string }
@@ -92,6 +116,7 @@ export async function authRoutes(app: FastifyInstance) {
     // Generar JWT con los datos del usuario y workspace
     const token = app.jwt.sign({
       sub:         user.id,
+      sessionVersion: user.sessionVersion,
       userId:      user.id,
       workspaceId: workspace.id,
       role:        'owner',
@@ -134,6 +159,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const token = app.jwt.sign({
       sub:         result.user.id,
+      sessionVersion: result.sessionVersion,
       userId:      result.user.id,
       workspaceId: result.workspace.id,
       role:        result.role,
@@ -413,14 +439,16 @@ export async function authRoutes(app: FastifyInstance) {
     const bcrypt      = await import('bcryptjs')
     const passwordHash = await bcrypt.hash(password, 12)
 
-    await db.user.update({
-      where: { id: user.id },
+    const reset = await db.user.updateMany({
+      where: { id: user.id, resetToken: token, resetTokenExpiry: { gt: new Date() }, sessionVersion: user.sessionVersion },
       data: {
         passwordHash,
+        sessionVersion: { increment: 1 },
         resetToken:       null,
         resetTokenExpiry: null,
       },
     })
+    if (reset.count !== 1) return reply.status(400).send({ error: 'INVALID_TOKEN', message: 'El link de recuperación es inválido o expiró.' })
 
     return reply.send({ message: 'Contraseña actualizada correctamente.' })
   })

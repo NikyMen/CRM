@@ -134,6 +134,7 @@ model User {
   id               String    @id @default(cuid())
   email            String    @unique
   passwordHash     String
+  sessionVersion   Int       @default(0)
   firstName        String
   lastName         String?
   avatar           String?
@@ -172,12 +173,27 @@ model WorkspaceUser {
   userId      String
   role        String   @default("member")
   createdAt   DateTime @default(now())
+  invitations TeamInvitation[]
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@map("workspace_users")
+}
+
+model TeamInvitation {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  role        String
+  createdById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  createdBy   WorkspaceUser @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById, expiresAt])
+  @@map("team_invitations")
 }
 
 model InternalConversation {

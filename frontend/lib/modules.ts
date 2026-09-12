@@ -2,6 +2,7 @@
 // Si agregás un módulo allá, agregalo acá con su ruta.
 
 export const MODULE_KEYS = [
+  'home',
   'clients',
   'sales',
   'commercial',
@@ -25,6 +26,7 @@ export type ModuleDefinition = {
 }
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
+  { key: 'home', label: 'Inicio', description: 'Panel de resumen con los indicadores del estudio.', defaultEnabled: true },
   { key: 'clients', label: 'Clientes', description: 'Legajo de clientes, responsables y documentos.', defaultEnabled: true },
   { key: 'sales', label: 'Ventas', description: 'Registro de ventas con ítems, totales y comprobantes.', defaultEnabled: true },
   { key: 'commercial', label: 'Gestión comercial', description: 'Leads, embudos y negocios.', defaultEnabled: true },
@@ -44,9 +46,10 @@ export const DEFAULT_MODULE_STATE: ModuleState = MODULE_DEFINITIONS.reduce((stat
 
 /**
  * Rutas del dashboard que dependen de cada módulo. Cubre todas las páginas
- * salvo Inicio y Configuración, que nunca se apagan.
+ * salvo Configuración, que nunca se apaga.
  */
 export const MODULE_PATHS: Record<ModuleKey, string[]> = {
+  home: ['/dashboard'],
   clients: ['/clients'],
   sales: ['/sales'],
   commercial: ['/commercial', '/leads', '/deals', '/pipelines', '/contacts'],

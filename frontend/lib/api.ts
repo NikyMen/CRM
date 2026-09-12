@@ -231,6 +231,7 @@ export const dashboardApi = {
 
 // Clientes contables (Company se mantiene como detalle interno del backend)
 export const clientsApi = {
+  remove: (id: string) => api.delete(`/clients/${id}`),
   list: (params?: {
     search?: string
     status?: string
@@ -302,6 +303,9 @@ export const checklistsApi = {
 }
 
 export const collectionsApi = {
+  paymentSummaryPdf: (id: string) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { responseType: 'blob' }),
+  removePayment: (id: string) => api.delete(`/collections/payments/${id}`),
+  setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
   summary: () => api.get<CollectionSummary>('/collections/summary'),
 
   listReceivables: (params?: {
@@ -548,6 +552,9 @@ export const whatsappApi = {
 
 // Equipo
 export const teamApi = {
+  createInvitation: (role: 'admin' | 'member' | 'viewer') => api.post<{ token: string; expiresAt: string }>('/auth/invitations', { role }),
+  acceptInvitation: (data: { token: string; email: string; password: string; firstName: string; lastName: string }) => api.post('/auth/invitations/accept', data),
+  changePassword: (id: string, password: string) => api.patch(`/auth/team/${id}/password`, { password }),
   list: () =>
     api.get('/auth/team'),
 

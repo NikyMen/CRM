@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../core/database'
 import { authenticate } from '../../core/auth/auth.service'
+import { requireModule } from '../../core/modules/require-module'
 import {
   activityPortfolioWhere,
   contactPortfolioWhere,
@@ -12,6 +13,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     await authenticate(req)
   })
+  app.addHook('onRequest', requireModule('home'))
 
   app.get('/', async (req, reply) => {
     const ctx = req.user as WorkspaceContext

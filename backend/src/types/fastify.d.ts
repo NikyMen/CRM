@@ -3,6 +3,7 @@ import '@fastify/jwt'
 declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: {
+      sessionVersion?: number
       sub: string
       userId: string 
       workspaceId: string

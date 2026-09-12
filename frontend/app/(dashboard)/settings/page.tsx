@@ -155,6 +155,7 @@ function AvatarSettingsPanel() {
       const dataUrl = await renderEditedAvatar(editor)
       setSelectedAvatar(dataUrl)
       closeEditor()
+      await saveAvatar(dataUrl)
     } catch {
       setError('No se pudo procesar la imagen.')
     } finally {
@@ -162,13 +163,14 @@ function AvatarSettingsPanel() {
     }
   }
 
-  async function saveAvatar() {
+  async function saveAvatar(avatarValue?: string | null) {
+    const value = avatarValue !== undefined ? avatarValue : selectedAvatar
     setSaving(true)
     setError('')
     setMessage('')
 
     try {
-      const res = await authApi.updateAvatar(selectedAvatar)
+      const res = await authApi.updateAvatar(value)
       const updated = res.data.user
       auth.updateUser({
         firstName: updated.firstName,
@@ -214,7 +216,7 @@ function AvatarSettingsPanel() {
 
           <button
             type="button"
-            onClick={saveAvatar}
+            onClick={() => saveAvatar()}
             disabled={!hasChanges || saving}
             className="btn-primary mt-6 w-full py-3 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -349,11 +351,11 @@ function AvatarSettingsPanel() {
                     <button
                       type="button"
                       onClick={confirmEditedImage}
-                      disabled={processing}
+                      disabled={processing || saving}
                       className="btn-primary"
                     >
-                      {processing ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      Usar imagen editada
+                      {processing || saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                      Usar y guardar imagen
                     </button>
                     <button type="button" onClick={closeEditor} className="btn-secondary">
                       Cancelar

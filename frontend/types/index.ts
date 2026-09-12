@@ -903,6 +903,7 @@ export interface Receivable {
 }
 
 export interface CollectionPayment {
+  voidedAt?: string | null
   id: string
   companyId: string
   company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv'>
