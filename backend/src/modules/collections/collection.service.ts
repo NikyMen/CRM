@@ -366,15 +366,23 @@ export class CollectionService {
   }
 
   async voidPayment(ctx: WorkspaceContext, id: string) {
+    return this.setPaymentStatus(ctx, id, 'VOID')
+  }
+
+  async setPaymentStatus(ctx: WorkspaceContext, id: string, status: 'RECEIVED' | 'VOID') {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede cambiar pagos')
+    const voiding = status === 'VOID'
     let companyId: string | null = null
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "payments" WHERE id = ${id} AND "workspaceId" = ${ctx.workspaceId} FOR UPDATE`
       const payment = await tx.payment.findFirst({
-        where: { id, workspaceId: ctx.workspaceId, voidedAt: null },
+        where: { id, workspaceId: ctx.workspaceId },
         include: { allocations: true },
       })
       if (!payment) throw new NotFoundError('Pago', id)
       companyId = payment.companyId
+      await ensureClientAccess(ctx, payment.companyId, 'write')
+      if (Boolean(payment.voidedAt) === voiding) return
 
       const receivableIds = [...new Set(payment.allocations.map((allocation) => allocation.receivableId))].sort()
       if (receivableIds.length) {
@@ -388,15 +396,18 @@ export class CollectionService {
       for (const allocation of payment.allocations) {
         const receivable = byId.get(allocation.receivableId)
         if (!receivable) throw new ConflictError('La cuenta aplicada ya no está disponible')
-        const paidAmount = Prisma.Decimal.max(new Prisma.Decimal(0), receivable.paidAmount.minus(allocation.amount))
+        if (receivable.currency !== payment.currency) throw new ConflictError('Pago y cargo deben usar la misma moneda')
+        if (!voiding && receivable.status === 'VOID') throw new ValidationError('No se puede restaurar un pago de un cargo anulado')
+        const paidAmount = voiding ? receivable.paidAmount.minus(allocation.amount) : receivable.paidAmount.plus(allocation.amount)
+        if (paidAmount.lt(0) || paidAmount.gt(receivable.amount)) throw new ConflictError('El saldo cambió. No se puede aplicar este cambio de estado')
         await tx.receivable.update({
           where: { id: receivable.id },
           data: { paidAmount, status: calculateReceivableStatus(receivable.amount, paidAmount, receivable.dueDate) },
         })
       }
-      await tx.payment.update({ where: { id: payment.id }, data: { voidedAt: new Date() } })
+      await tx.payment.update({ where: { id: payment.id }, data: { voidedAt: voiding ? new Date() : null } })
     })
-    await this.emitUpdate(ctx.workspaceId, companyId!, 'payment.voided', id)
+    await this.emitUpdate(ctx.workspaceId, companyId!, voiding ? 'payment.voided' : 'payment.restored', id)
   }
 
   async summary(ctx: WorkspaceContext) {

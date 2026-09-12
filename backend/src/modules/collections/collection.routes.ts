@@ -8,6 +8,10 @@ import { config } from '../../core/config'
 import { ValidationError, type WorkspaceContext } from '../../types'
 import { parseCollectionSpreadsheet } from './collection-import'
 import { normalizeParaguayDateInput } from './collection-calculations'
+import { renderPaymentSummary } from './payment-summary'
+import { ensureClientAccess } from '../clients/client-access'
+import { db } from '../../core/database'
+import { Prisma } from '@prisma/client'
 import {
   CollectionService,
   type PaymentInput,
@@ -79,6 +83,18 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     return reply.send(await service.summary(req.user as WorkspaceContext))
   })
 
+  app.get('/clients/:id/payments.pdf', async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
+    const { id } = req.params as { id: string }
+    const client = await ensureClientAccess(ctx, id)
+    const [payments, charges] = await db.$transaction([
+      db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
+      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' } } }),
+    ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+    return reply.header('Cache-Control', 'no-store').header('Content-Disposition', 'attachment; filename="resumen-pagos.pdf"')
+      .type('application/pdf').send(renderPaymentSummary(client, payments, charges))
+  })
+
   app.get('/receivables', async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const query = paginationSchema.extend({
@@ -143,6 +159,12 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const ctx = req.user as WorkspaceContext
     const { id } = req.params as { id: string }
     await service.voidPayment(ctx, id)
+    return reply.status(204).send()
+  })
+
+  app.patch('/payments/:id/status', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const { status } = z.object({ status: z.enum(['RECEIVED', 'VOID']) }).parse(req.body)
+    await service.setPaymentStatus(req.user as WorkspaceContext, (req.params as { id: string }).id, status)
     return reply.status(204).send()
   })
 

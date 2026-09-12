@@ -8,6 +8,7 @@ import type { Role } from '@/types'
 import { UserPlus, Trash2, Shield, Loader2, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 import { UserAvatar } from '@/components/UserAvatar'
+import { TeamAccessPanel } from '@/components/romez/TeamAccessPanel'
 
 const ROLE_LABELS: Record<Role, string> = {
   owner:  'Owner',
@@ -106,7 +107,7 @@ export default function TeamPage() {
             ].map(({ key, placeholder }) => (
               <input
                 key={key}
-                type={key === 'password' ? 'password' : 'text'}
+                type={key === 'password' || key === 'confirmPassword' ? 'password' : key === 'email' ? 'email' : 'text'}
                 placeholder={placeholder}
                 value={form[key as keyof typeof form]}
                 onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -155,6 +156,7 @@ export default function TeamPage() {
         </div>
       )}
 
+      {isOwner ? <TeamAccessPanel members={members} /> : null}
       {/* Lista de miembros */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">

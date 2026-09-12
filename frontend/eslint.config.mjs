@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Distribución de terceros: no es código fuente de la aplicación.
+    "public/tesseract/**",
   ]),
 ]);
 

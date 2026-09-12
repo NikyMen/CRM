@@ -155,6 +155,7 @@ export class AuthService {
         slug: workspaceUser.workspace.slug,
       },
       role: workspaceUser.role,
+      sessionVersion: user.sessionVersion,
     }
   }
 
@@ -368,6 +369,7 @@ export class AuthService {
       userId?: string
       workspaceId?: string
       type?: string
+      sessionVersion?: number
     }
     const userId = token.userId ?? token.sub
     if (!userId || !token.workspaceId || token.type !== 'access') {
@@ -381,9 +383,10 @@ export class AuthService {
           userId,
         },
       },
-      select: { role: true },
+      select: { role: true, user: { select: { sessionVersion: true } } },
     })
     if (!membership) throw new UnauthorizedError('La sesión ya no tiene acceso a este espacio')
+    if ((token.sessionVersion ?? 0) !== membership.user.sessionVersion) throw new UnauthorizedError('La contraseña cambió. Iniciá sesión nuevamente.')
 
     req.user = {
       ...token,
