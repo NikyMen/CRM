@@ -1,15 +1,18 @@
 'use client'
 
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus, Search, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
-import { clientsApi, salesApi, type SalePayload } from '@/lib/api'
-import type { Client, PaginatedResult, Sale, SaleStatus, SaleSummary } from '@/types'
+import { salesApi, type SalePayload } from '@/lib/api'
+import type { PaginatedResult, Sale, SaleStatus, SaleSummary } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
+import { ClientPicker } from '@/components/romez/ClientPicker'
+import { DateField } from '@/components/romez/DateField'
+import { ReceiptScanner } from '@/components/romez/ReceiptScanner'
 
 const PAGE_SIZE = 25
 
@@ -67,8 +70,6 @@ export default function SalesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [items, setItems] = useState<DraftItem[]>([{ ...EMPTY_ITEM }])
-  const [clientSearch, setClientSearch] = useState('')
-  const deferredClientSearch = useDeferredValue(clientSearch)
 
   const summaryQuery = useQuery<SaleSummary>({
     queryKey: ['sales-summary'],
@@ -78,12 +79,6 @@ export default function SalesPage() {
   const salesQuery = useQuery<PaginatedResult<Sale>>({
     queryKey: ['sales', { status, page }],
     queryFn: () => salesApi.list({ status: (status || undefined) as SaleStatus | undefined, page, limit: PAGE_SIZE }).then((response) => response.data),
-  })
-
-  const clientsQuery = useQuery<PaginatedResult<Client>>({
-    queryKey: ['clients', 'sales-picker', { search: deferredClientSearch }],
-    queryFn: () => clientsApi.list({ search: deferredClientSearch || undefined, page: 0, limit: 20, status: 'ACTIVE' }).then((response) => response.data),
-    enabled: formOpen,
   })
 
   const refresh = () => {
@@ -139,7 +134,7 @@ export default function SalesPage() {
   const formReady = Boolean(form.companyId) && items.every((item) => item.description.trim() && item.quantity && item.unitPrice) && total > 0
 
   return (
-    <PageFrame>
+    <PageFrame className="max-w-[1800px]">
       <PageHeader
         eyebrow="Facturación"
         title="Ventas"
@@ -177,24 +172,12 @@ export default function SalesPage() {
           action={<button type="button" className="btn-secondary" onClick={closeForm}><X size={14} /> Cerrar</button>}
         >
           <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2 sm:col-span-2">
-              <Field label="Buscar cliente">
-                <span className="relative block">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
-                  <input className="ctrl-input pl-9" value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Nombre, RUC o teléfono…" />
-                </span>
-              </Field>
-              <Field label="Cliente">
-                <select className="ctrl-input" value={form.companyId} disabled={clientsQuery.isLoading} onChange={(event) => setForm((current) => ({ ...current, companyId: event.target.value }))}>
-                  <option value="">{clientsQuery.isLoading ? 'Buscando…' : 'Seleccionar cliente…'}</option>
-                  {(clientsQuery.data?.items ?? []).map((client) => (
-                    <option key={client.id} value={client.id}>{client.name}{client.ruc ? ` · ${client.ruc}` : ''}</option>
-                  ))}
-                </select>
-              </Field>
+            <div className="sm:col-span-2">
+              <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Cliente</span>
+              <ClientPicker value={form.companyId} onChange={(clientId) => setForm((current) => ({ ...current, companyId: clientId }))} />
             </div>
-            <Field label="Fecha">
-              <input type="date" className="ctrl-input" value={form.soldAt} onChange={(event) => setForm((current) => ({ ...current, soldAt: event.target.value }))} />
+            <Field label="Fecha (día / mes / año)">
+              <DateField value={form.soldAt} onChange={(iso) => setForm((current) => ({ ...current, soldAt: iso }))} />
             </Field>
             <Field label="Moneda">
               <select className="ctrl-input" value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}>
@@ -208,9 +191,13 @@ export default function SalesPage() {
             <Field label="Impuesto (IVA)">
               <input type="number" min="0" className="ctrl-input" value={form.taxAmount} onChange={(event) => setForm((current) => ({ ...current, taxAmount: event.target.value }))} />
             </Field>
-            <Field label="Referencia / comprobante">
-              <input className="ctrl-input" value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} placeholder="001-001-0000123" />
-            </Field>
+            <div>
+              <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Referencia / comprobante</span>
+              <input className="ctrl-input font-mono tabular-nums" value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} placeholder="001-001-0000123" />
+              <div className="mt-2">
+                <ReceiptScanner onDetected={(value) => setForm((current) => ({ ...current, reference: value }))} />
+              </div>
+            </div>
             <Field label="Notas">
               <input className="ctrl-input" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
             </Field>
@@ -256,12 +243,12 @@ export default function SalesPage() {
       ) : null}
 
       <SectionPanel title="Historial de ventas">
-        <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] p-3 sm:flex-row">
-          <label className="relative flex-1">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
-            <input className="ctrl-input pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrar esta página…" />
+        <div className="grid gap-3 border-b border-[var(--line-soft)] p-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+          <label className="relative block w-full min-w-0">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
+            <input className="ctrl-input !min-h-11 w-full pl-10 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar en esta página por cliente, RUC, comprobante o número de venta…" />
           </label>
-          <select className="ctrl-input sm:w-44" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}>
+          <select className="ctrl-input !min-h-11 w-full" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}>
             <option value="">Todos los estados</option>
             <option value="DRAFT">Borradores</option>
             <option value="CONFIRMED">Confirmadas</option>
@@ -290,7 +277,7 @@ export default function SalesPage() {
                   {visibleSales.map((sale) => (
                     <tr key={sale.id}>
                       <td className="font-mono text-xs font-bold tabular-nums">{String(sale.number).padStart(5, '0')}</td>
-                      <td>{formatDate(sale.soldAt)}</td>
+                      <td className="font-mono text-xs tabular-nums">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                       <td>
                         {sale.company ? (
                           <Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${sale.company.id}`}>{sale.company.name}</Link>

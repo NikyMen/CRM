@@ -1,0 +1,3 @@
+
+# Motor OCR vendorizado: no tocar finales de linea ni intentar diffs.
+frontend/public/tesseract/** -text -diff linguist-vendored
