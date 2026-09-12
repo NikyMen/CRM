@@ -1,4 +1,4 @@
-ALTER TABLE "users" ADD COLUMN "sessionVersion" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "sessionVersion" INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE "team_invitations" (
   "id" TEXT NOT NULL,
