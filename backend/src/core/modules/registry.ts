@@ -4,6 +4,7 @@
 // `frontend/lib/modules.ts`; si agregás uno acá, agregalo allá también.
 
 export const MODULE_KEYS = [
+  'home',
   'clients',
   'sales',
   'commercial',
@@ -27,6 +28,7 @@ export interface ModuleDefinition {
 }
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
+  { key: 'home', label: 'Inicio', description: 'Panel de resumen con los indicadores del estudio.', defaultEnabled: true },
   { key: 'clients', label: 'Clientes', description: 'Legajo de clientes, responsables y documentos.', defaultEnabled: true },
   { key: 'sales', label: 'Ventas', description: 'Registro de ventas con ítems, totales y comprobantes.', defaultEnabled: true },
   { key: 'commercial', label: 'Gestión comercial', description: 'Leads, embudos y negocios.', defaultEnabled: true },
@@ -39,8 +41,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'integrations', label: 'Integraciones', description: 'Webhooks, API Keys y el endpoint de Meta API.', defaultEnabled: true },
 ]
 
-/** Inicio y Configuración no se pueden apagar: sin ellos no hay forma de volver. */
-export const ALWAYS_ON_PATHS = ['/dashboard', '/settings'] as const
+/** Configuración nunca se apaga: sin ella no hay forma de volver a prender los módulos. */
+export const ALWAYS_ON_PATHS = ['/settings'] as const
 
 const DEFINITION_BY_KEY = new Map(MODULE_DEFINITIONS.map((item) => [item.key, item]))
 

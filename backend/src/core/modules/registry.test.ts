@@ -4,6 +4,7 @@ import { MODULE_DEFINITIONS, MODULE_KEYS, mergeModuleState, readModuleState, wri
 
 test('sin configuración guardada cada módulo toma su valor por defecto', () => {
   const state = readModuleState(null)
+  assert.equal(state.home, true)
   assert.equal(state.clients, true)
   assert.equal(state.sales, true)
   assert.equal(state.team, true)

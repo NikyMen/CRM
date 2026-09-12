@@ -17,7 +17,7 @@ import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
 type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', label: 'Inicio', icon: Home, exact: true },
+  { href: '/dashboard', label: 'Inicio', icon: Home, exact: true, module: 'home' },
   { href: '/clients', label: 'Clientes', icon: Building2, module: 'clients' },
   { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },
   { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
@@ -137,6 +137,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const visibleItems = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && (!item.module || modules[item.module]))
   const logout = () => { auth.clear(); router.replace('/login') }
   const blockedModule = moduleForPath(pathname) && !isPathEnabled(pathname, modules)
+
+  // Inicio es el destino por defecto del login y de la raíz del sitio. Si el
+  // workspace lo apagó mandamos a la primera sección que sí esté prendida, así
+  // nadie aterriza en el cartel de módulo desactivado.
+  const homeFallback = pathname === '/dashboard' ? visibleItems[0]?.href : undefined
+  useEffect(() => {
+    if (blockedModule && homeFallback) router.replace(homeFallback)
+  }, [blockedModule, homeFallback, router])
 
   return (
     <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)] md:flex md:h-screen md:overflow-hidden">
