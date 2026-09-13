@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus, Search, Trash2, X } from 'lucide-react'
@@ -67,6 +67,7 @@ export default function SalesPage() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [items, setItems] = useState<DraftItem[]>([{ ...EMPTY_ITEM }])
@@ -121,6 +122,7 @@ export default function SalesPage() {
     },
   })
 
+  const selectedSale = salesQuery.data?.items.find((sale) => sale.id === selectedSaleId)
   const visibleSales = useMemo(() => {
     const term = search.trim().toLowerCase()
     const all = salesQuery.data?.items ?? []
@@ -275,7 +277,7 @@ export default function SalesPage() {
                 </thead>
                 <tbody>
                   {visibleSales.map((sale) => (
-                    <tr key={sale.id}>
+                    <tr key={sale.id} onClick={(event) => { if ((event.target as HTMLElement).closest('a, button')) return; setSelectedSaleId(sale.id) }} className="cursor-pointer hover:bg-[var(--paper-soft)]">
                       <td className="font-mono text-xs font-bold tabular-nums">{String(sale.number).padStart(5, '0')}</td>
                       <td className="font-mono text-xs tabular-nums">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                       <td>
@@ -323,7 +325,61 @@ export default function SalesPage() {
 
         <Pager data={salesQuery.data} page={page} setPage={setPage} />
       </SectionPanel>
+
+      {selectedSale ? <SaleDetail sale={selectedSale} onClose={() => setSelectedSaleId(null)} /> : null}
     </PageFrame>
+  )
+}
+
+function SaleDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const items = [...sale.items].sort((a, b) => a.position - b.position)
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Venta ${sale.number}`} onClick={onClose}>
+      <div className="paper-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--line-soft)] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Venta N° {String(sale.number).padStart(5, '0')}</p>
+            <h2 className="mt-1 font-display text-base font-extrabold text-[var(--ink-primary)]">{sale.company?.name ?? 'Sin cliente'}</h2>
+            <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}{sale.company?.ruc ? ` · RUC ${sale.company.ruc}` : ''}{sale.reference ? ` · ${sale.reference}` : ''}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusPill tone={STATUS_TONE[sale.status]}>{STATUS_LABEL[sale.status]}</StatusPill>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={17} /></button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead><tr><th>Descripción</th><th className="text-right">Cant.</th><th className="text-right">Precio</th><th className="text-right">Total</th></tr></thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.description}</td>
+                  <td className="text-right font-mono tabular-nums">{Number(item.quantity)}</td>
+                  <td className="text-right font-mono tabular-nums">{formatMoney(item.unitPrice, sale.currency)}</td>
+                  <td className="text-right font-mono font-bold tabular-nums">{formatMoney(item.total, sale.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <dl className="grid grid-cols-2 gap-4 border-t border-[var(--line-soft)] px-5 py-4 sm:grid-cols-4">
+          <Total label="Subtotal" value={formatMoney(sale.subtotal, sale.currency)} />
+          <Total label="Descuento" value={formatMoney(sale.discount, sale.currency)} />
+          <Total label="Impuesto" value={formatMoney(sale.taxAmount, sale.currency)} />
+          <Total label="Total" value={formatMoney(sale.total, sale.currency)} strong />
+        </dl>
+        {sale.notes ? <p className="border-t border-[var(--line-soft)] px-5 py-4 text-sm text-[var(--ink-secondary)] whitespace-pre-wrap">{sale.notes}</p> : null}
+        <div className="flex justify-end gap-2 border-t border-[var(--line-soft)] px-5 py-4">
+          {sale.company ? <Link className="btn-secondary" href={`/clients/${sale.company.id}`}>Ver cliente</Link> : null}
+          <button type="button" className="btn-primary" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
