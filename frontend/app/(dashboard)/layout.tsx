@@ -133,10 +133,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => setMobileOpen(false), [pathname])
 
   const role = (user?.role ?? 'viewer') as Role
-  const { modules } = useWorkspaceModules(Boolean(user))
-  const visibleItems = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && (!item.module || modules[item.module]))
+  const { modules, ready: modulesReady } = useWorkspaceModules(Boolean(user))
+  const visibleItems = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && (!item.module || (modulesReady && modules[item.module])))
   const logout = () => { auth.clear(); router.replace('/login') }
-  const blockedModule = moduleForPath(pathname) && !isPathEnabled(pathname, modules)
+  const blockedModule = modulesReady && moduleForPath(pathname) && !isPathEnabled(pathname, modules)
 
   // Inicio es el destino por defecto del login y de la raíz del sitio. Si el
   // workspace lo apagó mandamos a la primera sección que sí esté prendida, así
@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><div><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p><p className="text-[7px] font-bold uppercase tracking-wide text-[var(--ink-tertiary)]">Desarrollado por Consultoría Digital</p></div></div>
         </header>
-        {checking ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}
+        {checking || !modulesReady ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}
       </main>
     </div>
   )
