@@ -10,3 +10,5 @@ node_modules
 backend/.data
 frontend/.next
 *.log
+**/node_modules
+frontend/.env*
