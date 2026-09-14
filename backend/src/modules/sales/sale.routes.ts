@@ -45,7 +45,7 @@ const filterSchema = z.object({
   currency: z.string().length(3).optional(),
   from: businessDate.optional(),
   to: businessDate.optional(),
-  includeDeleted: z.coerce.boolean().optional(),
+  includeDeleted: z.preprocess((value) => value === 'true', z.boolean()).default(false),
 })
 
 const paginationSchema = z.object({

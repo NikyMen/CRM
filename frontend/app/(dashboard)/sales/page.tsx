@@ -3,30 +3,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArchiveRestore, Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, History, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArchiveRestore, Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { salesApi, type SalePayload } from '@/lib/api'
-import type { PaginatedResult, Sale, SaleHistoryEntry, SaleStatus, SaleSummary } from '@/types'
+import type { PaginatedResult, Role, Sale, SaleStatus, SaleSummary } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
+import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail, Total } from '@/components/romez/SaleDetail'
 import { ClientPicker } from '@/components/romez/ClientPicker'
 import { DateField } from '@/components/romez/DateField'
 import { ReceiptScanner } from '@/components/romez/ReceiptScanner'
 
 const PAGE_SIZE = 25
-
-const STATUS_LABEL: Record<SaleStatus, string> = {
-  DRAFT: 'Borrador',
-  CONFIRMED: 'Confirmada',
-  CANCELLED: 'Anulada',
-}
-
-const STATUS_TONE: Record<SaleStatus, 'warning' | 'success' | 'danger'> = {
-  DRAFT: 'warning',
-  CONFIRMED: 'success',
-  CANCELLED: 'danger',
-}
 
 type DraftItem = { description: string; quantity: string; unitPrice: string }
 
@@ -36,16 +25,20 @@ function paraguayBusinessDate() {
   return `${part('year')}-${part('month')}-${part('day')}`
 }
 
-const BUSINESS_DATE = paraguayBusinessDate()
 const EMPTY_ITEM: DraftItem = { description: '', quantity: '1', unitPrice: '' }
-const EMPTY_FORM = {
-  companyId: '',
-  soldAt: BUSINESS_DATE,
-  currency: 'PYG',
-  discount: '',
-  taxAmount: '',
-  reference: '',
-  notes: '',
+
+// La fecha se resuelve al abrir el formulario: en el scope del módulo quedaría
+// congelada en el arranque del proceso y el server serviría un día viejo.
+function emptyForm() {
+  return {
+    companyId: '',
+    soldAt: paraguayBusinessDate(),
+    currency: 'PYG',
+    discount: '',
+    taxAmount: '',
+    reference: '',
+    notes: '',
+  }
 }
 
 /** Subtotal en vivo del formulario; el backend vuelve a calcular al guardar. */
@@ -60,7 +53,8 @@ function draftSubtotal(items: DraftItem[]) {
 
 export default function SalesPage() {
   const queryClient = useQueryClient()
-  const role = auth.get()?.role
+  const [role, setRole] = useState<Role>()
+  useEffect(() => { setRole(auth.get()?.role as Role | undefined) }, [])
   const canManage = role === 'owner' || role === 'admin'
   const canWrite = Boolean(role && role !== 'viewer')
 
@@ -70,7 +64,8 @@ export default function SalesPage() {
   const [showTrash, setShowTrash] = useState(false)
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [editingSale, setEditingSale] = useState<Sale | null>(null)
+  const [form, setForm] = useState(emptyForm)
   const [items, setItems] = useState<DraftItem[]>([{ ...EMPTY_ITEM }])
 
   const summaryQuery = useQuery<SaleSummary>({
@@ -86,11 +81,37 @@ export default function SalesPage() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['sales'] })
     queryClient.invalidateQueries({ queryKey: ['sales-summary'] })
+    queryClient.invalidateQueries({ queryKey: ['sale-history'] })
   }
 
-  const closeForm = () => { setFormOpen(false); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]) }
+  const closeForm = () => { setFormOpen(false); setEditingSale(null); setForm(emptyForm()); setItems([{ ...EMPTY_ITEM }]) }
 
-  const createSale = useMutation({
+  const openCreate = () => {
+    setEditingSale(null)
+    setForm(emptyForm())
+    setItems([{ ...EMPTY_ITEM }])
+    setFormOpen(true)
+  }
+
+  const openEdit = (sale: Sale) => {
+    setEditingSale(sale)
+    setForm({
+      companyId: sale.companyId,
+      soldAt: sale.soldAt.slice(0, 10),
+      currency: sale.currency,
+      discount: Number(sale.discount) ? sale.discount : '',
+      taxAmount: Number(sale.taxAmount) ? sale.taxAmount : '',
+      reference: sale.reference ?? '',
+      notes: sale.notes ?? '',
+    })
+    setItems([...sale.items]
+      .sort((a, b) => a.position - b.position)
+      .map((item) => ({ description: item.description, quantity: item.quantity, unitPrice: item.unitPrice })))
+    setSelectedSaleId(null)
+    setFormOpen(true)
+  }
+
+  const saveSale = useMutation({
     mutationFn: () => {
       const payload: SalePayload = {
         companyId: form.companyId,
@@ -102,7 +123,7 @@ export default function SalesPage() {
         notes: form.notes || null,
         items: items.map((item) => ({ description: item.description.trim(), quantity: item.quantity, unitPrice: item.unitPrice })),
       }
-      return salesApi.create(payload)
+      return editingSale ? salesApi.update(editingSale.id, payload) : salesApi.create(payload)
     },
     onSuccess: () => { refresh(); closeForm() },
   })
@@ -118,7 +139,7 @@ export default function SalesPage() {
       const url = URL.createObjectURL(response.data as Blob)
       const anchor = window.document.createElement('a')
       anchor.href = url
-      anchor.download = `ventas-romez-${BUSINESS_DATE}.csv`
+      anchor.download = `ventas-romez-${paraguayBusinessDate()}.csv`
       anchor.click()
       URL.revokeObjectURL(url)
     },
@@ -151,8 +172,8 @@ export default function SalesPage() {
               <Download size={15} /> {exportSales.isPending ? 'Exportando…' : 'Exportar CSV'}
             </button>
             {canWrite ? (
-              <button type="button" className="btn-primary" onClick={() => setFormOpen(true)}>
-                <Plus size={15} /> Nueva venta
+              <button type="button" className="btn-primary" onClick={openCreate}>
+                <Plus size={15} /> Nueva factura
               </button>
             ) : null}
           </div>
@@ -173,7 +194,7 @@ export default function SalesPage() {
 
       {formOpen ? (
         <SectionPanel
-          title="Nueva venta"
+          title={editingSale ? `Editar factura N° ${String(editingSale.number).padStart(5, '0')}` : 'Nueva factura'}
           action={<button type="button" className="btn-secondary" onClick={closeForm}><X size={14} /> Cerrar</button>}
         >
           <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -236,11 +257,11 @@ export default function SalesPage() {
           </div>
 
           <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            {createSale.error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(createSale.error, 'No pudimos guardar la venta.')}</p> : <span />}
+            {saveSale.error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(saveSale.error, 'No pudimos guardar la factura.')}</p> : <span />}
             <div className="flex gap-2">
               <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
-              <button type="button" className="btn-primary" disabled={!formReady || createSale.isPending} onClick={() => createSale.mutate()}>
-                {createSale.isPending ? 'Guardando…' : 'Guardar borrador'}
+              <button type="button" className="btn-primary" disabled={!formReady || saveSale.isPending} onClick={() => saveSale.mutate()}>
+                {saveSale.isPending ? 'Guardando…' : editingSale ? 'Guardar cambios' : 'Emitir factura'}
               </button>
             </div>
           </div>
@@ -289,7 +310,7 @@ export default function SalesPage() {
                         ) : '—'}
                         <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">{sale.reference || `${sale.items.length} ítem${sale.items.length === 1 ? '' : 's'}`}</p>
                       </td>
-                      <td><StatusPill tone={STATUS_TONE[sale.status]}>{STATUS_LABEL[sale.status]}</StatusPill></td>
+                      <td><StatusPill tone={SALE_STATUS_TONE[sale.status]}>{SALE_STATUS_LABEL[sale.status]}</StatusPill></td>
                       <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(sale.total, sale.currency)}</td>
                       <td>
                         <div className="flex justify-end gap-1">
@@ -308,8 +329,13 @@ export default function SalesPage() {
                               <ArchiveRestore size={14} /> Restaurar
                             </button>
                           ) : null}
+                          {canWrite && !showTrash && sale.status !== 'CANCELLED' ? (
+                            <button type="button" className="btn-secondary" onClick={() => openEdit(sale)}>
+                              <Pencil size={14} /> Editar
+                            </button>
+                          ) : null}
                           {canManage && !showTrash ? (
-                            <button type="button" className="btn-secondary" disabled={removeSale.isPending} onClick={() => removeSale.mutate(sale.id)} aria-label={`Eliminar venta ${sale.number}`}>
+                            <button type="button" className="btn-secondary" disabled={removeSale.isPending} onClick={() => { if (confirm(`¿Enviar la factura N° ${String(sale.number).padStart(5, '0')} a la Papelera? Vas a poder restaurarla desde ahí.`)) removeSale.mutate(sale.id) }} aria-label={`Eliminar factura ${sale.number}`}>
                               <Trash2 size={14} />
                             </button>
                           ) : null}
@@ -339,63 +365,6 @@ export default function SalesPage() {
   )
 }
 
-function SaleDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-  const items = [...sale.items].sort((a, b) => a.position - b.position)
-  const historyQuery = useQuery<SaleHistoryEntry[]>({ queryKey: ['sale-history', sale.id], queryFn: () => salesApi.history(sale.id).then((response) => response.data) })
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Venta ${sale.number}`} onClick={onClose}>
-      <div className="paper-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--line-soft)] px-5 py-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Venta N° {String(sale.number).padStart(5, '0')}</p>
-            <h2 className="mt-1 font-display text-base font-extrabold text-[var(--ink-primary)]">{sale.company?.name ?? 'Sin cliente'}</h2>
-            <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}{sale.company?.ruc ? ` · RUC ${sale.company.ruc}` : ''}{sale.reference ? ` · ${sale.reference}` : ''}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusPill tone={STATUS_TONE[sale.status]}>{STATUS_LABEL[sale.status]}</StatusPill>
-            <button type="button" onClick={onClose} className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={17} /></button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead><tr><th>Descripción</th><th className="text-right">Cant.</th><th className="text-right">Precio</th><th className="text-right">Total</th></tr></thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.description}</td>
-                  <td className="text-right font-mono tabular-nums">{Number(item.quantity)}</td>
-                  <td className="text-right font-mono tabular-nums">{formatMoney(item.unitPrice, sale.currency)}</td>
-                  <td className="text-right font-mono font-bold tabular-nums">{formatMoney(item.total, sale.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <dl className="grid grid-cols-2 gap-4 border-t border-[var(--line-soft)] px-5 py-4 sm:grid-cols-4">
-          <Total label="Subtotal" value={formatMoney(sale.subtotal, sale.currency)} />
-          <Total label="Descuento" value={formatMoney(sale.discount, sale.currency)} />
-          <Total label="Impuesto" value={formatMoney(sale.taxAmount, sale.currency)} />
-          <Total label="Total" value={formatMoney(sale.total, sale.currency)} strong />
-        </dl>
-        {sale.notes ? <p className="border-t border-[var(--line-soft)] px-5 py-4 text-sm text-[var(--ink-secondary)] whitespace-pre-wrap">{sale.notes}</p> : null}
-        <div className="border-t border-[var(--line-soft)] px-5 py-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-bold text-[var(--ink-secondary)]"><History size={14} /> Actividad</div>
-          {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-muted)]">Cargando actividad…</p> : historyQuery.data?.length ? <div className="space-y-3">{historyQuery.data.map((entry) => <div key={entry.id} className="flex gap-3 text-xs"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--brand-blue)]" /><div><p className="font-semibold text-[var(--ink-primary)]">{entry.summary}</p><p className="mt-0.5 text-[var(--ink-tertiary)]">{formatDate(entry.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}{entry.actor ? ` · ${entry.actor.firstName} ${entry.actor.lastName ?? ''}` : ''}</p></div></div>)}</div> : <p className="text-xs text-[var(--ink-muted)]">Sin actividad registrada.</p>}
-        </div>
-        <div className="flex justify-end gap-2 border-t border-[var(--line-soft)] px-5 py-4">
-          {sale.company ? <Link className="btn-secondary" href={`/clients/${sale.company.id}`}>Ver cliente</Link> : null}
-          <button type="button" className="btn-primary" onClick={onClose}>Cerrar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function SaleMetric({ label, value, tone }: { label: string; value: string; tone?: 'warning' }) {
   return (
     <div className="bg-[var(--paper)] p-5">
@@ -407,15 +376,6 @@ function SaleMetric({ label, value, tone }: { label: string; value: string; tone
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block"><span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">{label}</span>{children}</label>
-}
-
-function Total({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div>
-      <dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt>
-      <dd className={clsx('mt-1 font-mono tabular-nums', strong ? 'text-lg font-bold text-[var(--ink-primary)]' : 'text-[var(--ink-secondary)]')}>{value}</dd>
-    </div>
-  )
 }
 
 function Pager({ data, page, setPage }: { data?: PaginatedResult<Sale>; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {

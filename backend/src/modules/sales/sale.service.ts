@@ -145,6 +145,8 @@ export class SaleService {
         workspaceId: ctx.workspaceId,
         companyId: input.companyId,
         number,
+        status: SaleStatus.CONFIRMED,
+        confirmedAt: new Date(),
         soldAt: input.soldAt ?? new Date(),
         currency: totals.currency,
         subtotal: totals.subtotal,
@@ -159,7 +161,7 @@ export class SaleService {
       include: SALE_INCLUDE,
     }))
 
-    await this.recordEvent(ctx, sale, 'created', 'Venta creada')
+    await this.recordEvent(ctx, sale, 'created', 'Factura emitida')
     return sale
   }
 
@@ -190,8 +192,8 @@ export class SaleService {
   async update(ctx: WorkspaceContext, id: string, input: Partial<SaleInput>) {
     this.assertWritable(ctx)
     const sale = await this.get(ctx, id)
-    if (sale.status !== SaleStatus.DRAFT) {
-      throw new ConflictError('Solo se puede editar una venta en borrador')
+    if (sale.status === SaleStatus.CANCELLED) {
+      throw new ConflictError('No se puede editar una factura anulada')
     }
     await ensureClientAccess(ctx, sale.companyId, 'write')
     if (input.companyId && input.companyId !== sale.companyId) {
