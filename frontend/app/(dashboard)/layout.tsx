@@ -27,7 +27,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/internal-chat', label: 'Chat interno', icon: MessageCircleMore, module: 'internal-chat' },
   { href: '/stock', label: 'Stock', icon: Boxes, roles: ['owner', 'admin', 'member'], module: 'stock' },
   { href: '/team', label: 'Equipo', icon: UsersRound, roles: ['owner', 'admin'], module: 'team' },
-  { href: '/settings', label: 'Configuración', icon: Settings, roles: ['owner', 'admin'] },
 ]
 
 function DisabledModuleNotice({ canManage }: { canManage: boolean }) {
@@ -185,7 +184,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-4 md:px-6">
           <div className="flex items-center gap-3 md:hidden">
             <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
-            <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p></div>
           </div>
           <div className="ml-auto"><UserMenu user={user} onLogout={logout} /></div>
         </header>

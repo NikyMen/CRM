@@ -4,18 +4,20 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Check, Circle, Download, FileText, MessageSquareText, Pencil, Plus, Save, UserCheck, UserMinus, Upload, UsersRound, WalletCards, X } from 'lucide-react'
+import { Building2, Check, Circle, Download, FileText, MessageSquareText, Pencil, Plus, Receipt, Save, UserCheck, UserMinus, Upload, UsersRound, WalletCards, X } from 'lucide-react'
 import clsx from 'clsx'
-import { checklistsApi, clientsApi, collectionsApi, contactsApi, teamApi } from '@/lib/api'
+import { checklistsApi, clientsApi, collectionsApi, contactsApi, salesApi, teamApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
-import type { AccountSummary, Client, ClientChecklist, ClientDocument, ClientNote, ClientSummary, Contact, PaginatedResult, Receivable, Role } from '@/types'
+import type { AccountSummary, Client, ClientChecklist, ClientDocument, ClientNote, ClientSummary, Contact, PaginatedResult, Receivable, Role, Sale } from '@/types'
 import { formatDate, formatMoney, fullName, getErrorMessage } from '@/lib/format'
 import { ClientIdentityStrip, EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
 import { PaymentSummaryButton } from '@/components/romez/PaymentSummaryButton'
+import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail } from '@/components/romez/SaleDetail'
 import { RECEIVABLE_LABELS } from '@/lib/collection-labels'
+import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 
-type Tab = 'ficha' | 'contactos' | 'cuenta' | 'personal' | 'checklist' | 'tickets' | 'documentos'
+type Tab = 'ficha' | 'contactos' | 'cuenta' | 'facturas' | 'personal' | 'checklist' | 'tickets' | 'documentos'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
 type AssignmentInput = { userId: string; area: string }
 
@@ -39,6 +41,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Building2 }> = [
   { id: 'ficha', label: 'Ficha fiscal', icon: Building2 },
   { id: 'contactos', label: 'Contactos', icon: UsersRound },
   { id: 'cuenta', label: 'Cuenta corriente', icon: WalletCards },
+  { id: 'facturas', label: 'Facturas', icon: Receipt },
   { id: 'personal', label: 'Personal asignado', icon: UsersRound },
   { id: 'checklist', label: 'Checklist', icon: Check },
   { id: 'tickets', label: 'Tickets', icon: MessageSquareText },
@@ -56,6 +59,8 @@ export default function ClientDetailPage() {
   const [note, setNote] = useState('')
   const [role, setRole] = useState<Role>()
   const canManage = role === 'owner' || role === 'admin'
+  const { modules } = useWorkspaceModules()
+  const visibleTabs = TABS.filter((item) => item.id !== 'facturas' || modules.sales)
 
   useEffect(() => {
     const syncRole = () => setRole(auth.get()?.role as Role | undefined)
@@ -175,7 +180,7 @@ export default function ClientDetailPage() {
 
       <div className="overflow-x-auto border-b border-[var(--line)]">
         <nav className="flex min-w-max gap-1" aria-label="Secciones del legajo">
-          {TABS.map(({ id: tabId, label, icon: Icon }) => <button key={tabId} type="button" onClick={() => setTab(tabId)} className={clsx('flex min-h-11 items-center gap-2 border-b-2 px-3 text-xs font-bold', tab === tabId ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)] hover:text-[var(--ink-primary)]')}><Icon size={15} />{label}</button>)}
+          {visibleTabs.map(({ id: tabId, label, icon: Icon }) => <button key={tabId} type="button" onClick={() => setTab(tabId)} className={clsx('flex min-h-11 items-center gap-2 border-b-2 px-3 text-xs font-bold', tab === tabId ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)] hover:text-[var(--ink-primary)]')}><Icon size={15} />{label}</button>)}
         </nav>
       </div>
 
@@ -184,6 +189,7 @@ export default function ClientDetailPage() {
       {tab === 'contactos' ? <ContactsTab contacts={summary.contacts ?? client.contacts ?? []} canWrite={canWrite} create={(value) => createContact.mutate(value)} creating={createContact.isPending} error={createContact.error} /> : null}
       {tab === 'cuenta' ? <PaymentSummaryButton clientId={id} /> : null}
       {tab === 'cuenta' ? <AccountTab accounts={summary.account} payments={summary.recentPayments} receivables={receivablesQuery.data?.items ?? []} loading={receivablesQuery.isLoading} /> : null}
+      {tab === 'facturas' ? <SalesTab clientId={id} /> : null}
       {tab === 'personal' ? <StaffTab client={client} members={teamQuery.data ?? []} canManage={canManage} onEdit={startEditing} saveAssignments={saveAssignments} saving={updateAssignments.isPending} error={updateAssignments.error} /> : null}
       {tab === 'checklist' ? <ChecklistTab checklists={summary.checklists} canWrite={canWrite} toggle={(checklistId, itemId, completed) => updateChecklistItem.mutate({ checklistId, itemId, isCompleted: !completed })} pending={updateChecklistItem.isPending} /> : null}
       {tab === 'tickets' ? <TicketsTab tickets={summary.tickets} /> : null}
@@ -219,6 +225,44 @@ function ContactsTab({ contacts, canWrite, create, creating, error }: { contacts
 
 function AccountTab({ accounts, payments, receivables, loading }: { accounts: AccountSummary[]; payments: ClientSummary['recentPayments']; receivables: Receivable[]; loading: boolean }) {
   return <div className="space-y-6"><div className="grid gap-px overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-3">{accounts.length ? accounts.map((account) => <div key={account.currency} className="bg-[var(--paper)] p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Saldo {account.currency}</p><p className="mt-2 font-mono text-lg font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(account.balance, account.currency)}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">Facturado {formatMoney(account.billed, account.currency)} · pagado {formatMoney(account.paid, account.currency)}</p></div>) : <p className="col-span-3 bg-[var(--paper)] p-5 text-sm text-[var(--ink-tertiary)]">Cuenta sin movimientos.</p>}</div><SectionPanel title="Movimientos pendientes" description="Importes separados por moneda, sin conversión automática.">{loading ? <LoadingState /> : receivables.length ? <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Concepto</th><th>Período</th><th>Vencimiento</th><th>Estado</th><th className="text-right">Saldo</th></tr></thead><tbody>{receivables.map((item) => <tr key={item.id}><td className="font-semibold text-[var(--ink-primary)]">{item.description}</td><td>{item.periodKey || '—'}</td><td>{formatDate(item.dueDate)}</td><td><StatusPill tone={item.status === 'PAID' ? 'success' : item.status === 'OVERDUE' ? 'danger' : 'warning'}>{RECEIVABLE_LABELS[item.status] ?? item.status}</StatusPill></td><td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(item.outstanding, item.currency)}</td></tr>)}</tbody></table></div> : <EmptyState title="Cuenta sin cargos" description="Los honorarios y cargos de este cliente aparecerán acá." />}</SectionPanel>{payments.length ? <SectionPanel title="Pagos recientes"><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Fecha</th><th>Medio</th><th>Referencia</th><th className="text-right">Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{formatDate(payment.paidAt)}</td><td>{payment.method || '—'}</td><td>{payment.reference || '—'}</td><td className="text-right font-mono font-bold text-[var(--success)]">{formatMoney(payment.amount, payment.currency)}</td></tr>)}</tbody></table></div></SectionPanel> : null}</div>
+}
+
+function SalesTab({ clientId }: { clientId: string }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const salesQuery = useQuery<PaginatedResult<Sale>>({
+    queryKey: ['client-sales', clientId],
+    queryFn: () => salesApi.list({ companyId: clientId, limit: 50 }).then((response) => response.data),
+  })
+  const sales = salesQuery.data?.items ?? []
+  const selected = sales.find((sale) => sale.id === selectedId)
+
+  return (
+    <SectionPanel title="Facturas del cliente" description="Abrí una factura para ver su detalle y el historial de cambios.">
+      {salesQuery.isLoading ? <LoadingState /> : null}
+      {salesQuery.isError ? <ErrorState message={getErrorMessage(salesQuery.error)} retry={() => salesQuery.refetch()} /> : null}
+      {!salesQuery.isLoading && !salesQuery.isError ? (
+        sales.length ? (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead><tr><th>N°</th><th>Fecha</th><th>Comprobante</th><th>Estado</th><th className="text-right">Total</th></tr></thead>
+              <tbody>
+                {sales.map((sale) => (
+                  <tr key={sale.id} className="cursor-pointer hover:bg-[var(--paper-soft)]" onClick={() => setSelectedId(sale.id)}>
+                    <td className="font-mono text-xs font-bold tabular-nums">{String(sale.number).padStart(5, '0')}</td>
+                    <td className="font-mono text-xs tabular-nums">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                    <td>{sale.reference || `${sale.items.length} ítem${sale.items.length === 1 ? '' : 's'}`}</td>
+                    <td><StatusPill tone={SALE_STATUS_TONE[sale.status]}>{SALE_STATUS_LABEL[sale.status]}</StatusPill></td>
+                    <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(sale.total, sale.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <EmptyState title="Sin facturas" description="Las facturas emitidas a este cliente aparecerán acá." />
+      ) : null}
+      {selected ? <SaleDetail sale={selected} onClose={() => setSelectedId(null)} /> : null}
+    </SectionPanel>
+  )
 }
 
 function StaffTab({ client, members, canManage, onEdit, saveAssignments, saving, error }: { client: Client; members: Member[]; canManage: boolean; onEdit: () => void; saveAssignments: (assignments: AssignmentInput[]) => void; saving: boolean; error: unknown }) {
