@@ -126,6 +126,7 @@ model Workspace {
   internalChatMessages  InternalChatMessage[]
   sales                 Sale[]
   saleItems             SaleItem[]
+  saleEvents            SaleEvent[]
 
   @@map("workspaces")
 }
@@ -163,6 +164,8 @@ model User {
   internalChatParticipants InternalConversationParticipant[]
   internalChatMessages     InternalChatMessage[]
   createdSales             Sale[]                @relation("SaleCreatedBy")
+  deletedSales             Sale[]                @relation("SaleDeletedBy")
+  saleEvents               SaleEvent[]           @relation("SaleEventActor")
 
   @@map("users")
 }
@@ -1085,19 +1088,43 @@ model Sale {
   createdByUserId String?
   confirmedAt     DateTime?
   cancelledAt     DateTime?
+  deletedAt       DateTime?
+  deletedByUserId String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   createdBy User?      @relation("SaleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  deletedBy User?      @relation("SaleDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   items     SaleItem[]
+  events    SaleEvent[]
 
   @@unique([workspaceId, number])
   @@index([workspaceId, soldAt])
   @@index([workspaceId, companyId, soldAt])
   @@index([workspaceId, status, soldAt])
+  @@index([workspaceId, deletedAt, soldAt])
   @@map("sales")
+}
+
+model SaleEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  saleId      String
+  actorUserId String?
+  type        String
+  summary     String
+  before      Json?
+  after       Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("SaleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, saleId, createdAt])
+  @@map("sale_events")
 }
 
 model SaleItem {

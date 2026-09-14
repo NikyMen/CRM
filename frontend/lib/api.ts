@@ -11,7 +11,7 @@ import type {
   ClientNote, ClientSummary, CollectionPayment, CollectionSummary, CustomerServiceSummary,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
-  Sale, SaleStatus, SaleSummary,
+  Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
 } from '@/types'
 
 export type WorkspaceSettingsResponse = {
@@ -714,6 +714,7 @@ type SaleFiltersQuery = {
   to?: string
   page?: number
   limit?: number
+  includeDeleted?: boolean
 }
 
 export type SalePayload = {
@@ -751,6 +752,12 @@ export const salesApi = {
 
   remove: (id: string) =>
     api.delete(`/sales/${id}`),
+
+  restore: (id: string) =>
+    api.post<Sale>(`/sales/${id}/restore`),
+
+  history: (id: string) =>
+    api.get<SaleHistoryEntry[]>(`/sales/${id}/history`),
 
   export: (params?: Omit<SaleFiltersQuery, 'page' | 'limit'>) =>
     api.get('/sales/export', { params, responseType: 'blob' }),

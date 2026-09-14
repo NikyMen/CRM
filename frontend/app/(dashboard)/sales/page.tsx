@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArchiveRestore, Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, History, Plus, Search, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { salesApi, type SalePayload } from '@/lib/api'
-import type { PaginatedResult, Sale, SaleStatus, SaleSummary } from '@/types'
+import type { PaginatedResult, Sale, SaleHistoryEntry, SaleStatus, SaleSummary } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 import { ClientPicker } from '@/components/romez/ClientPicker'
@@ -67,6 +67,7 @@ export default function SalesPage() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
+  const [showTrash, setShowTrash] = useState(false)
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -78,8 +79,8 @@ export default function SalesPage() {
   })
 
   const salesQuery = useQuery<PaginatedResult<Sale>>({
-    queryKey: ['sales', { status, page }],
-    queryFn: () => salesApi.list({ status: (status || undefined) as SaleStatus | undefined, page, limit: PAGE_SIZE }).then((response) => response.data),
+    queryKey: ['sales', { status, page, showTrash }],
+    queryFn: () => salesApi.list({ status: (status || undefined) as SaleStatus | undefined, page, limit: PAGE_SIZE, includeDeleted: showTrash }).then((response) => response.data),
   })
 
   const refresh = () => {
@@ -109,6 +110,7 @@ export default function SalesPage() {
   const confirmSale = useMutation({ mutationFn: (id: string) => salesApi.confirm(id), onSuccess: refresh })
   const cancelSale = useMutation({ mutationFn: (id: string) => salesApi.cancel(id), onSuccess: refresh })
   const removeSale = useMutation({ mutationFn: (id: string) => salesApi.remove(id), onSuccess: refresh })
+  const restoreSale = useMutation({ mutationFn: (id: string) => salesApi.restore(id), onSuccess: refresh })
 
   const exportSales = useMutation({
     mutationFn: () => salesApi.export({ status: (status || undefined) as SaleStatus | undefined }),
@@ -140,10 +142,12 @@ export default function SalesPage() {
       <PageHeader
         eyebrow="Facturación"
         title="Ventas"
-        description="Registrá ventas por cliente, confirmalas y llevá el total facturado por moneda."
         action={(
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary" disabled={exportSales.isPending} onClick={() => exportSales.mutate()}>
+            <button type="button" className={clsx('btn-secondary', showTrash && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => { setShowTrash((current) => !current); setPage(0); setSelectedSaleId(null) }}>
+              {showTrash ? <ArchiveRestore size={15} /> : <Trash2 size={15} />} {showTrash ? 'Volver a ventas' : 'Papelera'}
+            </button>
+            <button type="button" className="btn-secondary" disabled={exportSales.isPending || showTrash} onClick={() => exportSales.mutate()}>
               <Download size={15} /> {exportSales.isPending ? 'Exportando…' : 'Exportar CSV'}
             </button>
             {canWrite ? (
@@ -170,7 +174,6 @@ export default function SalesPage() {
       {formOpen ? (
         <SectionPanel
           title="Nueva venta"
-          description="Se guarda como borrador: podés revisarla y confirmarla después."
           action={<button type="button" className="btn-secondary" onClick={closeForm}><X size={14} /> Cerrar</button>}
         >
           <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -244,7 +247,7 @@ export default function SalesPage() {
         </SectionPanel>
       ) : null}
 
-      <SectionPanel title="Historial de ventas">
+      <SectionPanel title={showTrash ? 'Papelera' : 'Ventas'}>
         <div className="grid gap-3 border-b border-[var(--line-soft)] p-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
           <label className="relative block w-full min-w-0">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
@@ -300,7 +303,12 @@ export default function SalesPage() {
                               <Ban size={14} /> Anular
                             </button>
                           ) : null}
-                          {canManage && sale.status === 'DRAFT' ? (
+                          {canManage && showTrash ? (
+                            <button type="button" className="btn-secondary" disabled={restoreSale.isPending} onClick={() => restoreSale.mutate(sale.id)}>
+                              <ArchiveRestore size={14} /> Restaurar
+                            </button>
+                          ) : null}
+                          {canManage && !showTrash ? (
                             <button type="button" className="btn-secondary" disabled={removeSale.isPending} onClick={() => removeSale.mutate(sale.id)} aria-label={`Eliminar venta ${sale.number}`}>
                               <Trash2 size={14} />
                             </button>
@@ -317,9 +325,9 @@ export default function SalesPage() {
           )
         ) : null}
 
-        {cancelSale.error || removeSale.error || confirmSale.error ? (
+        {cancelSale.error || removeSale.error || restoreSale.error || confirmSale.error ? (
           <p className="border-t border-[var(--line-soft)] px-5 py-3 text-xs font-semibold text-[var(--danger)]">
-            {getErrorMessage(cancelSale.error ?? removeSale.error ?? confirmSale.error, 'No pudimos actualizar la venta.')}
+            {getErrorMessage(cancelSale.error ?? removeSale.error ?? restoreSale.error ?? confirmSale.error, 'No pudimos actualizar la venta.')}
           </p>
         ) : null}
 
@@ -338,6 +346,7 @@ function SaleDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   const items = [...sale.items].sort((a, b) => a.position - b.position)
+  const historyQuery = useQuery<SaleHistoryEntry[]>({ queryKey: ['sale-history', sale.id], queryFn: () => salesApi.history(sale.id).then((response) => response.data) })
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Venta ${sale.number}`} onClick={onClose}>
       <div className="paper-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
@@ -374,6 +383,10 @@ function SaleDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
           <Total label="Total" value={formatMoney(sale.total, sale.currency)} strong />
         </dl>
         {sale.notes ? <p className="border-t border-[var(--line-soft)] px-5 py-4 text-sm text-[var(--ink-secondary)] whitespace-pre-wrap">{sale.notes}</p> : null}
+        <div className="border-t border-[var(--line-soft)] px-5 py-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-bold text-[var(--ink-secondary)]"><History size={14} /> Actividad</div>
+          {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-muted)]">Cargando actividad…</p> : historyQuery.data?.length ? <div className="space-y-3">{historyQuery.data.map((entry) => <div key={entry.id} className="flex gap-3 text-xs"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--brand-blue)]" /><div><p className="font-semibold text-[var(--ink-primary)]">{entry.summary}</p><p className="mt-0.5 text-[var(--ink-tertiary)]">{formatDate(entry.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}{entry.actor ? ` · ${entry.actor.firstName} ${entry.actor.lastName ?? ''}` : ''}</p></div></div>)}</div> : <p className="text-xs text-[var(--ink-muted)]">Sin actividad registrada.</p>}
+        </div>
         <div className="flex justify-end gap-2 border-t border-[var(--line-soft)] px-5 py-4">
           {sale.company ? <Link className="btn-secondary" href={`/clients/${sale.company.id}`}>Ver cliente</Link> : null}
           <button type="button" className="btn-primary" onClick={onClose}>Cerrar</button>

@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Boxes, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Boxes, BriefcaseBusiness, Building2, ChevronDown, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -81,20 +81,49 @@ function Navigation({ items, pathname, onNavigate, collapsed = false }: { items:
   )
 }
 
-function Sidebar({ items, pathname, user, onLogout, onClose, collapsed = false, onToggle }: { items: NavItem[]; pathname: string; user: ReturnType<typeof auth.get>; onLogout: () => void; onClose?: () => void; collapsed?: boolean; onToggle?: () => void }) {
+function Sidebar({ items, pathname, onClose, collapsed = false, onToggle }: { items: NavItem[]; pathname: string; onClose?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   return (
     <div className="flex h-full flex-col border-r border-white/10 bg-[var(--sidebar-background)]">
       <div className={clsx('relative flex min-h-[82px] items-center border-b border-white/10', collapsed ? 'justify-center px-2' : 'justify-between px-4')}><Brand collapsed={collapsed} />{onClose ? <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-white/8 hover:text-white md:hidden" aria-label="Cerrar menú"><X size={19} /></button> : null}{onToggle ? <button type="button" onClick={onToggle} className="absolute -right-3.5 z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-[var(--sidebar-background)] text-white/75 shadow-sm hover:bg-[var(--brand-navy)] hover:text-white md:flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>{collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}</button> : null}</div>
 
       <Navigation items={items} pathname={pathname} onNavigate={onClose} collapsed={collapsed} />
-      <div className="border-t border-white/10 p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" />
-          {!collapsed ? <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{user?.firstName} {user?.lastName}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-white/42">{user?.role}</p></div> : null}
+      {!collapsed ? <div className="flex flex-col items-center justify-center gap-1 border-t border-white/10 p-4"><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-white/48">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={600} height={400} className="h-12 w-full max-w-[208px] object-cover" /></div> : null}
+    </div>
+  )
+}
+
+function UserMenu({ user, onLogout }: { user: ReturnType<typeof auth.get>; onLogout: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
+
+  useEffect(() => setOpen(false), [pathname])
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false) }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ')
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} className="flex items-center gap-2.5 rounded-lg border border-transparent py-1 pl-1 pr-2 hover:border-[var(--line)] hover:bg-[var(--background)]">
+        <UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" />
+        <div className="hidden min-w-0 text-left sm:block"><p className="max-w-[220px] truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
+        <ChevronDown size={15} className={clsx('text-[var(--ink-tertiary)] transition-transform', open && 'rotate-180')} />
+      </button>
+      {open ? (
+        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] py-1 shadow-lg">
+          <div className="border-b border-[var(--line)] px-4 py-3 sm:hidden"><p className="truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
+          <Link href="/settings" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Settings size={15} /> Configuración</Link>
+          <button type="button" role="menuitem" onClick={onLogout} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-red-600 hover:bg-[var(--background)]"><LogOut size={15} /> Cerrar sesión</button>
         </div>
-        <button type="button" onClick={onLogout} title={collapsed ? 'Cerrar sesión' : undefined} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 text-xs font-bold text-white/62 hover:bg-white/[0.055] hover:text-white"><LogOut size={15} />{!collapsed ? ' Cerrar sesión' : null}</button>
-        {!collapsed ? <div className="mt-4 flex flex-col items-center justify-center gap-1 border-t border-white/10 pt-4"><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-white/48">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={600} height={400} className="h-12 w-full max-w-[208px] object-cover" /></div> : null}
-      </div>
+      ) : null}
     </div>
   )
 }
@@ -149,15 +178,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)] md:flex md:h-screen md:overflow-hidden">
       {user && ['owner', 'admin', 'member'].includes(user.role) ? <WhatsAppLiveSync /> : null}
-      <aside className={clsx('hidden shrink-0 transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-[76px]' : 'w-[256px]')}><Sidebar items={visibleItems} pathname={pathname} user={user} onLogout={logout} collapsed={sidebarCollapsed} onToggle={toggleSidebar} /></aside>
+      <aside className={clsx('hidden shrink-0 transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-[76px]' : 'w-[256px]')}><Sidebar items={visibleItems} pathname={pathname} collapsed={sidebarCollapsed} onToggle={toggleSidebar} /></aside>
       <button type="button" aria-label="Cerrar menú" className={clsx('fixed inset-0 z-40 bg-[#04132b]/55 md:hidden', mobileOpen ? 'block' : 'hidden')} onClick={() => setMobileOpen(false)} />
-      <aside className={clsx('fixed inset-y-0 left-0 z-50 w-[min(88vw,286px)] transition-transform md:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}><Sidebar items={visibleItems} pathname={pathname} user={user} onLogout={logout} onClose={() => setMobileOpen(false)} /></aside>
-      <main className="min-w-0 flex-1 overflow-x-hidden md:overflow-y-auto">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--line)] bg-[var(--paper)] px-4 md:hidden">
-          <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
-          <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><div><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p><p className="text-[7px] font-bold uppercase tracking-wide text-[var(--ink-tertiary)]">Desarrollado por Consultoría Digital</p></div></div>
+      <aside className={clsx('fixed inset-y-0 left-0 z-50 w-[min(88vw,286px)] transition-transform md:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}><Sidebar items={visibleItems} pathname={pathname} onClose={() => setMobileOpen(false)} /></aside>
+      <main className="min-w-0 flex-1 overflow-x-hidden md:flex md:flex-col">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-4 md:px-6">
+          <div className="flex items-center gap-3 md:hidden">
+            <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
+            <div className="flex items-center gap-2"><Image src="/brand/romez-navy.jpg" alt="Gestión ROMEZ" width={38} height={38} className="h-9 w-9 object-contain" /><p className="text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">Gestión ROMEZ</p></div>
+          </div>
+          <div className="ml-auto"><UserMenu user={user} onLogout={logout} /></div>
         </header>
-        {checking || !modulesReady ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}
+        <div className="min-w-0 md:flex-1 md:overflow-y-auto">
+          {checking || !modulesReady ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}
+        </div>
       </main>
     </div>
   )
