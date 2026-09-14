@@ -27,7 +27,17 @@ export async function authRoutes(app: FastifyInstance) {
     reply.header('Cache-Control', 'no-store')
     return reply.status(201).send(await teamAccess.createInvitation(req.user as WorkspaceContext, role))
   })
-  app.post('/invitations/accept', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, async (req, reply) => {
+  // Por IP + token: un equipo entero puede aceptar invitaciones desde la misma oficina (misma IP pública)
+  app.post('/invitations/accept', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '15 minutes',
+        hook: 'preHandler',
+        keyGenerator: (req) => `invite:${req.ip}:${String((req.body as { token?: unknown })?.token ?? '')}`,
+      },
+    },
+  }, async (req, reply) => {
     const body = z.object({
       token: z.string().regex(/^[a-f0-9]{64}$/),
       email: authEmailSchema,
@@ -144,8 +154,14 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/login', {
     config: {
       rateLimit: {
-        max: 5,               // Solo 5 intentos de login...
-        timeWindow: '5 minutes' // ...cada 5 minutos por IP
+        max: 10,                  // 10 intentos de login...
+        timeWindow: '15 minutes', // ...cada 15 minutos por IP + email.
+        // Solo por IP bloqueaba a equipos que comparten IP pública (oficina con NAT).
+        hook: 'preHandler',       // el body ya está parseado
+        keyGenerator: (req) => {
+          const email = String((req.body as { email?: unknown })?.email ?? '').trim().toLowerCase()
+          return `login:${req.ip}:${email}`
+        },
       }
     }
   }, async (req, reply) => {
