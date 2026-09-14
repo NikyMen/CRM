@@ -108,8 +108,11 @@ export type CRMEvent =
   | 'checklist.updated'
   // Ventas
   | 'sale.created'
+  | 'sale.updated'
   | 'sale.confirmed'
   | 'sale.cancelled'
+  | 'sale.deleted'
+  | 'sale.restored'
   // Automatización
   | 'automation.triggered'
 

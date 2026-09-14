@@ -1076,9 +1076,20 @@ export interface Sale {
   cancelledAt?: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null
   company?: { id: string; name: string; ruc?: string | null; tradeName?: string | null }
   createdBy?: AssigneeSummary | null
   items: SaleItem[]
+}
+
+export interface SaleHistoryEntry {
+  id: string
+  type: string
+  summary: string
+  createdAt: string
+  actor?: AssigneeSummary | null
+  before?: unknown
+  after?: unknown
 }
 
 export interface SaleSummary {

@@ -30,6 +30,7 @@ export interface SaleFilters {
   to?: Date
   page: number
   limit: number
+  includeDeleted?: boolean
 }
 
 const SALE_INCLUDE = {
@@ -46,6 +47,7 @@ export class SaleService {
     const where: Prisma.SaleWhereInput = {
       workspaceId: ctx.workspaceId,
       company: { isArchived: false, ...clientVisibilityWhere(ctx) },
+      deletedAt: filters?.includeDeleted ? { not: null } : null,
     }
     if (filters?.companyId) where.companyId = filters.companyId
     if (filters?.status) where.status = filters.status
@@ -74,10 +76,25 @@ export class SaleService {
     return paginate(items, total, filters.page, filters.limit)
   }
 
-  async get(ctx: WorkspaceContext, id: string) {
-    const sale = await db.sale.findFirst({ where: { id, ...this.scope(ctx) }, include: SALE_INCLUDE })
+  async get(ctx: WorkspaceContext, id: string, includeDeleted = false) {
+    const sale = await db.sale.findFirst({ where: { id, ...this.scope(ctx, { includeDeleted }) }, include: SALE_INCLUDE })
     if (!sale) throw new NotFoundError('Venta', id)
     return sale
+  }
+
+  private snapshot(sale: { id: string; number: number; companyId: string; status: SaleStatus; soldAt: Date; currency: string; subtotal: Prisma.Decimal; discount: Prisma.Decimal; taxAmount: Prisma.Decimal; total: Prisma.Decimal; reference: string | null; notes: string | null; items: Array<{ description: string; quantity: Prisma.Decimal; unitPrice: Prisma.Decimal; total: Prisma.Decimal; position: number }> }) {
+    return {
+      id: sale.id, number: sale.number, companyId: sale.companyId, status: sale.status,
+      soldAt: sale.soldAt.toISOString(), currency: sale.currency,
+      subtotal: sale.subtotal.toString(), discount: sale.discount.toString(), taxAmount: sale.taxAmount.toString(), total: sale.total.toString(),
+      reference: sale.reference, notes: sale.notes,
+      items: sale.items.map((item) => ({ description: item.description, quantity: item.quantity.toString(), unitPrice: item.unitPrice.toString(), total: item.total.toString(), position: item.position })),
+    }
+  }
+
+  private async recordEvent(ctx: WorkspaceContext, sale: Parameters<SaleService['snapshot']>[0], type: string, summary: string, before?: ReturnType<SaleService['snapshot']>) {
+    await db.saleEvent.create({ data: { workspaceId: ctx.workspaceId, saleId: sale.id, actorUserId: ctx.userId, type, summary, before: before as any, after: this.snapshot(sale) as any } })
+    await this.eventBus?.emit(`sale.${type}` as any, { workspaceId: ctx.workspaceId, saleId: sale.id, summary })
   }
 
   /** Totales por moneda, contando solo las ventas confirmadas. */
@@ -142,11 +159,7 @@ export class SaleService {
       include: SALE_INCLUDE,
     }))
 
-    await this.eventBus?.emit('sale.created', {
-      workspaceId: ctx.workspaceId,
-      saleId: sale.id,
-      total: sale.total.toString(),
-    })
+    await this.recordEvent(ctx, sale, 'created', 'Venta creada')
     return sale
   }
 
@@ -197,7 +210,7 @@ export class SaleService {
       taxAmount: input.taxAmount ?? sale.taxAmount.toString(),
     })
 
-    return db.$transaction(async (tx) => {
+    const updated = await db.$transaction(async (tx) => {
       await tx.saleItem.deleteMany({ where: { saleId: sale.id } })
       return tx.sale.update({
         where: { id: sale.id },
@@ -216,6 +229,8 @@ export class SaleService {
         include: SALE_INCLUDE,
       })
     })
+    await this.recordEvent(ctx, updated, 'updated', 'Venta modificada', this.snapshot(sale))
+    return updated
   }
 
   async confirm(ctx: WorkspaceContext, id: string) {
@@ -230,11 +245,7 @@ export class SaleService {
       data: { status: SaleStatus.CONFIRMED, confirmedAt: new Date() },
       include: SALE_INCLUDE,
     })
-    await this.eventBus?.emit('sale.confirmed', {
-      workspaceId: ctx.workspaceId,
-      saleId: sale.id,
-      total: confirmed.total.toString(),
-    })
+    await this.recordEvent(ctx, confirmed, 'confirmed', 'Venta confirmada', this.snapshot(sale))
     return confirmed
   }
 
@@ -256,7 +267,7 @@ export class SaleService {
       },
       include: SALE_INCLUDE,
     })
-    await this.eventBus?.emit('sale.cancelled', { workspaceId: ctx.workspaceId, saleId: sale.id })
+    await this.recordEvent(ctx, cancelled, 'cancelled', 'Venta anulada', this.snapshot(sale))
     return cancelled
   }
 
@@ -265,11 +276,23 @@ export class SaleService {
       throw new ForbiddenError('Solo un owner o admin puede eliminar ventas')
     }
     const sale = await this.get(ctx, id)
-    if (sale.status !== SaleStatus.DRAFT) {
-      throw new ConflictError('Solo se puede eliminar una venta en borrador; usa anular')
-    }
-    await db.sale.delete({ where: { id: sale.id } })
-    return { id: sale.id }
+    const deleted = await db.sale.update({ where: { id: sale.id }, data: { deletedAt: new Date(), deletedByUserId: ctx.userId }, include: SALE_INCLUDE })
+    await this.recordEvent(ctx, deleted, 'deleted', 'Venta enviada a la papelera', this.snapshot(sale))
+    return deleted
+  }
+
+  async restore(ctx: WorkspaceContext, id: string) {
+    if (ctx.role !== 'owner' && ctx.role !== 'admin') throw new ForbiddenError('Solo un owner o admin puede restaurar ventas')
+    const sale = await this.get(ctx, id, true)
+    const restored = await db.sale.update({ where: { id: sale.id }, data: { deletedAt: null, deletedByUserId: null }, include: SALE_INCLUDE })
+    await this.recordEvent(ctx, restored, 'restored', 'Venta restaurada', this.snapshot(sale))
+    return restored
+  }
+
+  async history(ctx: WorkspaceContext, id: string) {
+    const active = await db.sale.findFirst({ where: { id, ...this.scope(ctx) }, select: { id: true } })
+    if (!active) await this.get(ctx, id, true)
+    return db.saleEvent.findMany({ where: { workspaceId: ctx.workspaceId, saleId: id }, include: { actor: { select: { id: true, firstName: true, lastName: true, email: true } } }, orderBy: { createdAt: 'desc' } })
   }
 
   async exportCsv(ctx: WorkspaceContext, filters: Omit<SaleFilters, 'page' | 'limit'>) {

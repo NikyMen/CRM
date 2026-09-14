@@ -45,6 +45,7 @@ const filterSchema = z.object({
   currency: z.string().length(3).optional(),
   from: businessDate.optional(),
   to: businessDate.optional(),
+  includeDeleted: z.coerce.boolean().optional(),
 })
 
 const paginationSchema = z.object({
@@ -82,6 +83,11 @@ export async function saleRoutes(app: FastifyInstance, options: { eventBus?: Eve
     return reply.send(await service.get(req.user as WorkspaceContext, id))
   })
 
+  app.get('/:id/history', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return reply.send(await service.history(req.user as WorkspaceContext, id))
+  })
+
   app.post('/', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
     const input = saleSchema.parse(req.body) as SaleInput
     return reply.status(201).send(await service.create(req.user as WorkspaceContext, input))
@@ -107,5 +113,10 @@ export async function saleRoutes(app: FastifyInstance, options: { eventBus?: Eve
   app.delete('/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const { id } = req.params as { id: string }
     return reply.send(await service.remove(req.user as WorkspaceContext, id))
+  })
+
+  app.post('/:id/restore', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return reply.send(await service.restore(req.user as WorkspaceContext, id))
   })
 }

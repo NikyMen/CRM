@@ -180,9 +180,9 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
   .ctrl-input::placeholder { color: var(--ink-muted); }
   /* Reserve space whenever a field has a decorative leading icon. This keeps
      placeholder text readable even when a page forgets the matching pl-* utility. */
-  .relative:has(> svg:first-child) > .ctrl-input { padding-left: 2.5rem; }
-  .relative:has(> svg:first-child) > .ctrl-input.pl-9 { padding-left: 2.25rem; }
-  .relative:has(> svg:first-child) > .ctrl-input.pl-10 { padding-left: 2.5rem; }
+  .relative:has(> svg[class*="left-"]) > .ctrl-input { padding-left: 2.5rem; }
+  .relative:has(> svg[class*="left-"]) > .ctrl-input.pl-9 { padding-left: 2.25rem; }
+  .relative:has(> svg[class*="left-"]) > .ctrl-input.pl-10 { padding-left: 2.75rem; }
   .relative > .ctrl-input + button { right: .75rem; }
   .ctrl-input:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(54, 92, 171, .16); }
   .page-title { color: var(--ink-primary); font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -.035em; line-height: 1.12; }
