@@ -91,7 +91,7 @@ export async function buildApp() {
       return {
         statusCode: 429,
         error: 'Too Many Requests',
-        message: `Has superado el límite de ${context.max} peticiones. Espera un momento y vuelve a intentar.`,
+        message: 'Demasiados intentos. Esperá unos minutos y volvé a intentar.',
       }
     }
   })  // ─── Event Bus ─────────────────────────────────────────────────
