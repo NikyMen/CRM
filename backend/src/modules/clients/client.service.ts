@@ -42,6 +42,9 @@ export interface ClientInput {
   address?: string | null
   city?: string | null
   department?: string | null
+  contactName?: string | null
+  contactPhone?: string | null
+  referenceNotes?: string | null
   country?: string
   status?: ClientStatus
   ownerId?: string | null
@@ -210,7 +213,24 @@ export class ClientService {
 
   async create(ctx: WorkspaceContext, input: ClientInput) {
     const data = await this.prepareInput(ctx, input, true) as Prisma.CompanyCreateInput
-    return db.company.create({ data, include: clientInclude })
+    return db.$transaction(async (tx) => {
+      const client = await tx.company.create({ data, include: clientInclude })
+      if (input.contactName?.trim()) {
+        const [firstName, ...lastName] = input.contactName.trim().split(/\s+/)
+        await tx.contact.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            companyId: client.id,
+            firstName,
+            lastName: lastName.join(' ') || null,
+            phone: input.contactPhone?.trim() || null,
+            email: input.email?.trim().toLowerCase() || null,
+            source: 'MANUAL',
+          },
+        })
+      }
+      return client
+    })
   }
 
   async update(ctx: WorkspaceContext, id: string, input: Partial<ClientInput>) {
@@ -422,6 +442,7 @@ export class ClientService {
       ...(input.address !== undefined ? { address: input.address } : {}),
       ...(input.city !== undefined ? { city: input.city } : {}),
       ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.referenceNotes !== undefined ? { customData: { ...(input.customData ?? {}), referenceNotes: input.referenceNotes } } : {}),
       ...(input.country !== undefined ? { country: input.country } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
