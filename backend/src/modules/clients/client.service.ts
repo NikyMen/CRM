@@ -212,6 +212,9 @@ export class ClientService {
   }
 
   async create(ctx: WorkspaceContext, input: ClientInput) {
+    if (input.contactPhone?.trim() && !input.contactName?.trim()) {
+      throw new ValidationError('Ingresá el nombre del contacto para guardar su teléfono')
+    }
     const data = await this.prepareInput(ctx, input, true) as Prisma.CompanyCreateInput
     return db.$transaction(async (tx) => {
       const client = await tx.company.create({ data, include: clientInclude })
@@ -221,6 +224,7 @@ export class ClientService {
           data: {
             workspaceId: ctx.workspaceId,
             companyId: client.id,
+            ownerId: client.ownerId,
             firstName,
             lastName: lastName.join(' ') || null,
             phone: input.contactPhone?.trim() || null,
@@ -434,7 +438,7 @@ export class ClientService {
       ...(input.dv !== undefined ? { dv: input.dv?.replace(/\D/g, '') || null } : {}),
       ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
       ...(input.tradeName !== undefined ? { tradeName: input.tradeName } : {}),
-      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.email !== undefined ? { email: input.email?.trim().toLowerCase() || null } : {}),
       ...(input.phone !== undefined ? { phone: input.phone } : {}),
       ...(input.website !== undefined ? { website: input.website } : {}),
       ...(input.activity !== undefined ? { activity: input.activity } : {}),
@@ -442,11 +446,11 @@ export class ClientService {
       ...(input.address !== undefined ? { address: input.address } : {}),
       ...(input.city !== undefined ? { city: input.city } : {}),
       ...(input.department !== undefined ? { department: input.department } : {}),
-      ...(input.referenceNotes !== undefined ? { customData: { ...(input.customData ?? {}), referenceNotes: input.referenceNotes } } : {}),
       ...(input.country !== undefined ? { country: input.country } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
       ...(input.customData !== undefined ? { customData: input.customData as Prisma.InputJsonValue } : {}),
+      ...(input.referenceNotes !== undefined ? { customData: { ...(input.customData ?? {}), referenceNotes: input.referenceNotes } } : {}),
       ...(ownerId ? { owner: { connect: { id: ownerId } } } : {}),
       ...(!creating && ownerId === null ? { owner: { disconnect: true } } : {}),
       ...(input.assignments !== undefined ? {

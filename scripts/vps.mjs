@@ -2,11 +2,11 @@
 
 import { spawnSync } from 'node:child_process'
 
-const sshAlias = (process.env.CRM_VPS_ALIAS || 'farmacia').trim()
+const sshAlias = (process.env.CRM_VPS_ALIAS || '').trim()
 const remoteDir = (process.env.CRM_VPS_DIR || '/var/www/crm').trim()
 const command = process.argv[2] || 'help'
 
-if (!/^[a-zA-Z0-9_.-]+$/.test(sshAlias)) {
+if (sshAlias && !/^[a-zA-Z0-9_.-]+$/.test(sshAlias)) {
   console.error('CRM_VPS_ALIAS contiene caracteres no permitidos.')
   process.exit(2)
 }
@@ -24,6 +24,10 @@ const baseSshArgs = [
 ]
 
 function runRemote(remoteCommand) {
+  if (!sshAlias) {
+    console.error('Configurá CRM_VPS_ALIAS con el alias del servidor actual. No hay servidor predeterminado.')
+    process.exit(2)
+  }
   const result = spawnSync('ssh', [...baseSshArgs, remoteCommand], {
     stdio: 'inherit',
     shell: false,
@@ -43,8 +47,8 @@ function showHelp() {
   pnpm vps status
   pnpm vps logs [backend|frontend|postgres|redis] [lineas]
 
-Configuracion opcional:
-  CRM_VPS_ALIAS  Alias de ~/.ssh/config (default: farmacia)
+Configuracion:
+  CRM_VPS_ALIAS  Alias del servidor actual en ~/.ssh/config (obligatorio)
   CRM_VPS_DIR    Carpeta remota del CRM (default: /var/www/crm)
 
 Los comandos disponibles son de solo lectura. Deploy, restart, migraciones y

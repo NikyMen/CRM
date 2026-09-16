@@ -86,7 +86,7 @@ pnpm acceptance
 
 ## Producción
 
-- Alias SSH: `farmacia`; repo actual `/var/www/crm`.
+- Servidor cambiado (2026-09-16): `farmacia`/`darmacia` ya no corresponde a este proyecto. No conectarse a ese servidor para operar Gestión ROMEZ. El alias del nuevo servidor está pendiente de confirmar; verificar también la ruta y topología antes de desplegar.
 - Dominio previsto: `https://romez.consultoriadigital.io`.
 - Topología objetivo: PostgreSQL/Redis dedicados en Docker sobre loopback; backend y frontend en PM2; una sola instancia backend; Nginx detrás de Traefik.
 - Ejecutar PM2 y la aplicación como usuario Unix dedicado `romez`, nunca como `root`; limitar escritura a `.data` y logs.
