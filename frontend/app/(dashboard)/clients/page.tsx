@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<string, string> = { PROSPECT: 'Prospecto', ACTIVE: '
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
 type ImportPreview = { rows: Array<{ name?: string; ruc?: string; errors: string[] }>; total: number; valid: number; invalid: number; committed: number }
 
-const EMPTY_FORM = { name: '', legalName: '', personType: 'LEGAL_ENTITY' as ClientPersonType, ruc: '', dv: '', email: '', phone: '', activity: '', ownerId: '', status: 'ACTIVE' as ClientStatus }
+const EMPTY_FORM = { name: '', legalName: '', tradeName: '', personType: 'LEGAL_ENTITY' as ClientPersonType, ruc: '', dv: '', email: '', phone: '', activity: '', address: '', city: '', department: '', taxObligations: '', ownerId: '', status: 'ACTIVE' as ClientStatus }
 
 export default function ClientsPage() {
   const queryClient = useQueryClient()
@@ -39,7 +39,7 @@ export default function ClientsPage() {
   const teamQuery = useQuery<Member[]>({ queryKey: ['team'], queryFn: () => teamApi.list().then((response) => response.data), enabled: canManage })
 
   const createClient = useMutation({
-    mutationFn: () => clientsApi.create({ name: form.name, legalName: form.legalName || undefined, personType: form.personType, ruc: form.ruc || undefined, dv: form.dv || undefined, email: form.email || undefined, phone: form.phone || undefined, activity: form.activity || undefined, ownerId: form.ownerId || undefined, status: form.status }),
+    mutationFn: () => clientsApi.create({ name: form.name, legalName: form.legalName || undefined, tradeName: form.tradeName || undefined, personType: form.personType, ruc: form.ruc || undefined, dv: form.dv || undefined, email: form.email || undefined, phone: form.phone || undefined, activity: form.activity || undefined, address: form.address || undefined, city: form.city || undefined, department: form.department || undefined, taxObligations: form.taxObligations.split(',').map((value) => value.trim()).filter(Boolean), ownerId: form.ownerId || undefined, status: form.status }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['clients'] }); setForm(EMPTY_FORM); setShowCreate(false) },
   })
   const previewImport = useMutation({ mutationFn: (file: File) => clientsApi.import(file, false), onSuccess: (response) => setImportPreview(response.data as ImportPreview) })
@@ -52,6 +52,8 @@ export default function ClientsPage() {
 
     {importFile ? <ImportPanel file={importFile} preview={importPreview} loading={previewImport.isPending} committing={commitImport.isPending} error={previewImport.error || commitImport.error} cancel={() => { setImportFile(null); setImportPreview(null) }} commit={() => commitImport.mutate()} /> : null}
     {showCreate ? <CreatePanel form={form} setForm={setForm} members={teamQuery.data ?? []} canManage={canManage} saving={createClient.isPending} error={createClient.error} close={() => setShowCreate(false)} save={() => createClient.mutate()} /> : null}
+    {showCreate ? <section className="paper-panel -mt-3 border-t-0 px-5 pb-5"><Field label="Obligaciones tributarias"><input value={form.taxObligations} onChange={(event) => setForm((current) => ({ ...current, taxObligations: event.target.value }))} className="ctrl-input max-w-xl" placeholder="IVA, IRE, IRP…" /><span className="mt-1 block text-[11px] text-[var(--ink-tertiary)]">Separá varias obligaciones con comas.</span></Field></section> : null}
+    {showCreate ? <section className="paper-panel -mt-3 border-t-0 px-5 pb-5"><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field label="Nombre comercial"><input value={form.tradeName} onChange={(event) => setForm((current) => ({ ...current, tradeName: event.target.value }))} className="ctrl-input" /></Field><Field label="Dirección"><input value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} className="ctrl-input" /></Field><Field label="Ciudad"><input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} className="ctrl-input" /></Field><Field label="Departamento"><input value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} className="ctrl-input" /></Field></div></section> : null}
 
     {clientsQuery.isLoading ? <LoadingState label="Ordenando legajos…" /> : clientsQuery.isError ? <ErrorState message={getErrorMessage(clientsQuery.error)} retry={() => clientsQuery.refetch()} /> : !clientsQuery.data?.items.length ? <EmptyState icon={Building2} title={deferredSearch ? 'No encontramos coincidencias' : 'Todavía no hay clientes'} description={deferredSearch ? 'Probá con otro nombre, RUC o teléfono.' : 'Todavía no hay legajos visibles en tu cartera.'} action={!deferredSearch && canWrite ? <button type="button" onClick={() => setShowCreate(true)} className="btn-primary"><FilePlus2 size={16} /> Abrir primer legajo</button> : undefined} /> : <ClientResults data={clientsQuery.data} page={page} setPage={setPage} />}
   </PageFrame>
