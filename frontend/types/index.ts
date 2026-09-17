@@ -798,6 +798,7 @@ export interface Client {
   country: string
   taxObligations: string[]
   tags: string[]
+  customData?: Record<string, unknown>
   status: ClientStatus
   ownerId?: string | null
   owner?: AssigneeSummary | null

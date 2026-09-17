@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teamApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
@@ -31,6 +32,7 @@ type Member = {
 }
 
 export default function TeamPage() {
+  const confirmDelete = useConfirmDelete()
   const currentUser  = auth.get()
   const queryClient  = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
@@ -229,12 +231,12 @@ export default function TeamPage() {
                   {/* Botón de eliminar — solo owner, no a sí mismo ni a otros owners */}
                   {isOwner && !isOwnerMember && !isMe ? (
                     <button
-                      onClick={() => {
-                        if (confirm(`¿Eliminar a ${member.user.firstName} del espacio de trabajo?`)) {
+                      onClick={async () => {
+                        if (await confirmDelete(`${member.user.firstName} perderá el acceso al espacio de trabajo.`)) {
                           removeMutation.mutate(member.id)
                         }
                       }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                      className="btn-danger !min-h-0 shrink-0 !p-2"
                       title="Eliminar usuario"
                     >
                       <Trash2 size={16} />

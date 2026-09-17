@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArchiveRestore, Ban, CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
@@ -52,6 +53,7 @@ function draftSubtotal(items: DraftItem[]) {
 }
 
 export default function SalesPage() {
+  const confirmDelete = useConfirmDelete()
   const queryClient = useQueryClient()
   const [role, setRole] = useState<Role>()
   useEffect(() => { setRole(auth.get()?.role as Role | undefined) }, [])
@@ -335,7 +337,7 @@ export default function SalesPage() {
                             </button>
                           ) : null}
                           {canManage && !showTrash ? (
-                            <button type="button" className="btn-secondary" disabled={removeSale.isPending} onClick={() => { if (confirm(`¿Enviar la factura N° ${String(sale.number).padStart(5, '0')} a la Papelera? Vas a poder restaurarla desde ahí.`)) removeSale.mutate(sale.id) }} aria-label={`Eliminar factura ${sale.number}`}>
+                            <button type="button" className="btn-danger" disabled={removeSale.isPending} onClick={async () => { if (await confirmDelete(`La factura N° ${String(sale.number).padStart(5, '0')} se enviará a la papelera. Vas a poder restaurarla desde ahí.`)) removeSale.mutate(sale.id) }} aria-label={`Eliminar factura ${sale.number}`}>
                               <Trash2 size={14} />
                             </button>
                           ) : null}

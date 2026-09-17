@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
@@ -109,7 +110,7 @@ function ConnectionCard({
           type="button"
           onClick={() => onDelete(connection.id)}
           disabled={busy}
-          className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-700 hover:bg-rose-100 disabled:opacity-50 dark:border-rose-400/30 dark:bg-rose-500/15 dark:text-rose-200"
+          className="btn-danger !min-h-0 shrink-0 !p-2"
           aria-label="Eliminar conexion"
         >
           <Trash2 size={16} />
@@ -161,6 +162,7 @@ function EndpointRow({ endpoint }: { endpoint: MetaApiEndpoint }) {
 }
 
 export default function MetaApiPage() {
+  const confirmDelete = useConfirmDelete()
   const queryClient = useQueryClient()
   const [userReady, setUserReady] = useState(false)
   const [canAccess, setCanAccess] = useState(false)
@@ -479,7 +481,7 @@ export default function MetaApiPage() {
                 connection={connection}
                 busy={connectionBusy}
                 onTest={(id) => testMutation.mutate(id)}
-                onDelete={(id) => deleteMutation.mutate(id)}
+                onDelete={async (id) => { if (await confirmDelete('Se eliminará esta conexión de Meta y su token guardado.')) deleteMutation.mutate(id) }}
                 onRegister={(id, pin) => registerMutation.mutate({ id, pin })}
               />
             ))

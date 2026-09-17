@@ -314,10 +314,8 @@ export class CollectionService {
       }
 
       const allocatedTotal = requested.reduce((sum, allocation) => sum.plus(allocation.amount), new Prisma.Decimal(0))
+      // Lo que no cubre cargos abiertos queda como saldo a favor del cliente.
       if (allocatedTotal.gt(amount)) throw new ValidationError('Las aplicaciones superan el monto del pago')
-      if (!allocatedTotal.eq(amount)) {
-        throw new ValidationError('El pago debe aplicarse completamente; no se admiten créditos sin asignar')
-      }
 
       const receivableIds = requested.map((allocation) => allocation.receivableId)
       if (new Set(receivableIds).size !== receivableIds.length) throw new ValidationError('No repitas una cuenta por cobrar')
@@ -381,7 +379,7 @@ export class CollectionService {
       })
       if (!payment) throw new NotFoundError('Pago', id)
       companyId = payment.companyId
-      await ensureClientAccess(ctx, payment.companyId, 'write')
+      // Sin ensureClientAccess: owner/admin deben poder anular pagos de clientes en la papelera.
       if (Boolean(payment.voidedAt) === voiding) return
 
       const receivableIds = [...new Set(payment.allocations.map((allocation) => allocation.receivableId))].sort()

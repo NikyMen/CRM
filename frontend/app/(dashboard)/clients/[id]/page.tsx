@@ -13,6 +13,7 @@ import { formatDate, formatMoney, fullName, getErrorMessage } from '@/lib/format
 import { ClientIdentityStrip, EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
 import { PaymentSummaryButton } from '@/components/romez/PaymentSummaryButton'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail } from '@/components/romez/SaleDetail'
 import { RECEIVABLE_LABELS } from '@/lib/collection-labels'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
@@ -20,6 +21,7 @@ import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 type Tab = 'ficha' | 'contactos' | 'cuenta' | 'facturas' | 'personal' | 'checklist' | 'tickets' | 'documentos'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
 type AssignmentInput = { userId: string; area: string }
+type ClientDraft = Partial<Client> & { referenceNotes?: string }
 
 const COLLABORATION_AREAS = ['GENERAL', 'CONTABILIDAD', 'IMPUESTOS', 'LABORAL', 'COBRANZAS', 'ATENCION AL CLIENTE']
 
@@ -52,10 +54,11 @@ export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const router = useRouter()
+  const confirmDelete = useConfirmDelete()
   const deleteClient = useMutation({ mutationFn: () => clientsApi.remove(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['clients'] }); queryClient.invalidateQueries({ queryKey: ['collections-summary'] }); router.push('/clients') } })
   const [tab, setTab] = useState<Tab>('ficha')
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<Partial<Client>>({})
+  const [draft, setDraft] = useState<ClientDraft>({})
   const [note, setNote] = useState('')
   const [role, setRole] = useState<Role>()
   const canManage = role === 'owner' || role === 'admin'
@@ -138,10 +141,13 @@ export default function ClientDetailPage() {
   const pending = summary.checklists.reduce((count, checklist) => count + checklist.items.filter((item) => !item.isCompleted).length, 0)
     + summary.tickets.filter((ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status)).length
   const assignmentInputs = client.assignments.map(({ userId, area }) => ({ userId, area }))
+  const referenceNotes = typeof client.customData?.referenceNotes === 'string' ? client.customData.referenceNotes : ''
   const saveClient = () => {
     const nextOwnerId = draft.ownerId !== undefined ? draft.ownerId : client.ownerId
+    const { referenceNotes: nextNotes = '', ...clientDraft } = draft
     updateClient.mutate({
-      ...draft,
+      ...clientDraft,
+      ...(nextNotes !== referenceNotes ? { referenceNotes: nextNotes.trim() || null } : {}),
       ...(canManage ? { assignments: sanitizeAssignments(assignmentInputs, nextOwnerId) } : {}),
     })
   }
@@ -165,6 +171,7 @@ export default function ClientDetailPage() {
       department: client.department,
       taxObligations: client.taxObligations,
       status: client.status,
+      referenceNotes,
       ...(canManage ? { ownerId: client.ownerId } : {}),
     })
     setEditing(true)
@@ -172,9 +179,9 @@ export default function ClientDetailPage() {
 
   return (
     <PageFrame>
-      <PageHeader eyebrow="Legajo contable" title={client.name} description={client.legalName || 'Información fiscal y operativa consolidada.'} backHref="/clients" action={canClaim || canRelease || canWrite ? <div className="flex flex-wrap gap-2">{canClaim ? <button type="button" className="btn-primary" disabled={claimClient.isPending} onClick={() => claimClient.mutate()}><UserCheck size={16} />{claimClient.isPending ? 'Tomando…' : 'Tomar cliente'}</button> : null}{canRelease ? <button type="button" className="btn-secondary" disabled={releaseClient.isPending} onClick={() => releaseClient.mutate()}><UserMinus size={16} />{releaseClient.isPending ? 'Liberando…' : 'Liberar cliente'}</button> : null}{canWrite ? <button type="button" className="btn-secondary" onClick={editing ? () => setEditing(false) : startEditing}>{editing ? <X size={16} /> : <Pencil size={16} />}{editing ? 'Cancelar' : 'Editar legajo'}</button> : null}</div> : undefined} />
+      <PageHeader eyebrow="Legajo contable" title={client.name} description={client.legalName || 'Información fiscal y operativa consolidada.'} backHref="/clients" action={canClaim || canRelease || canWrite ? <div className="flex flex-wrap gap-2">{canClaim ? <button type="button" className="btn-primary" disabled={claimClient.isPending} onClick={() => claimClient.mutate()}><UserCheck size={16} />{claimClient.isPending ? 'Tomando…' : 'Tomar cliente'}</button> : null}{canRelease ? <button type="button" className="btn-secondary" disabled={releaseClient.isPending} onClick={() => releaseClient.mutate()}><UserMinus size={16} />{releaseClient.isPending ? 'Liberando…' : 'Liberar cliente'}</button> : null}{canWrite ? <button type="button" className="btn-secondary" onClick={startEditing}><Pencil size={16} />Editar legajo</button> : null}</div> : undefined} />
       {claimClient.isError || releaseClient.isError ? <p className="rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] px-4 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(claimClient.error || releaseClient.error, 'No pudimos cambiar el responsable del cliente.')}</p> : null}
-      {canManage ? <div className="flex justify-end"><button type="button" className="btn-secondary text-[var(--danger)]" disabled={deleteClient.isPending} onClick={() => { if (confirm('¿Eliminar este cliente de la cartera? Se conservará su historial contable.')) deleteClient.mutate() }}>{deleteClient.isPending ? 'Eliminando…' : 'Eliminar cliente'}</button></div> : null}
+      {canManage ? <div className="flex justify-end"><button type="button" className="btn-danger" disabled={deleteClient.isPending} onClick={async () => { if (await confirmDelete(`El cliente "${client.name}" se enviará a la papelera. Sus pagos y cargos se conservan para mantener el historial contable.`)) deleteClient.mutate() }}>{deleteClient.isPending ? 'Eliminando…' : 'Eliminar cliente'}</button></div> : null}
       {deleteClient.isError ? <p role="alert" className="text-sm text-[var(--danger)]">{getErrorMessage(deleteClient.error)}</p> : null}
       <ClientIdentityStrip client={client} account={account} pending={pending} />
 
@@ -184,7 +191,7 @@ export default function ClientDetailPage() {
         </nav>
       </div>
 
-      {editing && canWrite ? <EditClientPanel draft={draft} setDraft={setDraft} members={teamQuery.data ?? []} canManage={canManage} saving={updateClient.isPending} error={updateClient.error} save={saveClient} /> : null}
+      {editing && canWrite ? <EditClientPanel draft={draft} setDraft={setDraft} members={teamQuery.data ?? []} canManage={canManage} saving={updateClient.isPending} error={updateClient.error} save={saveClient} close={() => { setEditing(false); updateClient.reset() }} /> : null}
       {tab === 'ficha' ? <FiscalTab client={client} /> : null}
       {tab === 'contactos' ? <ContactsTab contacts={summary.contacts ?? client.contacts ?? []} canWrite={canWrite} create={(value) => createContact.mutate(value)} creating={createContact.isPending} error={createContact.error} /> : null}
       {tab === 'cuenta' ? <PaymentSummaryButton clientId={id} /> : null}
@@ -198,9 +205,17 @@ export default function ClientDetailPage() {
   )
 }
 
-function EditClientPanel({ draft, setDraft, members, canManage, saving, error, save }: { draft: Partial<Client>; setDraft: React.Dispatch<React.SetStateAction<Partial<Client>>>; members: Member[]; canManage: boolean; saving: boolean; error: unknown; save: () => void }) {
-  const update = (field: keyof Client, value: unknown) => setDraft((current) => ({ ...current, [field]: value }))
-  return <SectionPanel title="Editar datos del legajo" description={canManage ? 'La reasignación actualiza contactos, oportunidades y tickets abiertos.' : 'Actualizá la información fiscal y de contacto del legajo.'}><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4"><Field label="Nombre"><input className="ctrl-input" value={draft.name ?? ''} onChange={(event) => update('name', event.target.value)} /></Field><Field label="Tipo de persona"><select className="ctrl-input" value={draft.personType ?? 'LEGAL_ENTITY'} onChange={(event) => update('personType', event.target.value)}><option value="INDIVIDUAL">Persona física</option><option value="LEGAL_ENTITY">Persona jurídica</option></select></Field><Field label="Razón social"><input className="ctrl-input" value={draft.legalName ?? ''} onChange={(event) => update('legalName', event.target.value)} /></Field><Field label="Nombre comercial"><input className="ctrl-input" value={draft.tradeName ?? ''} onChange={(event) => update('tradeName', event.target.value)} /></Field><div className="grid grid-cols-[1fr_72px] gap-2"><Field label="RUC"><input className="ctrl-input" value={draft.ruc ?? ''} onChange={(event) => update('ruc', event.target.value)} /></Field><Field label="DV"><input className="ctrl-input" value={draft.dv ?? ''} onChange={(event) => update('dv', event.target.value)} /></Field></div><Field label="Correo"><input className="ctrl-input" value={draft.email ?? ''} onChange={(event) => update('email', event.target.value)} /></Field><Field label="Teléfono"><input className="ctrl-input" value={draft.phone ?? ''} onChange={(event) => update('phone', event.target.value)} /></Field><Field label="Actividad"><input className="ctrl-input" value={draft.activity ?? ''} onChange={(event) => update('activity', event.target.value)} /></Field>{canManage ? <Field label="Responsable"><select className="ctrl-input" value={draft.ownerId ?? ''} onChange={(event) => update('ownerId', event.target.value || null)}><option value="">Sin asignar</option>{members.map((member) => <option key={member.user.id} value={member.user.id}>{fullName(member.user)}</option>)}</select></Field> : null}<Field label="Dirección"><input className="ctrl-input" value={draft.address ?? ''} onChange={(event) => update('address', event.target.value)} /></Field><Field label="Ciudad"><input className="ctrl-input" value={draft.city ?? ''} onChange={(event) => update('city', event.target.value)} /></Field><Field label="Departamento"><input className="ctrl-input" value={draft.department ?? ''} onChange={(event) => update('department', event.target.value)} /></Field><Field label="Obligaciones"><input className="ctrl-input" value={(draft.taxObligations ?? []).join(', ')} onChange={(event) => update('taxObligations', event.target.value.split(',').map((value) => value.trim()).filter(Boolean))} placeholder="IVA, IRE, IRP…" /></Field></div><div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">{error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(error, 'No pudimos guardar los cambios.')}</p> : <span />}<button type="button" className="btn-primary" disabled={!draft.name?.trim() || saving} onClick={save}><Save size={15} />{saving ? 'Guardando…' : 'Guardar cambios'}</button></div></SectionPanel>
+function EditClientPanel({ draft, setDraft, members, canManage, saving, error, save, close }: { draft: ClientDraft; setDraft: React.Dispatch<React.SetStateAction<ClientDraft>>; members: Member[]; canManage: boolean; saving: boolean; error: unknown; save: () => void; close: () => void }) {
+  const [notesExpanded, setNotesExpanded] = useState(false)
+  const update = (field: keyof ClientDraft, value: unknown) => setDraft((current) => ({ ...current, [field]: value }))
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !saving) close() }
+    document.addEventListener('keydown', onKey)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow }
+  }, [close, saving])
+  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm sm:items-center sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) close() }}><div role="dialog" aria-modal="true" aria-labelledby="edit-client-title" className="paper-panel my-auto w-full max-w-5xl animate-slide-up"><div className="flex items-center justify-between border-b border-[var(--line-soft)] px-5 py-4"><div><h2 id="edit-client-title" className="font-display text-sm font-extrabold">Editar datos del legajo</h2><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{canManage ? 'La reasignación actualiza contactos, oportunidades y tickets abiertos.' : 'Actualizá la información fiscal del legajo.'}</p></div><button type="button" onClick={close} disabled={saving} className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={18} /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4"><Field label="Nombre"><input className="ctrl-input" value={draft.name ?? ''} onChange={(event) => update('name', event.target.value)} /></Field><Field label="Tipo de persona"><select className="ctrl-input" value={draft.personType ?? 'LEGAL_ENTITY'} onChange={(event) => update('personType', event.target.value)}><option value="INDIVIDUAL">Persona física</option><option value="LEGAL_ENTITY">Persona jurídica</option></select></Field><Field label="Razón social"><input className="ctrl-input" value={draft.legalName ?? ''} onChange={(event) => update('legalName', event.target.value)} /></Field><Field label="Nombre comercial"><input className="ctrl-input" value={draft.tradeName ?? ''} onChange={(event) => update('tradeName', event.target.value)} /></Field><div className="grid grid-cols-[1fr_72px] gap-2"><Field label="RUC"><input className="ctrl-input" value={draft.ruc ?? ''} onChange={(event) => update('ruc', event.target.value)} /></Field><Field label="DV"><input className="ctrl-input" value={draft.dv ?? ''} onChange={(event) => update('dv', event.target.value)} /></Field></div><Field label="Correo"><input className="ctrl-input" value={draft.email ?? ''} onChange={(event) => update('email', event.target.value)} /></Field><Field label="Teléfono"><input className="ctrl-input" value={draft.phone ?? ''} onChange={(event) => update('phone', event.target.value)} /></Field><Field label="Actividad"><input className="ctrl-input" value={draft.activity ?? ''} onChange={(event) => update('activity', event.target.value)} /></Field>{canManage ? <Field label="Responsable"><select className="ctrl-input" value={draft.ownerId ?? ''} onChange={(event) => update('ownerId', event.target.value || null)}><option value="">Sin asignar</option>{members.map((member) => <option key={member.user.id} value={member.user.id}>{fullName(member.user)}</option>)}</select></Field> : null}<Field label="Dirección"><input className="ctrl-input" value={draft.address ?? ''} onChange={(event) => update('address', event.target.value)} /></Field><Field label="Ciudad"><input className="ctrl-input" value={draft.city ?? ''} onChange={(event) => update('city', event.target.value)} /></Field><Field label="Departamento"><input className="ctrl-input" value={draft.department ?? ''} onChange={(event) => update('department', event.target.value)} /></Field><Field label="Obligaciones"><input className="ctrl-input" value={(draft.taxObligations ?? []).join(', ')} onChange={(event) => update('taxObligations', event.target.value.split(',').map((value) => value.trim()).filter(Boolean))} placeholder="IVA, IRE, IRP…" /></Field><div className="grid content-start gap-2 sm:col-span-2"><Field label="Referencia / notas"><textarea id="edit-client-reference-notes" maxLength={5000} value={draft.referenceNotes ?? ''} onChange={(event) => update('referenceNotes', event.target.value)} className="ctrl-input resize-y" rows={notesExpanded ? 6 : 2} /></Field><button type="button" className="justify-self-start text-xs font-semibold text-[var(--brand-blue)]" aria-expanded={notesExpanded} aria-controls="edit-client-reference-notes" onClick={() => setNotesExpanded((value) => !value)}>{notesExpanded ? 'Contraer notas' : 'Ampliar notas'}</button></div></div><div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">{error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(error, 'No pudimos guardar los cambios.')}</p> : <span />}<div className="flex gap-2"><button type="button" className="btn-secondary" disabled={saving} onClick={close}>Cancelar</button><button type="button" className="btn-primary" disabled={!draft.name?.trim() || saving} onClick={save}><Save size={15} />{saving ? 'Guardando…' : 'Guardar cambios'}</button></div></div></div></div>
 }
 
 function FiscalTab({ client }: { client: Client }) {

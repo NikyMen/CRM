@@ -58,6 +58,7 @@ export interface ClientFilters {
   status?: ClientStatus
   ownerId?: string
   hasDebt?: boolean
+  archived?: boolean
   page?: number
   limit?: number
   sortBy?: string
@@ -76,7 +77,7 @@ export class ClientService {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
     const conditions: Prisma.CompanyWhereInput[] = [
-      { workspaceId: ctx.workspaceId, isArchived: false },
+      { workspaceId: ctx.workspaceId, isArchived: canManageAllClients(ctx) && filters.archived === true },
       clientVisibilityWhere(ctx),
     ]
 
@@ -239,6 +240,11 @@ export class ClientService {
 
   async update(ctx: WorkspaceContext, id: string, input: Partial<ClientInput>) {
     await ensureClientAccess(ctx, id, 'write')
+    if (input.referenceNotes !== undefined && input.customData === undefined) {
+      // Conservar el resto de customData al editar solo las notas.
+      const current = await db.company.findFirst({ where: { id, workspaceId: ctx.workspaceId }, select: { customData: true } })
+      input = { ...input, customData: (current?.customData ?? {}) as Record<string, unknown> }
+    }
     const prepared = await this.prepareInput(ctx, input, false, id)
     const ownerWasProvided = Object.prototype.hasOwnProperty.call(input, 'ownerId')
     const assignmentsWereProvided = Object.prototype.hasOwnProperty.call(input, 'assignments')
@@ -271,6 +277,14 @@ export class ClientService {
         data: { isActive: false },
       }),
     ])
+  }
+
+  async restore(ctx: WorkspaceContext, id: string) {
+    if (!canManageAllClients(ctx)) throw new ForbiddenError('Solo owner o admin pueden restaurar clientes')
+    const client = await db.company.findFirst({ where: { id, workspaceId: ctx.workspaceId, isArchived: true } })
+    if (!client) throw new NotFoundError('Cliente', id)
+    // Los planes recurrentes quedan pausados: se reactivan a mano para no generar cargos por sorpresa.
+    return db.company.update({ where: { id }, data: { isArchived: false, status: 'ACTIVE' }, include: clientInclude })
   }
 
   async claim(ctx: WorkspaceContext, id: string) {

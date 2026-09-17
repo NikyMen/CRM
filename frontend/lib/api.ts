@@ -232,11 +232,13 @@ export const dashboardApi = {
 // Clientes contables (Company se mantiene como detalle interno del backend)
 export const clientsApi = {
   remove: (id: string) => api.delete(`/clients/${id}`),
+  restore: (id: string) => api.post<Client>(`/clients/${id}/restore`),
   list: (params?: {
     search?: string
     status?: string
     ownerId?: string
     hasDebt?: boolean
+    archived?: boolean
     page?: number
     limit?: number
   }) => api.get<PaginatedResult<Client>>('/clients', { params }),
@@ -249,6 +251,9 @@ export const clientsApi = {
 
   update: (id: string, data: Partial<Omit<Client, 'assignments'>> & {
     assignments?: Array<{ userId: string; area?: string }>
+    contactName?: string
+    contactPhone?: string
+    referenceNotes?: string | null
   }) => api.patch<Client>(`/clients/${id}`, data),
 
   listContacts: (id: string) => api.get<Contact[]>(`/clients/${id}/contacts`),

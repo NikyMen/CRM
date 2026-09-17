@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { contactsApi, activitiesApi, notesApi } from '@/lib/api'
 import type { Contact, Activity, Note } from '@/types'
@@ -61,6 +62,7 @@ function formatPhoneNumber(value?: string | null) {
 }
 
 export default function ContactDetailPage() {
+  const confirmDelete = useConfirmDelete()
   const { id } = useParams<{ id: string }>()
   const router       = useRouter()
   const queryClient  = useQueryClient()
@@ -462,10 +464,10 @@ export default function ContactDetailPage() {
                               </p>
                             </div>
                             <button
-                              onClick={() => {
-                                if(confirm('¿Seguro quieres eliminar esta actividad?')) deleteActivity.mutate(activity.id)
+                              onClick={async () => {
+                                if (await confirmDelete('Se eliminará esta actividad del contacto.')) deleteActivity.mutate(activity.id)
                               }}
-                              className="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shrink-0"
+                              className="btn-danger !min-h-0 shrink-0 !p-2"
                             >
                               <Trash2 size={16} strokeWidth={2.5}/>
                             </button>
@@ -521,10 +523,10 @@ export default function ContactDetailPage() {
                               {note.content}
                             </p>
                             <button
-                              onClick={() => {
-                                if(confirm('¿Borrar nota?')) deleteNote.mutate(note.id)
+                              onClick={async () => {
+                                if (await confirmDelete('Se eliminará esta nota del contacto.')) deleteNote.mutate(note.id)
                               }}
-                              className="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex flex-shrink-0 items-center justify-center transition-colors -mt-1 -mr-2"
+                              className="btn-danger !min-h-0 shrink-0 !p-2 -mt-1 -mr-2"
                             >
                               <Trash2 size={16} strokeWidth={2.5}/>
                             </button>
