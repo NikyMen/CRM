@@ -889,7 +889,7 @@ export type ReceivableStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOI
 export interface Receivable {
   id: string
   companyId: string
-  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'ownerId'>
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'ownerId' | 'isArchived'>
   description: string
   periodKey?: string | null
   currency: string
@@ -907,7 +907,7 @@ export interface CollectionPayment {
   voidedAt?: string | null
   id: string
   companyId: string
-  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv'>
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'isArchived'>
   currency: string
   amount: string
   method?: string | null
@@ -950,7 +950,7 @@ export interface CollectionInsights {
 export interface RecurringCharge {
   id: string
   companyId: string
-  company?: Pick<Client, 'id' | 'name' | 'ruc'>
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'isArchived'>
   name: string
   description?: string | null
   amount: string

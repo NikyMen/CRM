@@ -310,6 +310,7 @@ export const checklistsApi = {
 export const collectionsApi = {
   paymentSummaryPdf: (id: string) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { responseType: 'blob' }),
   removePayment: (id: string) => api.delete(`/collections/payments/${id}`),
+  removeReceivable: (id: string) => api.delete(`/collections/receivables/${id}`),
   setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
   summary: () => api.get<CollectionSummary>('/collections/summary'),
 

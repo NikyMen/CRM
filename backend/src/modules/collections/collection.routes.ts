@@ -131,6 +131,13 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     return reply.status(201).send(await service.createReceivable(ctx, input))
   })
 
+  app.delete('/receivables/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
+    const { id } = req.params as { id: string }
+    await service.voidReceivable(ctx, id)
+    return reply.status(204).send()
+  })
+
   app.patch('/receivables/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const { id } = req.params as { id: string }

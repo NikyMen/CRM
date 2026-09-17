@@ -116,14 +116,15 @@ export class CollectionService {
       workspaceId: ctx.workspaceId,
       company: clientVisibilityWhere(ctx),
       ...(filters.companyId ? { companyId: filters.companyId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
+      // Los anulados (eliminados) solo aparecen al filtrarlos explícitamente.
+      status: filters.status ?? { not: 'VOID' },
       ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
     }
     const [items, total] = await Promise.all([
       db.receivable.findMany({
         where,
         include: {
-          company: { select: { id: true, name: true, ruc: true, dv: true, ownerId: true } },
+          company: { select: { id: true, name: true, ruc: true, dv: true, ownerId: true, isArchived: true } },
           allocations: { include: { payment: true } },
         },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
@@ -254,6 +255,27 @@ export class CollectionService {
     return updated
   }
 
+  /**
+   * Elimina (anula) un cargo. Lo ya cobrado se desvincula: esos pagos siguen
+   * recibidos y el importe queda como saldo a favor del cliente.
+   */
+  async voidReceivable(ctx: WorkspaceContext, id: string) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede eliminar cargos')
+    let companyId: string | null = null
+    await serializableTransaction(async (tx) => {
+      const receivable = await tx.receivable.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+      if (!receivable) throw new NotFoundError('Cuenta por cobrar', id)
+      companyId = receivable.companyId
+      if (receivable.status === 'VOID') return
+      await tx.paymentAllocation.deleteMany({ where: { receivableId: id } })
+      await tx.receivable.update({
+        where: { id },
+        data: { status: 'VOID', paidAmount: new Prisma.Decimal(0), voidedAt: new Date() },
+      })
+    })
+    await this.emitUpdate(ctx.workspaceId, companyId!, 'receivable.voided', id)
+  }
+
   async listPayments(
     ctx: WorkspaceContext,
     filters: { companyId?: string; currency?: string; includeVoided?: boolean; page: number; limit: number }
@@ -269,7 +291,7 @@ export class CollectionService {
       db.payment.findMany({
         where,
         include: {
-          company: { select: { id: true, name: true, ruc: true, dv: true } },
+          company: { select: { id: true, name: true, ruc: true, dv: true, isArchived: true } },
           allocations: { include: { receivable: { select: { id: true, description: true, dueDate: true } } } },
         },
         orderBy: { paidAt: 'desc' },
@@ -550,7 +572,7 @@ export class CollectionService {
     const [items, total] = await Promise.all([
       db.recurringCharge.findMany({
         where,
-        include: { company: { select: { id: true, name: true, ruc: true } } },
+        include: { company: { select: { id: true, name: true, ruc: true, isArchived: true } } },
         orderBy: { createdAt: 'desc' },
         skip: page * limit,
         take: limit,
