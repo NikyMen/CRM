@@ -83,6 +83,11 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     return reply.send(await service.summary(req.user as WorkspaceContext))
   })
 
+  app.get('/insights', async (req, reply) => {
+    const { currency } = z.object({ currency: z.string().length(3).default('PYG') }).parse(req.query)
+    return reply.send(await service.insights(req.user as WorkspaceContext, currency))
+  })
+
   app.get('/clients/:id/payments.pdf', async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const { id } = req.params as { id: string }

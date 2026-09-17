@@ -931,6 +931,22 @@ export interface CollectionSummary {
   overdueCount: number
 }
 
+export interface CollectionInsights {
+  currency: string
+  months: Array<{ key: string; billed: number; collected: number }>
+  collectedThisMonth: number
+  collectedLastMonth: number
+  collectionRate: number
+  billed: number
+  applied: number
+  outstanding: number
+  overdueOutstanding: number
+  creditBalance: number
+  clientsWithDebt: number
+  aging: Array<{ key: string; label: string; amount: number; count: number }>
+  topDebtors: Array<{ id: string; name: string; outstanding: number; overdue: number }>
+}
+
 export interface RecurringCharge {
   id: string
   companyId: string

@@ -224,3 +224,27 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
 @media (max-width: 900px) { .client-identity { grid-template-columns: 1fr 1fr 1fr; } .client-identity__name { grid-column: 1 / -1; border-bottom: 1px solid var(--line-soft); } .client-identity__datum:first-of-type { border-left: 0; } }
 @media (max-width: 560px) { .client-identity { grid-template-columns: 1fr 1fr; } .client-identity__datum:nth-last-child(1) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line-soft); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Tablero de cobranzas: paleta validada (categórica azul/aqua + rampa secuencial azul). */
+.viz {
+  --viz-billed: #2a78d6;
+  --viz-collected: #1baf7a;
+  --viz-track: #eef1f6;
+  --viz-hover: rgba(54, 92, 171, .07);
+  --viz-seq-1: #86b6ef;
+  --viz-seq-2: #5598e7;
+  --viz-seq-3: #2a78d6;
+  --viz-seq-4: #1c5cab;
+  --viz-seq-5: #104281;
+}
+.dark .viz {
+  --viz-billed: #3987e5;
+  --viz-collected: #199e70;
+  --viz-track: rgba(255, 255, 255, .08);
+  --viz-hover: rgba(174, 190, 216, .1);
+  --viz-seq-1: #184f95;
+  --viz-seq-2: #256abf;
+  --viz-seq-3: #3987e5;
+  --viz-seq-4: #6da7ec;
+  --viz-seq-5: #9ec5f4;
+}

@@ -446,6 +446,101 @@ export class CollectionService {
     }
   }
 
+  /** Indicadores del tablero de cobranzas para una moneda (montos como número). */
+  async insights(ctx: WorkspaceContext, currencyInput = 'PYG') {
+    await this.refreshOverdue(ctx.workspaceId)
+    const currency = currencyCode(currencyInput)
+    const clientScope = clientVisibilityWhere(ctx)
+    const monthKey = (date: Date) => paraguayDate.format(date).slice(0, 7)
+    const today = paraguayDate.format(new Date())
+    const [year, month] = today.split('-').map(Number)
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(Date.UTC(year, month - 6 + index, 1))
+      return date.toISOString().slice(0, 7)
+    })
+    // Un margen de días antes del primer mes cubre el desfase horario de Paraguay.
+    const rangeStart = new Date(Date.UTC(year, month - 7, 25))
+    const toNumber = (value: Prisma.Decimal | null | undefined) => Number((value ?? new Prisma.Decimal(0)).toString())
+
+    const [periodCharges, periodPayments, openReceivables, totals, received] = await Promise.all([
+      db.receivable.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' }, dueDate: { gte: rangeStart } },
+        select: { amount: true, dueDate: true },
+      }),
+      db.payment.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, voidedAt: null, paidAt: { gte: rangeStart } },
+        select: { amount: true, paidAt: true },
+      }),
+      db.receivable.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { amount: true, paidAmount: true, dueDate: true, companyId: true, company: { select: { id: true, name: true } } },
+      }),
+      db.receivable.aggregate({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' } },
+        _sum: { amount: true, paidAmount: true },
+      }),
+      db.payment.aggregate({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, voidedAt: null },
+        _sum: { amount: true },
+      }),
+    ])
+
+    const monthly = new Map(months.map((key) => [key, { key, billed: 0, collected: 0 }]))
+    for (const charge of periodCharges) {
+      const bucket = monthly.get(monthKey(charge.dueDate))
+      if (bucket) bucket.billed += toNumber(charge.amount)
+    }
+    for (const payment of periodPayments) {
+      const bucket = monthly.get(monthKey(payment.paidAt))
+      if (bucket) bucket.collected += toNumber(payment.amount)
+    }
+
+    const agingBuckets = [
+      { key: 'current', label: 'Por vencer', amount: 0, count: 0 },
+      { key: '1-30', label: '1 a 30 días', amount: 0, count: 0 },
+      { key: '31-60', label: '31 a 60 días', amount: 0, count: 0 },
+      { key: '61-90', label: '61 a 90 días', amount: 0, count: 0 },
+      { key: '90+', label: 'Más de 90 días', amount: 0, count: 0 },
+    ]
+    const todayMs = Date.parse(`${today}T00:00:00Z`)
+    const debtors = new Map<string, { id: string; name: string; outstanding: number; overdue: number }>()
+    let overdueOutstanding = 0
+    for (const receivable of openReceivables) {
+      const outstanding = toNumber(receivable.amount.minus(receivable.paidAmount))
+      if (outstanding <= 0) continue
+      const daysLate = Math.floor((todayMs - Date.parse(`${paraguayDate.format(receivable.dueDate)}T00:00:00Z`)) / 86_400_000)
+      const bucket = daysLate <= 0 ? agingBuckets[0] : daysLate <= 30 ? agingBuckets[1] : daysLate <= 60 ? agingBuckets[2] : daysLate <= 90 ? agingBuckets[3] : agingBuckets[4]
+      bucket.amount += outstanding
+      bucket.count += 1
+      const debtor = debtors.get(receivable.companyId) ?? { id: receivable.company.id, name: receivable.company.name, outstanding: 0, overdue: 0 }
+      debtor.outstanding += outstanding
+      if (daysLate > 0) {
+        debtor.overdue += outstanding
+        overdueOutstanding += outstanding
+      }
+      debtors.set(receivable.companyId, debtor)
+    }
+
+    const billed = toNumber(totals._sum.amount)
+    const applied = toNumber(totals._sum.paidAmount)
+    const series = [...monthly.values()]
+    return {
+      currency,
+      months: series,
+      collectedThisMonth: series.at(-1)?.collected ?? 0,
+      collectedLastMonth: series.at(-2)?.collected ?? 0,
+      collectionRate: billed > 0 ? Math.round((applied / billed) * 1000) / 10 : 0,
+      billed,
+      applied,
+      outstanding: billed - applied,
+      overdueOutstanding,
+      creditBalance: Math.max(0, toNumber(received._sum.amount) - applied),
+      clientsWithDebt: debtors.size,
+      aging: agingBuckets,
+      topDebtors: [...debtors.values()].sort((left, right) => right.outstanding - left.outstanding).slice(0, 5),
+    }
+  }
+
   async listRecurring(ctx: WorkspaceContext, page: number, limit: number, companyId?: string) {
     const where: Prisma.RecurringChargeWhereInput = {
       workspaceId: ctx.workspaceId,

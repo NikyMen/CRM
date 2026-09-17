@@ -9,8 +9,8 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileS
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { collectionsApi } from '@/lib/api'
-import type { CollectionPayment, CollectionSummary, PaginatedResult, Receivable, RecurringCharge } from '@/types'
-import { formatDate, formatMoney, getErrorMessage, isPositiveDecimal } from '@/lib/format'
+import type { CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
+import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
 import { RECEIVABLE_LABELS, FREQUENCY_LABELS } from '@/lib/collection-labels'
@@ -18,6 +18,7 @@ import { PaymentSummaryButton } from '@/components/romez/PaymentSummaryButton'
 import { ClientPicker } from '@/components/romez/ClientPicker'
 import { DateField } from '@/components/romez/DateField'
 import { MoneyInput } from '@/components/romez/MoneyInput'
+import { CollectionsDashboard } from '@/components/romez/CollectionsDashboard'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 
 type View = 'receivables' | 'payments' | 'plans' | 'import'
@@ -48,7 +49,7 @@ export default function CollectionsPage() {
   const role = auth.get()?.role
   const canManage = role === 'owner' || role === 'admin'
   const canWrite = Boolean(role && role !== 'viewer')
-  const [view, setView] = useState<View>('receivables')
+  const [view, setView] = useState<View>('payments')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [receivablesPage, setReceivablesPage] = useState(0)
@@ -62,12 +63,12 @@ export default function CollectionsPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
 
-  const summaryQuery = useQuery<CollectionSummary>({ queryKey: ['collections-summary'], queryFn: () => collectionsApi.summary().then((response) => response.data) })
+  const insightsQuery = useQuery<CollectionInsights>({ queryKey: ['collections-insights'], queryFn: () => collectionsApi.insights().then((response) => response.data) })
   const receivablesQuery = useQuery<PaginatedResult<Receivable>>({ queryKey: ['receivables', { status, page: receivablesPage }], queryFn: () => collectionsApi.listReceivables({ status: status || undefined, page: receivablesPage, limit: PAGE_SIZE }).then((response) => response.data) })
   const paymentsQuery = useQuery<PaginatedResult<CollectionPayment>>({ queryKey: ['payments', { page: paymentsPage, includeVoided }], queryFn: () => collectionsApi.listPayments({ page: paymentsPage, limit: PAGE_SIZE, includeVoided }).then((response) => response.data) })
   const plansQuery = useQuery<PaginatedResult<RecurringCharge>>({ queryKey: ['recurring-charges', { page: plansPage }], queryFn: () => collectionsApi.listRecurring({ page: plansPage, limit: PAGE_SIZE }).then((response) => response.data) })
 
-  const refresh = () => { queryClient.invalidateQueries({ queryKey: ['collections-summary'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['recurring-charges'] }); queryClient.invalidateQueries({ queryKey: ['client-summary'] }) }
+  const refresh = () => { queryClient.invalidateQueries({ queryKey: ['collections-summary'] }); queryClient.invalidateQueries({ queryKey: ['collections-insights'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['recurring-charges'] }); queryClient.invalidateQueries({ queryKey: ['client-summary'] }) }
   const removePayment = useMutation({ mutationFn: (id: string) => collectionsApi.removePayment(id), onSuccess: refresh })
   const changePaymentStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'RECEIVED' | 'VOID' }) => collectionsApi.setPaymentStatus(id, status), onSuccess: refresh })
   const createPayment = useMutation({ mutationFn: () => collectionsApi.createPayment({ ...paymentForm, amount: paymentForm.amount }), onSuccess: () => { refresh(); setPaymentForm(PAYMENT_FORM); setFormMode(null) } })
@@ -89,14 +90,13 @@ export default function CollectionsPage() {
     },
   })
 
-  const pyg = summaryQuery.data?.currencies.find((item) => item.currency === 'PYG') ?? summaryQuery.data?.currencies[0]
   const generationResult = generateRecurring.data?.data as { generated: number; skipped: number } | undefined
 
   return <PageFrame><PageHeader eyebrow="Cuenta corriente" title="Gestión de cobranzas" description="Honorarios, cargos, pagos y vencimientos; cada moneda se mantiene separada." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={exportReceivables.isPending} onClick={() => exportReceivables.mutate()}><Download size={15} /> {exportReceivables.isPending ? 'Exportando…' : 'Exportar CSV'}</button>{canManage ? <button type="button" className="btn-secondary" onClick={() => { setView('import'); fileRef.current?.click() }}><Upload size={15} /> Importar</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => setFormMode('payment')}><Plus size={15} /> Registrar pago</button> : null}<input ref={fileRef} type="file" accept=".xlsx,.csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); previewImport.mutate(file) } }} /></div>} />
 
-    {summaryQuery.isError ? <ErrorState message={getErrorMessage(summaryQuery.error)} retry={() => summaryQuery.refetch()} /> : <section className="grid overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 xl:grid-cols-4"><LedgerMetric label="Facturado" value={pyg?.billed} currency={pyg?.currency} /><LedgerMetric label="Aplicado" value={pyg?.applied} currency={pyg?.currency} tone="success" /><LedgerMetric label="Saldo pendiente" value={pyg?.outstanding} currency={pyg?.currency} tone={isPositiveDecimal(pyg?.outstanding) ? 'warning' : undefined} /><LedgerMetric label="Cuentas vencidas" value={summaryQuery.data?.overdueCount ?? 0} plain tone={(summaryQuery.data?.overdueCount ?? 0) > 0 ? 'danger' : 'success'} /></section>}
+    {insightsQuery.isLoading ? <LoadingState label="Calculando indicadores…" /> : insightsQuery.isError || !insightsQuery.data ? <ErrorState message={getErrorMessage(insightsQuery.error, 'No pudimos cargar los indicadores.')} retry={() => insightsQuery.refetch()} /> : <CollectionsDashboard data={insightsQuery.data} />}
 
-    <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['receivables', 'Cuentas por cobrar'], ['payments', 'Pagos'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('shrink-0 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
+    <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['payments', 'Pagos'], ['receivables', 'Cuentas por cobrar'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('shrink-0 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
 
     {formMode === 'payment' ? <EntryForm title="Registrar pago" error={createPayment.error} cancel={() => setFormMode(null)} save={() => createPayment.mutate()} saving={createPayment.isPending} disabled={!paymentForm.companyId || !paymentForm.amount || !paymentForm.paidAt}><ClientField><ClientPicker value={paymentForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el pago." onChange={(companyId) => setPaymentForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Importe"><MoneyInput value={paymentForm.amount} decimals={paymentForm.currency !== 'PYG'} onChange={(amount) => setPaymentForm((current) => ({ ...current, amount }))} /></Field><Field label="Fecha (día / mes / año)"><DateField value={paymentForm.paidAt} onChange={(paidAt) => setPaymentForm((current) => ({ ...current, paidAt }))} /></Field><Field label="Medio"><select className="ctrl-input" value={paymentForm.method} onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></Field><Field label="Referencia"><input className="ctrl-input" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} /></Field></EntryForm> : null}
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
@@ -108,7 +108,6 @@ export default function CollectionsPage() {
   </PageFrame>
 }
 
-function LedgerMetric({ label, value, currency = 'PYG', tone, plain }: { label: string; value?: string | number; currency?: string; tone?: 'danger' | 'success' | 'warning'; plain?: boolean }) { return <div className="bg-[var(--paper)] p-5"><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p><p className={clsx('mt-2 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]', tone === 'danger' && 'text-[var(--danger)]', tone === 'success' && 'text-[var(--success)]', tone === 'warning' && 'text-[var(--warning)]')}>{plain ? value ?? 0 : formatMoney(value, currency)}</p></div> }
 /** Hace clicable toda la fila para abrir el legajo, sin interferir con enlaces ni botones. */
 function openClientRow(router: ReturnType<typeof useRouter>, clientId?: string | null) {
   if (!clientId) return {}
