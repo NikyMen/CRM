@@ -253,6 +253,7 @@ export const clientsApi = {
     assignments?: Array<{ userId: string; area?: string }>
     contactName?: string
     contactPhone?: string
+    contactEmail?: string
     referenceNotes?: string | null
   }) => api.patch<Client>(`/clients/${id}`, data),
 

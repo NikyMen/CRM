@@ -44,6 +44,7 @@ export interface ClientInput {
   department?: string | null
   contactName?: string | null
   contactPhone?: string | null
+  contactEmail?: string | null
   referenceNotes?: string | null
   country?: string
   status?: ClientStatus
@@ -213,8 +214,8 @@ export class ClientService {
   }
 
   async create(ctx: WorkspaceContext, input: ClientInput) {
-    if (input.contactPhone?.trim() && !input.contactName?.trim()) {
-      throw new ValidationError('Ingresá el nombre del contacto para guardar su teléfono')
+    if ((input.contactPhone?.trim() || input.contactEmail?.trim()) && !input.contactName?.trim()) {
+      throw new ValidationError('Ingresá el nombre del contacto para guardar su teléfono o correo')
     }
     const data = await this.prepareInput(ctx, input, true) as Prisma.CompanyCreateInput
     return db.$transaction(async (tx) => {
@@ -229,7 +230,7 @@ export class ClientService {
             firstName,
             lastName: lastName.join(' ') || null,
             phone: input.contactPhone?.trim() || null,
-            email: input.email?.trim().toLowerCase() || null,
+            email: (input.contactEmail ?? input.email)?.trim().toLowerCase() || null,
             source: 'MANUAL',
           },
         })
@@ -260,6 +261,7 @@ export class ClientService {
         include: clientInclude,
       })
       if (ownerWasProvided) await this.syncOwner(tx, ctx.workspaceId, id, input.ownerId ?? null, ctx.userId)
+      await this.syncPrimaryContact(tx, ctx.workspaceId, updated.id, updated.ownerId, input)
       return updated
     })
     if (ownerWasProvided) await this.publishOwnerSync(ctx.workspaceId, id, input.ownerId ?? null)
@@ -427,6 +429,35 @@ export class ClientService {
       },
     })))
     return { rows: reviewed, total: reviewed.length, valid: valid.length, invalid: 0, committed: valid.length }
+  }
+
+  /** Actualiza (o crea) el contacto principal del legajo: el más antiguo que siga activo. */
+  private async syncPrimaryContact(tx: Prisma.TransactionClient, workspaceId: string, companyId: string, ownerId: string | null, input: Partial<ClientInput>) {
+    if (input.contactName === undefined && input.contactPhone === undefined && input.contactEmail === undefined) return
+    const name = input.contactName?.trim() ?? ''
+    const phone = input.contactPhone?.trim() || null
+    const email = input.contactEmail?.trim().toLowerCase() || null
+    const primary = await tx.contact.findFirst({
+      where: { workspaceId, companyId, isArchived: false },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (!name) {
+      if (phone || email) throw new ValidationError('Ingresá el nombre del contacto para guardar su teléfono o correo')
+      return
+    }
+    const [firstName, ...rest] = name.split(/\s+/)
+    const data = {
+      firstName,
+      lastName: rest.join(' ') || null,
+      ...(input.contactPhone !== undefined ? { phone } : {}),
+      ...(input.contactEmail !== undefined ? { email } : {}),
+    }
+    if (primary) {
+      await tx.contact.update({ where: { id: primary.id }, data })
+    } else {
+      await tx.contact.create({ data: { ...data, workspaceId, companyId, ownerId, source: 'MANUAL' } })
+    }
   }
 
   private async prepareInput(ctx: WorkspaceContext, input: Partial<ClientInput>, creating: boolean, currentId?: string): Promise<Prisma.CompanyCreateInput | Prisma.CompanyUpdateInput> {
