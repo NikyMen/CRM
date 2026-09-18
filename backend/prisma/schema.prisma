@@ -175,6 +175,9 @@ model WorkspaceUser {
   workspaceId String
   userId      String
   role        String   @default("member")
+  /// Overrides de módulos de esta persona dentro del workspace. Nunca contiene
+  /// credenciales; las claves válidas se validan en el registro de módulos.
+  moduleAccess Json     @default("{}")
   createdAt   DateTime @default(now())
   invitations TeamInvitation[]
 

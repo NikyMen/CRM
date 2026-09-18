@@ -308,7 +308,7 @@ export const checklistsApi = {
 }
 
 export const collectionsApi = {
-  paymentSummaryPdf: (id: string) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { responseType: 'blob' }),
+  paymentSummaryPdf: (id: string, params?: { from?: string; to?: string }) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { params, responseType: 'blob' }),
   removePayment: (id: string) => api.delete(`/collections/payments/${id}`),
   removeReceivable: (id: string) => api.delete(`/collections/receivables/${id}`),
   setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
@@ -571,6 +571,9 @@ export const teamApi = {
 
   updateRole: (memberId: string, role: 'admin' | 'member' | 'viewer') =>
     api.patch(`/auth/team/${memberId}/role`, { role }),
+
+  updateModules: (memberId: string, modules: Partial<Record<ModuleKey, boolean>>) =>
+    api.patch<{ id: string; modules: ModuleState }>(`/auth/team/${memberId}/modules`, { modules }),
 
   remove: (memberId: string) =>
     api.delete(`/auth/team/${memberId}`),

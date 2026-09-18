@@ -6,10 +6,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teamApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import type { Role } from '@/types'
-import { UserPlus, Trash2, Shield, Loader2, ChevronDown } from 'lucide-react'
+import { UserPlus, Trash2, Shield, Loader2, ChevronDown, SlidersHorizontal, Check } from 'lucide-react'
 import clsx from 'clsx'
 import { UserAvatar } from '@/components/UserAvatar'
 import { TeamAccessPanel } from '@/components/romez/TeamAccessPanel'
+import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey } from '@/lib/modules'
 
 const ROLE_LABELS: Record<Role, string> = {
   owner:  'Owner',
@@ -22,6 +23,7 @@ type Member = {
   id:       string
   role:     Role
   joinedAt: string
+  moduleAccess?: Partial<Record<ModuleKey, boolean>>
   user: {
     id:        string
     email:     string
@@ -36,6 +38,7 @@ export default function TeamPage() {
   const currentUser  = auth.get()
   const queryClient  = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
+  const [modulesMemberId, setModulesMemberId] = useState<string | null>(null)
   const [form, setForm] = useState({
     firstName: '',
     lastName:  '',
@@ -70,7 +73,13 @@ export default function TeamPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['team'] }),
   })
 
+  const updateModulesMutation = useMutation({
+    mutationFn: ({ id, modules }: { id: string; modules: Partial<Record<ModuleKey, boolean>> }) => teamApi.updateModules(id, modules),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['team'] }),
+  })
+
   const isOwner = currentUser?.role === 'owner'
+  const canManageModules = currentUser?.role === 'owner' || currentUser?.role === 'admin'
 
   return (
     <div className="p-6 max-w-5xl mx-auto animate-fade-in">
@@ -228,6 +237,17 @@ export default function TeamPage() {
                     </span>
                   )}
 
+                  {canManageModules && !isOwnerMember && (isOwner || member.role !== 'admin') ? (
+                    <button
+                      type="button"
+                      className={clsx('rounded-lg border p-2 transition-all duration-200', modulesMemberId === member.id ? 'border-[var(--brand-blue)] bg-[var(--brand-paper)] text-[var(--brand-navy)] shadow-sm' : 'border-[var(--line)] text-[var(--ink-tertiary)] hover:border-[var(--brand-blue)] hover:text-[var(--brand-navy)]')}
+                      onClick={() => setModulesMemberId((current) => current === member.id ? null : member.id)}
+                      aria-expanded={modulesMemberId === member.id}
+                      aria-controls={`member-modules-${member.id}`}
+                      title={`Módulos de ${member.user.firstName}`}
+                    ><SlidersHorizontal size={16} /></button>
+                  ) : null}
+
                   {/* Botón de eliminar — solo owner, no a sí mismo ni a otros owners */}
                   {isOwner && !isOwnerMember && !isMe ? (
                     <button
@@ -244,8 +264,9 @@ export default function TeamPage() {
                   ) : (
                     <div className="w-8"></div>
                   )}
-                </div>
               </div>
+              {modulesMemberId === member.id ? <MemberModuleSelector member={member} saving={updateModulesMutation.isPending} error={updateModulesMutation.error} onChange={(modules) => updateModulesMutation.mutate({ id: member.id, modules })} /> : null}
+            </div>
             )
           })}
         </div>
@@ -276,5 +297,21 @@ export default function TeamPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function MemberModuleSelector({ member, saving, error, onChange }: { member: Member; saving: boolean; error: unknown; onChange: (modules: Partial<Record<ModuleKey, boolean>>) => void }) {
+  const modules = normalizeModuleState(member.moduleAccess)
+  return (
+    <section id={`member-modules-${member.id}`} className="mt-4 border-t border-[var(--line-soft)] pt-4 animate-slide-up" aria-label={`Módulos de ${member.user.firstName}`}>
+      <div className="mb-3 flex items-start justify-between gap-4"><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">Módulos visibles</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">La selección se guarda para este integrante. Cobranzas empieza desactivada.</p></div><span className="rounded-full bg-[var(--brand-paper)] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[var(--brand-navy)]">{member.role}</span></div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {MODULE_DEFINITIONS.filter((definition) => definition.key !== 'team' && definition.key !== 'integrations').map((definition) => {
+          const enabled = modules[definition.key]
+          return <button key={definition.key} type="button" disabled={saving} onClick={() => onChange({ ...modules, [definition.key]: !enabled })} className={clsx('group flex min-h-16 items-center gap-3 rounded-xl border px-3 text-left transition-all duration-200 disabled:cursor-wait disabled:opacity-60', enabled ? 'border-[var(--brand-blue)] bg-[var(--brand-paper)] shadow-sm' : 'border-[var(--line)] bg-[var(--paper)] hover:border-[var(--ink-tertiary)]')}><span className={clsx('grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors', enabled ? 'border-[var(--brand-blue)] bg-[var(--brand-blue)] text-white' : 'border-[var(--line)] bg-[var(--paper)] text-transparent')}><Check size={13} strokeWidth={3} /></span><span><span className="block text-xs font-extrabold text-[var(--ink-primary)]">{definition.label}</span><span className="mt-0.5 block text-[10px] leading-tight text-[var(--ink-tertiary)]">{definition.description}</span></span></button>
+        })}
+      </div>
+      {error ? <p role="alert" className="mt-3 text-xs font-semibold text-[var(--danger)]">No pudimos actualizar los módulos. Intentá nuevamente.</p> : null}
+    </section>
   )
 }

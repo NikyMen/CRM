@@ -278,6 +278,7 @@ export class AuthService {
       id:        m.id,
       role:      m.role,
       joinedAt:  m.createdAt,
+      moduleAccess: m.moduleAccess,
       user:      m.user,
     }))
   }

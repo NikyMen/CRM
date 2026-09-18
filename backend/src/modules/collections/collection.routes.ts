@@ -3,11 +3,12 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
+import { requireModule } from '../../core/modules/require-module'
 import type { EventBus } from '../../core/event-bus'
 import { config } from '../../core/config'
 import { ValidationError, type WorkspaceContext } from '../../types'
 import { parseCollectionSpreadsheet } from './collection-import'
-import { normalizeParaguayDateInput } from './collection-calculations'
+import { normalizeParaguayDateInput, startOfParaguayDay } from './collection-calculations'
 import { renderPaymentSummary } from './payment-summary'
 import { ensureClientAccess } from '../clients/client-access'
 import { db } from '../../core/database'
@@ -78,6 +79,7 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
   const service = new CollectionService(options.eventBus)
   await app.register(multipart, { limits: { files: 1, fileSize: config.UPLOAD_MAX_BYTES, fields: 5 } })
   app.addHook('onRequest', async (req) => authenticate(req))
+  app.addHook('preHandler', requireModule('collections'))
 
   app.get('/summary', async (req, reply) => {
     return reply.send(await service.summary(req.user as WorkspaceContext))
@@ -91,13 +93,24 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
   app.get('/clients/:id/payments.pdf', async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const { id } = req.params as { id: string }
+    const range = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query)
+    if (range.from && range.to && range.from > range.to) throw new ValidationError('El inicio del período debe ser anterior al final')
+    const toStart = (value: string) => startOfParaguayDay(normalizeParaguayDateInput(value) as Date)
+    const dateFilter = (field: 'paidAt' | 'createdAt') => {
+      if (!range.from && !range.to) return {}
+      const filter: { gte?: Date; lt?: Date } = {}
+      if (range.from) filter.gte = toStart(range.from)
+      if (range.to) { const end = toStart(range.to); end.setUTCDate(end.getUTCDate() + 1); filter.lt = end }
+      return { [field]: filter }
+    }
     const client = await ensureClientAccess(ctx, id)
     const [payments, charges] = await db.$transaction([
-      db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
-      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' } } }),
+      db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, ...dateFilter('paidAt') }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
+      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('createdAt') } }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+    const periodLabel = range.from || range.to ? `Período ${range.from ?? 'inicio'} a ${range.to ?? 'hoy'}` : 'Historial completo'
     return reply.header('Cache-Control', 'no-store').header('Content-Disposition', 'attachment; filename="resumen-pagos.pdf"')
-      .type('application/pdf').send(renderPaymentSummary(client, payments, charges))
+      .type('application/pdf').send(renderPaymentSummary(client, payments, charges, new Date(), periodLabel))
   })
 
   app.get('/receivables', async (req, reply) => {

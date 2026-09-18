@@ -7,8 +7,8 @@ const money = (value: Prisma.Decimal, currency: string) => `${currency} ${value.
 
 // Informe de texto A4, fuentes PDF estándar y WinAnsi (incluye acentos españoles).
 // No interpreta HTML ni permite que los datos agreguen operadores al documento.
-export function renderPaymentSummary(client: { name: string; ruc: string | null; dv: string | null }, payments: PaymentRow[], charges: ChargeRow[], now = new Date()) {
-  const blocks: string[][] = [[`Cliente: ${client.name}`, `RUC: ${client.ruc || 'Sin RUC'}${client.dv ? `-${client.dv}` : ''}`, `Emitido: ${date(now)} - Historial completo`, '', 'RESUMEN POR MONEDA']]
+export function renderPaymentSummary(client: { name: string; ruc: string | null; dv: string | null }, payments: PaymentRow[], charges: ChargeRow[], now = new Date(), periodLabel = 'Historial completo') {
+  const blocks: string[][] = [[`Cliente: ${client.name}`, `RUC: ${client.ruc || 'Sin RUC'}${client.dv ? `-${client.dv}` : ''}`, `Emitido: ${date(now)} - ${periodLabel}`, '', 'RESUMEN POR MONEDA']]
   const currencies = [...new Set([...payments.map((p) => p.currency), ...charges.map((c) => c.currency)])].sort()
   for (const currency of currencies) {
     const billed = charges.filter((c) => c.currency === currency).reduce((sum, c) => sum.plus(c.amount), new Prisma.Decimal(0))
@@ -41,7 +41,7 @@ export function renderPaymentSummary(client: { name: string; ruc: string | null;
   pages.forEach((page, index) => {
     const pageId = objects.length + 1
     kids.push(pageId)
-    const content = `BT /F1 16 Tf 40 797 Td (${escape('Gestión ROMEZ - Resumen de pagos')}) Tj ET\nBT /F1 10 Tf 15 TL 40 760 Td\n${page.map((line, i) => `${i ? 'T* ' : ''}(${escape(line)}) Tj`).join('\n')}\nET\nBT /F1 9 Tf 40 35 Td (Página ${index + 1} de ${pages.length}) Tj ET`
+    const content = `0.02 0.12 0.25 rg\nBT /F1 19 Tf 40 802 Td (${escape('ROMEZ')}) Tj ET\n0 0 0 rg\nBT /F1 12 Tf 170 805 Td (${escape('Resumen de cuenta')}) Tj ET\nBT /F1 10 Tf 15 TL 40 760 Td\n${page.map((line, i) => `${i ? 'T* ' : ''}(${escape(line)}) Tj`).join('\n')}\nET\nBT /F1 9 Tf 40 35 Td (Gestión ROMEZ | Página ${index + 1} de ${pages.length}) Tj ET`
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`, `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`)
   })
   objects[0] = '<< /Type /Catalog /Pages 2 0 R >>'

@@ -52,6 +52,19 @@ desktop.ini
 # Backups and local secrets
 backups/
 .secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Datos efímeros de pruebas locales (pueden contener información de clientes)
+backend/.data/client-documents/
+backend/.data/test-uploads/
+.env.test
+.env.test.local
 
 # Testing
 coverage/
