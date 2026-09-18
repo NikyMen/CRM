@@ -10,12 +10,12 @@ Cambios:
 
 ## Actualizar el VPS
 
-Para la instalación PM2 en `/var/www/crm`, bajo usuario de aplicación `romez`.
+Referencia para una instalación PM2 en `/var/www/crm`, bajo usuario de aplicación `romez`. El servidor cambió el 2026-09-16: confirmar alias, ruta y topología del nuevo VPS antes de usar estos comandos.
 Ejecutar después de que el commit esté disponible en `origin/codex/gestion-romez`.
 Estos comandos interrumpen temporalmente frontend/backend. No reinician PostgreSQL ni Redis.
 
 ```bash
-ssh farmacia
+ssh ALIAS_DEL_VPS_ACTUAL
 cd /var/www/crm
 set -euo pipefail
 

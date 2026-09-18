@@ -96,11 +96,7 @@ export class ContactService {
 
     // 1. Deduplicación — evitar contactos duplicados por email o tel
     if (data.email || data.phone) {
-      const duplicate = await this.findDuplicate(
-        workspaceId,
-        data.email,
-        data.phone
-      )
+      const duplicate = await this.findDuplicate(workspaceId, data.email, data.phone, undefined, data.companyId)
       if (duplicate) {
         throw new ConflictError(
           `Ya existe un contacto con este ${data.email ? 'email' : 'teléfono'}. ID: ${duplicate.id}`
@@ -252,13 +248,14 @@ export class ContactService {
       await this.ensureVisibleCompany(workspaceId, data.companyId, actor)
     }
 
-    // Verificar duplicados si cambia email o phone
-    if (data.email || data.phone) {
+    // También validar al cambiar de cliente, usando los datos efectivos.
+    if (data.email || data.phone || data.companyId !== undefined) {
       const dup = await this.findDuplicate(
         workspaceId,
-        data.email,
-        data.phone,
-        id // excluir el contacto actual de la búsqueda
+        data.email ?? existing.email ?? undefined,
+        data.phone ?? existing.phone ?? undefined,
+        id, // excluir el contacto actual de la búsqueda
+        data.companyId !== undefined ? data.companyId : existing.companyId
       )
       if (dup) {
         throw new ConflictError('Otro contacto ya tiene este email o teléfono')
@@ -456,7 +453,8 @@ export class ContactService {
     workspaceId: string,
     email?: string,
     phone?: string,
-    excludeId?: string
+    excludeId?: string,
+    companyId?: string | null
   ): Promise<Contact | null> {
     if (!email && !phone) return null
 
@@ -465,6 +463,7 @@ export class ContactService {
         workspaceId,
         isArchived: false,
         ...(excludeId && { id: { not: excludeId } }),
+        ...(companyId ? { AND: [{ OR: [{ companyId: null }, { companyId: { not: companyId } }] }] } : {}),
         OR: [
           ...(email ? [{ email }] : []),
           ...(phone ? [{ phone }] : []),

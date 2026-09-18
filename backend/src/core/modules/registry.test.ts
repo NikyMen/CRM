@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { MODULE_DEFINITIONS, MODULE_KEYS, mergeModuleState, readModuleState, writeModuleState } from './registry'
+import { MODULE_DEFINITIONS, MODULE_KEYS, mergeModuleState, readMemberModuleState, readModuleState, writeModuleState } from './registry'
 
 test('sin configuración guardada cada módulo toma su valor por defecto', () => {
   const state = readModuleState(null)
@@ -10,6 +10,13 @@ test('sin configuración guardada cada módulo toma su valor por defecto', () =>
   assert.equal(state.team, true)
   assert.equal(state.integrations, true)
   assert.equal(state.stock, false)
+  assert.equal(state.collections, false)
+})
+
+test('cobranzas sólo está disponible por defecto para owner y admin', () => {
+  assert.equal(readMemberModuleState(null, {}, 'member').collections, false)
+  assert.equal(readMemberModuleState(null, { collections: true }, 'member').collections, true)
+  assert.equal(readMemberModuleState(null, { collections: false }, 'admin').collections, true)
 })
 
 test('el registro cubre todos los módulos apagables del producto', () => {

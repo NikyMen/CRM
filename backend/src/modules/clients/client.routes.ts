@@ -37,6 +37,9 @@ const clientSchema = z.object({
   address: nullableText(500),
   city: nullableText(120),
   department: nullableText(120),
+  contactName: nullableText(180),
+  contactPhone: nullableText(50),
+  referenceNotes: nullableText(5000),
   country: z.string().trim().min(1).max(80).default('Paraguay'),
   status: z.enum(['PROSPECT', 'ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
   ownerId: z.string().nullable().optional(),
@@ -50,6 +53,7 @@ const filtersSchema = z.object({
   status: z.enum(['PROSPECT', 'ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
   ownerId: z.string().optional(),
   hasDebt: z.preprocess((value) => value === 'true' ? true : value === 'false' ? false : value, z.boolean().optional()),
+  archived: z.preprocess((value) => value === 'true' ? true : value === 'false' ? false : value, z.boolean().optional()),
   page: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   sortBy: z.string().optional(),
@@ -216,5 +220,11 @@ export async function clientRoutes(app: FastifyInstance, options: { eventBus?: E
     const { id } = req.params as { id: string }
     await service.archive(ctx, id)
     return reply.status(204).send()
+  })
+
+  app.post('/:id/restore', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
+    const { id } = req.params as { id: string }
+    return reply.send(await service.restore(ctx, id))
   })
 }

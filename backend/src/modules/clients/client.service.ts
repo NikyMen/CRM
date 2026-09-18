@@ -42,6 +42,9 @@ export interface ClientInput {
   address?: string | null
   city?: string | null
   department?: string | null
+  contactName?: string | null
+  contactPhone?: string | null
+  referenceNotes?: string | null
   country?: string
   status?: ClientStatus
   ownerId?: string | null
@@ -55,6 +58,7 @@ export interface ClientFilters {
   status?: ClientStatus
   ownerId?: string
   hasDebt?: boolean
+  archived?: boolean
   page?: number
   limit?: number
   sortBy?: string
@@ -73,7 +77,7 @@ export class ClientService {
     const page = filters.page ?? 0
     const limit = Math.min(filters.limit ?? 25, 100)
     const conditions: Prisma.CompanyWhereInput[] = [
-      { workspaceId: ctx.workspaceId, isArchived: false },
+      { workspaceId: ctx.workspaceId, isArchived: canManageAllClients(ctx) && filters.archived === true },
       clientVisibilityWhere(ctx),
     ]
 
@@ -209,12 +213,38 @@ export class ClientService {
   }
 
   async create(ctx: WorkspaceContext, input: ClientInput) {
+    if (input.contactPhone?.trim() && !input.contactName?.trim()) {
+      throw new ValidationError('Ingresá el nombre del contacto para guardar su teléfono')
+    }
     const data = await this.prepareInput(ctx, input, true) as Prisma.CompanyCreateInput
-    return db.company.create({ data, include: clientInclude })
+    return db.$transaction(async (tx) => {
+      const client = await tx.company.create({ data, include: clientInclude })
+      if (input.contactName?.trim()) {
+        const [firstName, ...lastName] = input.contactName.trim().split(/\s+/)
+        await tx.contact.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            companyId: client.id,
+            ownerId: client.ownerId,
+            firstName,
+            lastName: lastName.join(' ') || null,
+            phone: input.contactPhone?.trim() || null,
+            email: input.email?.trim().toLowerCase() || null,
+            source: 'MANUAL',
+          },
+        })
+      }
+      return client
+    })
   }
 
   async update(ctx: WorkspaceContext, id: string, input: Partial<ClientInput>) {
     await ensureClientAccess(ctx, id, 'write')
+    if (input.referenceNotes !== undefined && input.customData === undefined) {
+      // Conservar el resto de customData al editar solo las notas.
+      const current = await db.company.findFirst({ where: { id, workspaceId: ctx.workspaceId }, select: { customData: true } })
+      input = { ...input, customData: (current?.customData ?? {}) as Record<string, unknown> }
+    }
     const prepared = await this.prepareInput(ctx, input, false, id)
     const ownerWasProvided = Object.prototype.hasOwnProperty.call(input, 'ownerId')
     const assignmentsWereProvided = Object.prototype.hasOwnProperty.call(input, 'assignments')
@@ -247,6 +277,14 @@ export class ClientService {
         data: { isActive: false },
       }),
     ])
+  }
+
+  async restore(ctx: WorkspaceContext, id: string) {
+    if (!canManageAllClients(ctx)) throw new ForbiddenError('Solo owner o admin pueden restaurar clientes')
+    const client = await db.company.findFirst({ where: { id, workspaceId: ctx.workspaceId, isArchived: true } })
+    if (!client) throw new NotFoundError('Cliente', id)
+    // Los planes recurrentes quedan pausados: se reactivan a mano para no generar cargos por sorpresa.
+    return db.company.update({ where: { id }, data: { isArchived: false, status: 'ACTIVE' }, include: clientInclude })
   }
 
   async claim(ctx: WorkspaceContext, id: string) {
@@ -414,7 +452,7 @@ export class ClientService {
       ...(input.dv !== undefined ? { dv: input.dv?.replace(/\D/g, '') || null } : {}),
       ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
       ...(input.tradeName !== undefined ? { tradeName: input.tradeName } : {}),
-      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.email !== undefined ? { email: input.email?.trim().toLowerCase() || null } : {}),
       ...(input.phone !== undefined ? { phone: input.phone } : {}),
       ...(input.website !== undefined ? { website: input.website } : {}),
       ...(input.activity !== undefined ? { activity: input.activity } : {}),
@@ -426,6 +464,7 @@ export class ClientService {
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
       ...(input.customData !== undefined ? { customData: input.customData as Prisma.InputJsonValue } : {}),
+      ...(input.referenceNotes !== undefined ? { customData: { ...(input.customData ?? {}), referenceNotes: input.referenceNotes } } : {}),
       ...(ownerId ? { owner: { connect: { id: ownerId } } } : {}),
       ...(!creating && ownerId === null ? { owner: { disconnect: true } } : {}),
       ...(input.assignments !== undefined ? {

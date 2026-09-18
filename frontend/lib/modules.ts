@@ -30,7 +30,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'clients', label: 'Clientes', description: 'Legajo de clientes, responsables y documentos.', defaultEnabled: true },
   { key: 'sales', label: 'Ventas', description: 'Registro de ventas con ítems, totales y comprobantes.', defaultEnabled: true },
   { key: 'commercial', label: 'Gestión comercial', description: 'Leads, embudos y negocios.', defaultEnabled: true },
-  { key: 'collections', label: 'Cobranzas', description: 'Cuentas por cobrar, pagos y planes recurrentes.', defaultEnabled: true },
+  { key: 'collections', label: 'Cobranzas', description: 'Cuentas por cobrar, pagos y planes recurrentes.', defaultEnabled: false },
   { key: 'customer-service', label: 'Atención al cliente', description: 'Bandeja de WhatsApp y atención.', defaultEnabled: true },
   { key: 'tickets', label: 'Tickets', description: 'Pedidos internos y seguimiento.', defaultEnabled: true },
   { key: 'internal-chat', label: 'Chat interno', description: 'Mensajería entre el equipo.', defaultEnabled: true },

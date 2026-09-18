@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { webhooksApi } from '@/lib/api'
 import type { Webhook as WebhookType } from '@/types'
@@ -26,6 +27,7 @@ const EVENT_LABELS: Record<string, string> = {
 }
 
 export default function WebhooksPage() {
+  const confirmDelete = useConfirmDelete()
   const queryClient               = useQueryClient()
   const [showForm, setShowForm]   = useState(false)
   const [copiedId, setCopiedId]   = useState<string | null>(null)
@@ -254,8 +256,8 @@ export default function WebhooksPage() {
                     Test
                   </button>
                   <button
-                    onClick={() => deleteMutation.mutate(wh.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={async () => { if (await confirmDelete(`Se eliminará el webhook ${wh.url}.`)) deleteMutation.mutate(wh.id) }}
+                    className="btn-danger !min-h-0 shrink-0 !p-2"
                     title="Eliminar"
                   >
                     <Trash2 size={16} />

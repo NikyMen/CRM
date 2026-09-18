@@ -10,6 +10,7 @@ import { BadgeDollarSign, Boxes, BriefcaseBusiness, Building2, ChevronDown, Chev
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
+import { ConfirmDeleteProvider } from '@/components/romez/ConfirmDelete'
 import { UserAvatar } from '@/components/UserAvatar'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
@@ -175,6 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [blockedModule, homeFallback, router])
 
   return (
+    <ConfirmDeleteProvider>
     <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)] md:flex md:h-screen md:overflow-hidden">
       {user && ['owner', 'admin', 'member'].includes(user.role) ? <WhatsAppLiveSync /> : null}
       <aside className={clsx('hidden shrink-0 transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-[76px]' : 'w-[256px]')}><Sidebar items={visibleItems} pathname={pathname} collapsed={sidebarCollapsed} onToggle={toggleSidebar} /></aside>
@@ -192,5 +194,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
     </div>
+    </ConfirmDeleteProvider>
   )
 }

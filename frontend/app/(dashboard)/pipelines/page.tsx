@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { pipelinesApi } from '@/lib/api'
 import type { Pipeline } from '@/types'
@@ -36,6 +37,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
 }
 
 export default function PipelinesPage() {
+  const confirmDelete = useConfirmDelete()
   const pathname = usePathname()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -236,12 +238,12 @@ export default function PipelinesPage() {
                                 <Pencil size={14} />
                                 </button>
                                 <button
-                                onClick={() => {
-                                    if (confirm(`¿Borrar etapa "${stage.name}"?`)) {
+                                onClick={async () => {
+                                    if (await confirmDelete(`Se eliminará la etapa "${stage.name}".`)) {
                                        deleteStage.mutate({ pipelineId: pipeline.id, stageId: stage.id })
                                     }
                                 }}
-                                className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors"
+                                className="btn-danger !min-h-0 !p-1.5"
                                 >
                                 <Trash2 size={14} />
                                 </button>

@@ -6,11 +6,13 @@ import { requireRole } from '../../core/auth/require-role'
 import { INVITABLE_ROLES } from '../../core/auth/roles'
 import { config } from '../../core/config'
 import { Prisma } from '@prisma/client'
+import { ForbiddenError, ValidationError } from '../../types'
 import { TeamAccessService } from './team-access.service'
 import type { WorkspaceContext } from '../../types'
 import {
   MODULE_DEFINITIONS,
   mergeModuleState,
+  readMemberModuleState,
   readModuleState,
   writeModuleState,
 } from '../../core/modules/registry'
@@ -54,12 +56,12 @@ export async function authRoutes(app: FastifyInstance) {
   })
 
   app.get('/workspace-settings', { preHandler: authenticate }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; role: string }
-    const workspace = await db.workspace.findUnique({
-      where: { id: ctx.workspaceId },
-      select: { settings: true },
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
+    const member = await db.workspaceUser.findUnique({
+      where: { workspaceId_userId: { workspaceId: ctx.workspaceId, userId: ctx.userId } },
+      select: { moduleAccess: true, workspace: { select: { settings: true } } },
     })
-    const modules = readModuleState(workspace?.settings)
+    const modules = readMemberModuleState(member?.workspace.settings, member?.moduleAccess, ctx.role)
     return reply.send({
       modules,
       definitions: MODULE_DEFINITIONS,
@@ -302,7 +304,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/invite', {
     preHandler: [authenticate, requireRole('owner', 'admin')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; role: string }
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
 
     const schema = z.object({
       email:     authEmailSchema,
@@ -339,7 +341,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.patch('/team/:id/role', {
     preHandler: [authenticate, requireRole('owner', 'admin')],
   }, async (req, reply) => {
-    const ctx = req.user as { workspaceId: string; role: string }
+    const ctx = req.user as { workspaceId: string; userId: string; role: string }
     const { id } = req.params as { id: string }
     const { role } = z.object({
       role: z.enum(['admin', 'member', 'viewer']),
@@ -347,6 +349,25 @@ export async function authRoutes(app: FastifyInstance) {
 
     const updated = await authService.updateMemberRole(ctx.workspaceId, id, role, ctx.role)
     return reply.send(updated)
+  })
+
+  // Define qué módulos puede abrir cada integrante no privilegiado. Owner y
+  // admin mantienen Cobranzas por política, aun si una petición maliciosa
+  // intentara apagársela.
+  app.patch('/team/:id/modules', {
+    preHandler: [authenticate, requireRole('owner', 'admin')],
+  }, async (req, reply) => {
+    const ctx = req.user as { workspaceId: string; role: string }
+    const { id } = req.params as { id: string }
+    const { modules } = z.object({ modules: z.record(z.string(), z.boolean()) }).parse(req.body)
+    const member = await db.workspaceUser.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+    if (!member) throw new ValidationError('Integrante no encontrado')
+    if (member.role === 'owner') throw new ForbiddenError('No se pueden cambiar los módulos del owner')
+    if (ctx.role !== 'owner' && member.role === 'admin') throw new ForbiddenError('Solo el owner puede cambiar los módulos de un administrador')
+    const safeModules = mergeModuleState(readModuleState(null), modules)
+    const updated = await db.workspaceUser.update({ where: { id }, data: { moduleAccess: safeModules as Prisma.InputJsonValue } })
+    invalidateModuleCache(ctx.workspaceId)
+    return reply.send({ id: updated.id, modules: safeModules })
   })
 
   // Solo el owner puede eliminar miembros

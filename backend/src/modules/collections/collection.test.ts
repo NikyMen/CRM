@@ -59,6 +59,8 @@ test('el PDF incluye historial completo, acentos, páginas y totales por moneda 
   const pdf = renderPaymentSummary({ name: 'Compañía de prueba', ruc: null, dv: null }, payments, [])
   const text = pdf.toString('latin1')
   assert.ok(text.startsWith('%PDF-1.4'))
+  assert.match(text, /ROMEZ/)
+  assert.match(text, /Resumen de cuenta/)
   assert.match(text, /Compañía de prueba/)
   assert.match(text, /Pagos recibidos: PYG 34 000/)
   assert.match(text, /Pago 34/)

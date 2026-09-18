@@ -116,14 +116,15 @@ export class CollectionService {
       workspaceId: ctx.workspaceId,
       company: clientVisibilityWhere(ctx),
       ...(filters.companyId ? { companyId: filters.companyId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
+      // Los anulados (eliminados) solo aparecen al filtrarlos explícitamente.
+      status: filters.status ?? { not: 'VOID' },
       ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
     }
     const [items, total] = await Promise.all([
       db.receivable.findMany({
         where,
         include: {
-          company: { select: { id: true, name: true, ruc: true, dv: true, ownerId: true } },
+          company: { select: { id: true, name: true, ruc: true, dv: true, ownerId: true, isArchived: true } },
           allocations: { include: { payment: true } },
         },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
@@ -254,6 +255,27 @@ export class CollectionService {
     return updated
   }
 
+  /**
+   * Elimina (anula) un cargo. Lo ya cobrado se desvincula: esos pagos siguen
+   * recibidos y el importe queda como saldo a favor del cliente.
+   */
+  async voidReceivable(ctx: WorkspaceContext, id: string) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede eliminar cargos')
+    let companyId: string | null = null
+    await serializableTransaction(async (tx) => {
+      const receivable = await tx.receivable.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+      if (!receivable) throw new NotFoundError('Cuenta por cobrar', id)
+      companyId = receivable.companyId
+      if (receivable.status === 'VOID') return
+      await tx.paymentAllocation.deleteMany({ where: { receivableId: id } })
+      await tx.receivable.update({
+        where: { id },
+        data: { status: 'VOID', paidAmount: new Prisma.Decimal(0), voidedAt: new Date() },
+      })
+    })
+    await this.emitUpdate(ctx.workspaceId, companyId!, 'receivable.voided', id)
+  }
+
   async listPayments(
     ctx: WorkspaceContext,
     filters: { companyId?: string; currency?: string; includeVoided?: boolean; page: number; limit: number }
@@ -269,7 +291,7 @@ export class CollectionService {
       db.payment.findMany({
         where,
         include: {
-          company: { select: { id: true, name: true, ruc: true, dv: true } },
+          company: { select: { id: true, name: true, ruc: true, dv: true, isArchived: true } },
           allocations: { include: { receivable: { select: { id: true, description: true, dueDate: true } } } },
         },
         orderBy: { paidAt: 'desc' },
@@ -314,10 +336,8 @@ export class CollectionService {
       }
 
       const allocatedTotal = requested.reduce((sum, allocation) => sum.plus(allocation.amount), new Prisma.Decimal(0))
+      // Lo que no cubre cargos abiertos queda como saldo a favor del cliente.
       if (allocatedTotal.gt(amount)) throw new ValidationError('Las aplicaciones superan el monto del pago')
-      if (!allocatedTotal.eq(amount)) {
-        throw new ValidationError('El pago debe aplicarse completamente; no se admiten créditos sin asignar')
-      }
 
       const receivableIds = requested.map((allocation) => allocation.receivableId)
       if (new Set(receivableIds).size !== receivableIds.length) throw new ValidationError('No repitas una cuenta por cobrar')
@@ -381,7 +401,7 @@ export class CollectionService {
       })
       if (!payment) throw new NotFoundError('Pago', id)
       companyId = payment.companyId
-      await ensureClientAccess(ctx, payment.companyId, 'write')
+      // Sin ensureClientAccess: owner/admin deben poder anular pagos de clientes en la papelera.
       if (Boolean(payment.voidedAt) === voiding) return
 
       const receivableIds = [...new Set(payment.allocations.map((allocation) => allocation.receivableId))].sort()
@@ -448,6 +468,101 @@ export class CollectionService {
     }
   }
 
+  /** Indicadores del tablero de cobranzas para una moneda (montos como número). */
+  async insights(ctx: WorkspaceContext, currencyInput = 'PYG') {
+    await this.refreshOverdue(ctx.workspaceId)
+    const currency = currencyCode(currencyInput)
+    const clientScope = clientVisibilityWhere(ctx)
+    const monthKey = (date: Date) => paraguayDate.format(date).slice(0, 7)
+    const today = paraguayDate.format(new Date())
+    const [year, month] = today.split('-').map(Number)
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(Date.UTC(year, month - 6 + index, 1))
+      return date.toISOString().slice(0, 7)
+    })
+    // Un margen de días antes del primer mes cubre el desfase horario de Paraguay.
+    const rangeStart = new Date(Date.UTC(year, month - 7, 25))
+    const toNumber = (value: Prisma.Decimal | null | undefined) => Number((value ?? new Prisma.Decimal(0)).toString())
+
+    const [periodCharges, periodPayments, openReceivables, totals, received] = await Promise.all([
+      db.receivable.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' }, dueDate: { gte: rangeStart } },
+        select: { amount: true, dueDate: true },
+      }),
+      db.payment.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, voidedAt: null, paidAt: { gte: rangeStart } },
+        select: { amount: true, paidAt: true },
+      }),
+      db.receivable.findMany({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { amount: true, paidAmount: true, dueDate: true, companyId: true, company: { select: { id: true, name: true } } },
+      }),
+      db.receivable.aggregate({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' } },
+        _sum: { amount: true, paidAmount: true },
+      }),
+      db.payment.aggregate({
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, voidedAt: null },
+        _sum: { amount: true },
+      }),
+    ])
+
+    const monthly = new Map(months.map((key) => [key, { key, billed: 0, collected: 0 }]))
+    for (const charge of periodCharges) {
+      const bucket = monthly.get(monthKey(charge.dueDate))
+      if (bucket) bucket.billed += toNumber(charge.amount)
+    }
+    for (const payment of periodPayments) {
+      const bucket = monthly.get(monthKey(payment.paidAt))
+      if (bucket) bucket.collected += toNumber(payment.amount)
+    }
+
+    const agingBuckets = [
+      { key: 'current', label: 'Por vencer', amount: 0, count: 0 },
+      { key: '1-30', label: '1 a 30 días', amount: 0, count: 0 },
+      { key: '31-60', label: '31 a 60 días', amount: 0, count: 0 },
+      { key: '61-90', label: '61 a 90 días', amount: 0, count: 0 },
+      { key: '90+', label: 'Más de 90 días', amount: 0, count: 0 },
+    ]
+    const todayMs = Date.parse(`${today}T00:00:00Z`)
+    const debtors = new Map<string, { id: string; name: string; outstanding: number; overdue: number }>()
+    let overdueOutstanding = 0
+    for (const receivable of openReceivables) {
+      const outstanding = toNumber(receivable.amount.minus(receivable.paidAmount))
+      if (outstanding <= 0) continue
+      const daysLate = Math.floor((todayMs - Date.parse(`${paraguayDate.format(receivable.dueDate)}T00:00:00Z`)) / 86_400_000)
+      const bucket = daysLate <= 0 ? agingBuckets[0] : daysLate <= 30 ? agingBuckets[1] : daysLate <= 60 ? agingBuckets[2] : daysLate <= 90 ? agingBuckets[3] : agingBuckets[4]
+      bucket.amount += outstanding
+      bucket.count += 1
+      const debtor = debtors.get(receivable.companyId) ?? { id: receivable.company.id, name: receivable.company.name, outstanding: 0, overdue: 0 }
+      debtor.outstanding += outstanding
+      if (daysLate > 0) {
+        debtor.overdue += outstanding
+        overdueOutstanding += outstanding
+      }
+      debtors.set(receivable.companyId, debtor)
+    }
+
+    const billed = toNumber(totals._sum.amount)
+    const applied = toNumber(totals._sum.paidAmount)
+    const series = [...monthly.values()]
+    return {
+      currency,
+      months: series,
+      collectedThisMonth: series.at(-1)?.collected ?? 0,
+      collectedLastMonth: series.at(-2)?.collected ?? 0,
+      collectionRate: billed > 0 ? Math.round((applied / billed) * 1000) / 10 : 0,
+      billed,
+      applied,
+      outstanding: billed - applied,
+      overdueOutstanding,
+      creditBalance: Math.max(0, toNumber(received._sum.amount) - applied),
+      clientsWithDebt: debtors.size,
+      aging: agingBuckets,
+      topDebtors: [...debtors.values()].sort((left, right) => right.outstanding - left.outstanding).slice(0, 5),
+    }
+  }
+
   async listRecurring(ctx: WorkspaceContext, page: number, limit: number, companyId?: string) {
     const where: Prisma.RecurringChargeWhereInput = {
       workspaceId: ctx.workspaceId,
@@ -457,7 +572,7 @@ export class CollectionService {
     const [items, total] = await Promise.all([
       db.recurringCharge.findMany({
         where,
-        include: { company: { select: { id: true, name: true, ruc: true } } },
+        include: { company: { select: { id: true, name: true, ruc: true, isArchived: true } } },
         orderBy: { createdAt: 'desc' },
         skip: page * limit,
         take: limit,

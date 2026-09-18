@@ -8,7 +8,7 @@ import type {
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
   EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
   AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
-  ClientNote, ClientSummary, CollectionPayment, CollectionSummary, CustomerServiceSummary,
+  ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CustomerServiceSummary,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
@@ -232,11 +232,13 @@ export const dashboardApi = {
 // Clientes contables (Company se mantiene como detalle interno del backend)
 export const clientsApi = {
   remove: (id: string) => api.delete(`/clients/${id}`),
+  restore: (id: string) => api.post<Client>(`/clients/${id}/restore`),
   list: (params?: {
     search?: string
     status?: string
     ownerId?: string
     hasDebt?: boolean
+    archived?: boolean
     page?: number
     limit?: number
   }) => api.get<PaginatedResult<Client>>('/clients', { params }),
@@ -245,10 +247,13 @@ export const clientsApi = {
 
   summary: (id: string) => api.get<ClientSummary>(`/clients/${id}/summary`),
 
-  create: (data: Partial<Client> & { name: string }) => api.post<Client>('/clients', data),
+  create: (data: Partial<Client> & { name: string; contactName?: string; contactPhone?: string; referenceNotes?: string }) => api.post<Client>('/clients', data),
 
   update: (id: string, data: Partial<Omit<Client, 'assignments'>> & {
     assignments?: Array<{ userId: string; area?: string }>
+    contactName?: string
+    contactPhone?: string
+    referenceNotes?: string | null
   }) => api.patch<Client>(`/clients/${id}`, data),
 
   listContacts: (id: string) => api.get<Contact[]>(`/clients/${id}/contacts`),
@@ -303,10 +308,13 @@ export const checklistsApi = {
 }
 
 export const collectionsApi = {
-  paymentSummaryPdf: (id: string) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { responseType: 'blob' }),
+  paymentSummaryPdf: (id: string, params?: { from?: string; to?: string }) => api.get<Blob>(`/collections/clients/${id}/payments.pdf`, { params, responseType: 'blob' }),
   removePayment: (id: string) => api.delete(`/collections/payments/${id}`),
+  removeReceivable: (id: string) => api.delete(`/collections/receivables/${id}`),
   setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
   summary: () => api.get<CollectionSummary>('/collections/summary'),
+
+  insights: (currency = 'PYG') => api.get<CollectionInsights>('/collections/insights', { params: { currency } }),
 
   listReceivables: (params?: {
     status?: string
@@ -563,6 +571,9 @@ export const teamApi = {
 
   updateRole: (memberId: string, role: 'admin' | 'member' | 'viewer') =>
     api.patch(`/auth/team/${memberId}/role`, { role }),
+
+  updateModules: (memberId: string, modules: Partial<Record<ModuleKey, boolean>>) =>
+    api.patch<{ id: string; modules: ModuleState }>(`/auth/team/${memberId}/modules`, { modules }),
 
   remove: (memberId: string) =>
     api.delete(`/auth/team/${memberId}`),

@@ -171,7 +171,9 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
   .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { cursor: not-allowed; opacity: .45; }
   .btn-secondary { border: 1px solid var(--line); background: var(--paper); color: var(--ink-primary); }
   .btn-secondary:hover { border-color: var(--line-strong); background: var(--paper-soft); }
-  .btn-danger { border: 1px solid var(--danger-line); background: var(--danger-paper); color: var(--danger); }
+  .btn-danger { border: 1px solid #b4373d; background: #b4373d; color: #fff; }
+  .btn-danger:hover:not(:disabled) { border-color: #962c31; background: #962c31; }
+  .btn-danger:focus-visible { box-shadow: 0 0 0 3px rgba(180, 55, 61, .3); }
   .rb-pill-nav { display: flex; width: max-content; min-width: 100%; gap: .35rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--paper-soft); padding: .3rem; }
   .rb-pill { display: inline-flex; min-height: 2.25rem; flex: 0 0 auto; align-items: center; justify-content: center; gap: .45rem; border: 1px solid transparent; border-radius: .65rem; padding: .45rem .8rem; color: var(--ink-tertiary); font-size: .75rem; font-weight: 750; white-space: nowrap; }
   .rb-pill:hover { background: var(--paper); color: var(--ink-primary); }
@@ -222,3 +224,27 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
 @media (max-width: 900px) { .client-identity { grid-template-columns: 1fr 1fr 1fr; } .client-identity__name { grid-column: 1 / -1; border-bottom: 1px solid var(--line-soft); } .client-identity__datum:first-of-type { border-left: 0; } }
 @media (max-width: 560px) { .client-identity { grid-template-columns: 1fr 1fr; } .client-identity__datum:nth-last-child(1) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line-soft); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Tablero de cobranzas: paleta validada (categórica azul/aqua + rampa secuencial azul). */
+.viz {
+  --viz-billed: #2a78d6;
+  --viz-collected: #1baf7a;
+  --viz-track: #eef1f6;
+  --viz-hover: rgba(54, 92, 171, .07);
+  --viz-seq-1: #86b6ef;
+  --viz-seq-2: #5598e7;
+  --viz-seq-3: #2a78d6;
+  --viz-seq-4: #1c5cab;
+  --viz-seq-5: #104281;
+}
+.dark .viz {
+  --viz-billed: #3987e5;
+  --viz-collected: #199e70;
+  --viz-track: rgba(255, 255, 255, .08);
+  --viz-hover: rgba(174, 190, 216, .1);
+  --viz-seq-1: #184f95;
+  --viz-seq-2: #256abf;
+  --viz-seq-3: #3987e5;
+  --viz-seq-4: #6da7ec;
+  --viz-seq-5: #9ec5f4;
+}

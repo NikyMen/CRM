@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
 import type { ApiKey } from '@/types'
 import { Key, Plus, Trash2, Copy, Check, Loader2, Eye, EyeOff } from 'lucide-react'
 
 export default function ApiKeysPage() {
+  const confirmDelete = useConfirmDelete()
   const queryClient                   = useQueryClient()
   const [showForm, setShowForm]       = useState(false)
   const [name, setName]               = useState('')
@@ -188,12 +190,12 @@ export default function ApiKeysPage() {
 
               {/* Eliminar */}
               <button
-                onClick={() => {
-                   if (confirm(`¿Estás seguro que querés revocar la API Key "${apiKey.name}"? Cualquier integración que la use dejará de funcionar.`)) {
+                onClick={async () => {
+                   if (await confirmDelete({ title: '¿Estás seguro que querés revocar esta API Key?', message: `Cualquier integración que use "${apiKey.name}" dejará de funcionar.`, confirmLabel: 'Sí, revocar' })) {
                        deleteMutation.mutate(apiKey.id)
                    }
                 }}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+className="btn-danger !min-h-0 shrink-0 !p-2"
                 title="Revocar key permanentemente"
               >
                 <Trash2 size={18} />
