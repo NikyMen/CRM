@@ -39,6 +39,7 @@ const clientSchema = z.object({
   department: nullableText(120),
   contactName: nullableText(180),
   contactPhone: nullableText(50),
+  contactEmail: z.preprocess((value) => value === '' ? null : value, z.string().email().max(254).nullable().optional()),
   referenceNotes: nullableText(5000),
   country: z.string().trim().min(1).max(80).default('Paraguay'),
   status: z.enum(['PROSPECT', 'ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
