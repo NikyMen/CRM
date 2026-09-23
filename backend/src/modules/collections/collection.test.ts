@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { type TestContext } from 'node:test'
 import { Prisma } from '@prisma/client'
-import { renderPaymentSummary } from './payment-summary'
+import { paymentSummaryFileName, renderPaymentSummary } from './payment-summary'
 import type { WorkspaceContext } from '../../types'
 import {
   parseCollectionSpreadsheet,
@@ -59,17 +59,29 @@ test('el PDF incluye historial completo, acentos, páginas y totales por moneda 
   const pdf = renderPaymentSummary({ name: 'Compañía de prueba', ruc: null, dv: null }, payments, [])
   const text = pdf.toString('latin1')
   assert.ok(text.startsWith('%PDF-1.4'))
-  assert.match(text, /ROMEZ/)
-  assert.match(text, /Resumen de cuenta/)
+  assert.match(text, /RESUMEN DE CUENTA/)
   assert.match(text, /Compañía de prueba/)
-  assert.match(text, /Pagos recibidos: PYG 34 000/)
-  assert.match(text, /Pago 34/)
-  assert.match(text, /Página 3 de 3/)
+  assert.match(text, /PAGOS RECIBIDOS/)
+  assert.match(text, /\(Gs\. 34\.000\) Tj/)
+  assert.match(text, /Pago 34 \\\(prueba\\\)/)
+  const pageCount = Number(text.match(/\/Type \/Pages \/Kids \[[^\]]*\] \/Count (\d+)/)![1])
+  assert.ok(pageCount >= 2)
+  assert.match(text, new RegExp(`Página ${pageCount} de ${pageCount}`))
+  // Logo arriba a la izquierda y como marca de agua translúcida.
+  assert.match(text, /\/Subtype \/Image \/Width 480 \/Height 817/)
+  assert.match(text, /\/Type \/ExtGState \/ca 0\.06/)
+  assert.match(text, /\/GSw gs .* \/Logo Do/)
   const xref = Number(text.match(/startxref\n(\d+)/)![1])
   assert.equal(pdf.subarray(xref, xref + 4).toString(), 'xref')
   const mixed = renderPaymentSummary({ name: 'Prueba', ruc: null, dv: null }, [{ ...payments[1], currency: 'USD', amount: new Prisma.Decimal('12.50') }, payments[1]], [])
-  assert.match(mixed.toString('latin1'), /Pagos recibidos: USD 12.50/)
-  assert.match(mixed.toString('latin1'), /Pagos recibidos: PYG 1 000/)
+  assert.match(mixed.toString('latin1'), /\(US\$ 12,50\) Tj/)
+  assert.match(mixed.toString('latin1'), /\(Gs\. 1\.000\) Tj/)
+})
+
+test('el resumen se descarga con el nombre del cliente y la fecha de Paraguay', () => {
+  const now = new Date('2026-09-23T02:30:00Z') // 22/09 en Asunción
+  assert.equal(paymentSummaryFileName('Compañía Sur S.A.', now), 'Resumen de cuenta - Compañía Sur S.A. - 22-09-2026.pdf')
+  assert.equal(paymentSummaryFileName('A/B: "C"', now), 'Resumen de cuenta - A B C - 22-09-2026.pdf')
 })
 
 test('anular y restaurar pagos recalcula parciales, evita doble reversión y rechaza sobrepago', async (t) => {
