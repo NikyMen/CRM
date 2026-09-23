@@ -36,6 +36,7 @@ export interface SaleFilters {
 const SALE_INCLUDE = {
   company: { select: { id: true, name: true, ruc: true, tradeName: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+  deletedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
   items: { orderBy: { position: 'asc' } },
 } satisfies Prisma.SaleInclude
 

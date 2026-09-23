@@ -3,7 +3,8 @@
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, HandCoins, Plus, Search, Trash2 } from 'lucide-react'
+import { ArchiveRestore, ChevronDown, ChevronRight, HandCoins, Plus, Search, Trash2 } from 'lucide-react'
+import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { collectionsApi } from '@/lib/api'
 import type { ClientBalance, ClientBalances, PaginatedResult, Receivable } from '@/types'
@@ -15,6 +16,7 @@ import { DateField } from '@/components/romez/DateField'
 import { MoneyInput } from '@/components/romez/MoneyInput'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { PaymentDialog, invalidateCollections, type PaymentTarget } from '@/components/romez/PaymentDialog'
+import { CollectionsTrash } from '@/components/romez/CollectionsTrash'
 
 const NUMERIC_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
 
@@ -35,6 +37,7 @@ export default function BalancesPage() {
   const confirmDelete = useConfirmDelete()
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
   const [form, setForm] = useState(BALANCE_FORM)
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -66,7 +69,7 @@ export default function BalancesPage() {
   }, [balancesQuery.data?.items, search])
 
   return <PageFrame>
-    <PageHeader eyebrow="Cuenta corriente" title="Saldos" description="Deudas pendientes de cada cliente. Al cobrar se cancelan automáticamente, empezando por la más antigua de la misma moneda; desde el detalle podés cobrar o eliminar cada concepto." action={canWrite ? <button type="button" className="btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> Cargar saldo</button> : undefined} />
+    <PageHeader eyebrow="Cuenta corriente" title="Saldos" description="Deudas pendientes de cada cliente. Al cobrar se cancelan automáticamente, empezando por la más antigua de la misma moneda; desde el detalle podés cobrar o eliminar cada concepto." action={canWrite || canManage ? <div className="flex flex-wrap gap-2">{canManage ? <button type="button" className={clsx('btn-secondary', showTrash && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => setShowTrash((current) => !current)}>{showTrash ? <ArchiveRestore size={15} /> : <Trash2 size={15} />} {showTrash ? 'Volver a saldos' : 'Papelera'}</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => { setShowTrash(false); setShowForm(true) }}><Plus size={15} /> Cargar saldo</button> : null}</div> : undefined} />
 
     {showForm ? <SectionPanel title="Cargar saldo" description="Registra una deuda del cliente. Queda pendiente hasta que se cobre desde Cobranzas.">
       <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -89,7 +92,7 @@ export default function BalancesPage() {
       <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{total.clients} {total.clients === 1 ? 'cliente' : 'clientes'} · vencido <span className="font-semibold text-[var(--danger)]">{formatMoney(total.overdue, total.currency)}</span></p>
     </div>)}</div> : null}
 
-    <SectionPanel title="Deudas por cliente">
+    {showTrash && canManage ? <CollectionsTrash types={['RECEIVABLE']} description="Conceptos y saldos eliminados, con quién los eliminó y cuándo. Restaurar un concepto lo vuelve a sumar a la deuda del cliente." emptyDescription="Los conceptos que elimines en Saldos aparecerán acá." /> : <SectionPanel title="Deudas por cliente">
       <div className="border-b border-[var(--line-soft)] p-3"><label className="relative block w-full min-w-0"><Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input className="ctrl-input !min-h-11 w-full pl-10 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por cliente o RUC…" /></label></div>
       {balancesQuery.isLoading ? <LoadingState label="Calculando saldos…" /> : balancesQuery.isError ? <ErrorState message={getErrorMessage(balancesQuery.error, 'No pudimos cargar los saldos.')} retry={() => balancesQuery.refetch()} /> : items.length ? <div className="overflow-x-auto"><table className="data-table">
         <thead><tr><th /><th>Cliente</th><th className="text-right">Deudas</th><th>Más antigua</th><th className="text-right">Importe</th><th className="text-right">Cobrado</th><th className="text-right">Vencido</th><th className="text-right">Saldo</th>{canWrite ? <th /> : null}</tr></thead>
@@ -112,7 +115,7 @@ export default function BalancesPage() {
           </Fragment>
         })}</tbody>
       </table></div> : <EmptyState title={search.trim() ? 'Sin coincidencias' : 'Sin saldos pendientes'} description={search.trim() ? 'Ningún cliente con deuda coincide con la búsqueda.' : 'Cuando cargues un saldo, la deuda del cliente aparecerá acá hasta que se cobre.'} />}
-    </SectionPanel>
+    </SectionPanel>}
     {removeReceivable.error ? <p role="alert" className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeReceivable.error, 'No pudimos eliminar el concepto.')}</p> : null}
     <PaymentDialog target={paymentTarget} onClose={() => setPaymentTarget(null)} />
   </PageFrame>
