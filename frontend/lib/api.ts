@@ -8,7 +8,7 @@ import type {
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
   EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
   AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
-  ClientBalances, ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CustomerServiceSummary,
+  ClientBalances, ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CollectionTrashItem, CustomerServiceSummary,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
@@ -313,6 +313,10 @@ export const collectionsApi = {
   removePayment: (id: string) => api.delete(`/collections/payments/${id}`),
   removeReceivable: (id: string) => api.delete(`/collections/receivables/${id}`),
   setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
+  restoreReceivable: (id: string) => api.post(`/collections/receivables/${id}/restore`),
+  removeRecurring: (id: string) => api.delete(`/collections/recurring-charges/${id}`),
+  restoreRecurring: (id: string) => api.post(`/collections/recurring-charges/${id}/restore`),
+  trash: () => api.get<{ items: CollectionTrashItem[] }>('/collections/trash'),
   summary: () => api.get<CollectionSummary>('/collections/summary'),
 
   balances: (currency?: string) => api.get<ClientBalances>('/collections/balances', { params: { currency } }),
@@ -352,6 +356,8 @@ export const collectionsApi = {
     reference?: string
     notes?: string
     allocations?: Array<{ receivableId: string; amount: string }>
+    documentId?: string | null
+    documentWaived?: boolean
   }) => api.post<CollectionPayment>('/collections/payments', data),
 
   import: (file: File, commit = false) => {

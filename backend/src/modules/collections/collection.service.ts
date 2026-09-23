@@ -41,7 +41,13 @@ export interface PaymentInput {
   notes?: string | null
   externalKey?: string | null
   allocations?: Array<{ receivableId: string; amount: string | number }>
+  /** Documento del legajo del cliente que respalda el cobro. */
+  documentId?: string | null
+  /** Constancia explícita de que el cobro se registra sin comprobante. */
+  documentWaived?: boolean
 }
+
+const userName = { select: { id: true, firstName: true, lastName: true, email: true } } as const
 
 export interface RecurringChargeInput {
   companyId: string
@@ -311,6 +317,7 @@ export class CollectionService {
         status,
         ...(input.reference !== undefined ? { reference: input.reference } : {}),
         voidedAt: status === 'VOID' ? receivable.voidedAt ?? new Date() : null,
+        voidedByUserId: status === 'VOID' ? receivable.voidedByUserId ?? ctx.userId : null,
       },
     })
     await this.emitUpdate(ctx.workspaceId, receivable.companyId, 'receivable.updated', id)
@@ -332,10 +339,30 @@ export class CollectionService {
       await tx.paymentAllocation.deleteMany({ where: { receivableId: id } })
       await tx.receivable.update({
         where: { id },
-        data: { status: 'VOID', paidAmount: new Prisma.Decimal(0), voidedAt: new Date() },
+        data: { status: 'VOID', paidAmount: new Prisma.Decimal(0), voidedAt: new Date(), voidedByUserId: ctx.userId },
       })
     })
     await this.emitUpdate(ctx.workspaceId, companyId!, 'receivable.voided', id)
+  }
+
+  /**
+   * Saca un cargo de la papelera. Los pagos que tenía aplicados se desvincularon
+   * al eliminarlo, así que vuelve con su importe completo pendiente.
+   */
+  async restoreReceivable(ctx: WorkspaceContext, id: string) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede restaurar cargos')
+    const receivable = await db.receivable.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+    if (!receivable) throw new NotFoundError('Cuenta por cobrar', id)
+    if (receivable.status !== 'VOID') return
+    await db.receivable.update({
+      where: { id },
+      data: {
+        status: calculateReceivableStatus(receivable.amount, receivable.paidAmount, receivable.dueDate),
+        voidedAt: null,
+        voidedByUserId: null,
+      },
+    })
+    await this.emitUpdate(ctx.workspaceId, receivable.companyId, 'receivable.restored', id)
   }
 
   async listPayments(
@@ -355,6 +382,7 @@ export class CollectionService {
         include: {
           company: { select: { id: true, name: true, ruc: true, dv: true, isArchived: true } },
           allocations: { include: { receivable: { select: { id: true, description: true, dueDate: true } } } },
+          document: { select: { id: true, name: true } },
         },
         orderBy: { paidAt: 'desc' },
         skip: filters.page * filters.limit,
@@ -369,6 +397,13 @@ export class CollectionService {
     await this.ensureFinancialWrite(ctx, input.companyId)
     const currency = currencyCode(input.currency)
     const amount = money(input.amount, currency)
+    if (input.documentId) {
+      const document = await db.clientDocument.findFirst({
+        where: { id: input.documentId, workspaceId: ctx.workspaceId, companyId: input.companyId },
+        select: { id: true },
+      })
+      if (!document) throw new ValidationError('El comprobante no pertenece al cliente')
+    }
 
     const payment = await serializableTransaction(async (tx) => {
       let requested = input.allocations?.map((allocation) => ({
@@ -420,6 +455,8 @@ export class CollectionService {
           method: input.method,
           reference: input.reference,
           notes: input.notes,
+          documentId: input.documentId ?? null,
+          documentWaived: !input.documentId && Boolean(input.documentWaived),
           createdByUserId: ctx.userId,
         },
       })
@@ -487,7 +524,10 @@ export class CollectionService {
           data: { paidAmount, status: calculateReceivableStatus(receivable.amount, paidAmount, receivable.dueDate) },
         })
       }
-      await tx.payment.update({ where: { id: payment.id }, data: { voidedAt: voiding ? new Date() : null } })
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { voidedAt: voiding ? new Date() : null, voidedByUserId: voiding ? ctx.userId : null },
+      })
     })
     await this.emitUpdate(ctx.workspaceId, companyId!, voiding ? 'payment.voided' : 'payment.restored', id)
   }
@@ -628,6 +668,7 @@ export class CollectionService {
   async listRecurring(ctx: WorkspaceContext, page: number, limit: number, companyId?: string) {
     const where: Prisma.RecurringChargeWhereInput = {
       workspaceId: ctx.workspaceId,
+      deletedAt: null,
       company: clientVisibilityWhere(ctx),
       ...(companyId ? { companyId } : {}),
     }
@@ -665,7 +706,7 @@ export class CollectionService {
   }
 
   async updateRecurring(ctx: WorkspaceContext, id: string, input: Partial<RecurringChargeInput>) {
-    const existing = await db.recurringCharge.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+    const existing = await db.recurringCharge.findFirst({ where: { id, workspaceId: ctx.workspaceId, deletedAt: null } })
     if (!existing) throw new NotFoundError('Plan recurrente', id)
     if (input.companyId) await ensureClientAccess(ctx, input.companyId, 'write')
     const nextCurrency = currencyCode(input.currency ?? existing.currency)
@@ -687,6 +728,69 @@ export class CollectionService {
     })
   }
 
+  /** Manda un plan a la papelera: deja de generar cargos; los ya generados no cambian. */
+  async deleteRecurring(ctx: WorkspaceContext, id: string) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede eliminar planes')
+    const existing = await db.recurringCharge.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+    if (!existing) throw new NotFoundError('Plan recurrente', id)
+    if (existing.deletedAt) return
+    await db.recurringCharge.update({ where: { id }, data: { deletedAt: new Date(), deletedByUserId: ctx.userId } })
+    await this.emitUpdate(ctx.workspaceId, existing.companyId, 'recurring.deleted', id)
+  }
+
+  async restoreRecurring(ctx: WorkspaceContext, id: string) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede restaurar planes')
+    const existing = await db.recurringCharge.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
+    if (!existing) throw new NotFoundError('Plan recurrente', id)
+    if (!existing.deletedAt) return
+    await db.recurringCharge.update({ where: { id }, data: { deletedAt: null, deletedByUserId: null } })
+    await this.emitUpdate(ctx.workspaceId, existing.companyId, 'recurring.restored', id)
+  }
+
+  /** Papelera de cobranzas: cargos, pagos y planes eliminados, con quién y cuándo. */
+  async trash(ctx: WorkspaceContext) {
+    if (!['owner', 'admin'].includes(ctx.role)) throw new ForbiddenError('Solo el propietario o administrador puede ver la papelera')
+    const company = { select: { id: true, name: true, ruc: true, isArchived: true } } as const
+    const take = 200
+    const [receivables, payments, plans] = await Promise.all([
+      db.receivable.findMany({
+        where: { workspaceId: ctx.workspaceId, status: 'VOID' },
+        include: { company, voidedBy: userName },
+        orderBy: { voidedAt: 'desc' },
+        take,
+      }),
+      db.payment.findMany({
+        where: { workspaceId: ctx.workspaceId, voidedAt: { not: null } },
+        include: { company, voidedBy: userName },
+        orderBy: { voidedAt: 'desc' },
+        take,
+      }),
+      db.recurringCharge.findMany({
+        where: { workspaceId: ctx.workspaceId, deletedAt: { not: null } },
+        include: { company, deletedBy: userName },
+        orderBy: { deletedAt: 'desc' },
+        take,
+      }),
+    ])
+    const items = [
+      ...receivables.map((item) => ({
+        type: 'RECEIVABLE' as const, id: item.id, company: item.company, description: item.description,
+        amount: item.amount.toString(), currency: item.currency, deletedAt: item.voidedAt, deletedBy: item.voidedBy,
+      })),
+      ...payments.map((item) => ({
+        type: 'PAYMENT' as const, id: item.id, company: item.company,
+        description: [item.method, item.reference].filter(Boolean).join(' · ') || 'Pago',
+        amount: item.amount.toString(), currency: item.currency, deletedAt: item.voidedAt, deletedBy: item.voidedBy,
+      })),
+      ...plans.map((item) => ({
+        type: 'PLAN' as const, id: item.id, company: item.company, description: item.name,
+        amount: item.amount.toString(), currency: item.currency, deletedAt: item.deletedAt, deletedBy: item.deletedBy,
+      })),
+    ]
+    items.sort((a, b) => (b.deletedAt?.getTime() ?? 0) - (a.deletedAt?.getTime() ?? 0))
+    return { items }
+  }
+
   async generateRecurring(ctx: WorkspaceContext, periodKey: string) {
     const match = /^(\d{4})-(\d{2})$/.exec(periodKey)
     if (!match) throw new ValidationError('El período debe usar formato YYYY-MM')
@@ -699,6 +803,7 @@ export class CollectionService {
       where: {
         workspaceId: ctx.workspaceId,
         isActive: true,
+        deletedAt: null,
         company: { isArchived: false, status: 'ACTIVE' },
         startDate: { lte: periodEnd },
         OR: [{ endDate: null }, { endDate: { gte: periodStart } }],
