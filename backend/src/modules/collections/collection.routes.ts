@@ -9,7 +9,7 @@ import { config } from '../../core/config'
 import { ValidationError, type WorkspaceContext } from '../../types'
 import { parseCollectionSpreadsheet } from './collection-import'
 import { normalizeParaguayDateInput, startOfParaguayDay } from './collection-calculations'
-import { renderPaymentSummary } from './payment-summary'
+import { paymentSummaryFileName, renderPaymentSummary } from './payment-summary'
 import { ensureClientAccess } from '../clients/client-access'
 import { db } from '../../core/database'
 import { Prisma } from '@prisma/client'
@@ -113,9 +113,14 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
       db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, ...dateFilter('paidAt') }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
       db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('createdAt') } }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
-    const periodLabel = range.from || range.to ? `Período ${range.from ?? 'inicio'} a ${range.to ?? 'hoy'}` : 'Historial completo'
-    return reply.header('Cache-Control', 'no-store').header('Content-Disposition', 'attachment; filename="resumen-pagos.pdf"')
-      .type('application/pdf').send(renderPaymentSummary(client, payments, charges, new Date(), periodLabel))
+    const displayDate = (value: string) => value.split('-').reverse().join('/')
+    const periodLabel = range.from || range.to ? `${range.from ? displayDate(range.from) : 'Inicio'} al ${range.to ? displayDate(range.to) : 'hoy'}` : 'Historial completo'
+    const now = new Date()
+    const fileName = paymentSummaryFileName(client.name, now)
+    const asciiName = fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '')
+    return reply.header('Cache-Control', 'no-store')
+      .header('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`)
+      .type('application/pdf').send(renderPaymentSummary(client, payments, charges, now, periodLabel))
   })
 
   app.get('/receivables', async (req, reply) => {

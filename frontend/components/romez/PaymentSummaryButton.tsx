@@ -22,14 +22,25 @@ function quickRange(period: QuickPeriod) {
   return { from: formatUtcDate(current), to: formatUtcDate(new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0))) }
 }
 
-export function PaymentSummaryButton({ clientId }: { clientId: string }) {
+/** "Resumen de cuenta - <Cliente> - <dd-mm-aaaa>.pdf": usa el nombre del servidor y, si el navegador no lo expone, lo arma acá. */
+function summaryFileName(disposition: string | undefined, clientName?: string) {
+  const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try { return decodeURIComponent(encoded) } catch { /* se arma localmente */ }
+  }
+  const [year, month, day] = paraguayToday().split('-')
+  const safeName = (clientName ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Cliente'
+  return `Resumen de cuenta - ${safeName} - ${day}-${month}-${year}.pdf`
+}
+
+export function PaymentSummaryButton({ clientId, clientName }: { clientId: string; clientName?: string }) {
   const [open, setOpen] = useState(false)
   const [period, setPeriod] = useState<QuickPeriod>('all')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const download = useMutation({
     mutationFn: () => collectionsApi.paymentSummaryPdf(clientId, from || to ? { from: from || undefined, to: to || undefined } : quickRange(period)),
-    onSuccess: ({ data }) => { const url = URL.createObjectURL(data); const link = document.createElement('a'); link.href = url; link.download = 'resumen-cuenta-romez.pdf'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setOpen(false) },
+    onSuccess: ({ data, headers }) => { const url = URL.createObjectURL(data); const link = document.createElement('a'); link.href = url; link.download = summaryFileName(headers['content-disposition'] as string | undefined, clientName); link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setOpen(false) },
   })
   const choosePeriod = (next: QuickPeriod) => { setPeriod(next); setFrom(''); setTo('') }
   const hasInvalidRange = Boolean(from && to && from > to)
