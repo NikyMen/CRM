@@ -139,6 +139,68 @@ export class CollectionService {
     })), total, filters.page, filters.limit)
   }
 
+  /** Deuda abierta agrupada por cliente y moneda; nunca suma monedas distintas. */
+  async balances(ctx: WorkspaceContext, filters: { currency?: string } = {}) {
+    await this.refreshOverdue(ctx.workspaceId)
+    const where: Prisma.ReceivableWhereInput = {
+      workspaceId: ctx.workspaceId,
+      company: clientVisibilityWhere(ctx),
+      status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
+    }
+    const [groups, overdueGroups] = await Promise.all([
+      db.receivable.groupBy({
+        by: ['companyId', 'currency'],
+        where,
+        _sum: { amount: true, paidAmount: true },
+        _count: { _all: true },
+        _min: { dueDate: true },
+      }),
+      db.receivable.groupBy({
+        by: ['companyId', 'currency'],
+        where: { ...where, status: 'OVERDUE' },
+        _sum: { amount: true, paidAmount: true },
+      }),
+    ])
+    const companies = await db.company.findMany({
+      where: { workspaceId: ctx.workspaceId, id: { in: [...new Set(groups.map((group) => group.companyId))] } },
+      select: { id: true, name: true, ruc: true, dv: true, isArchived: true },
+    })
+    const companyById = new Map(companies.map((company) => [company.id, company]))
+    const overdueByKey = new Map(overdueGroups.map((group) => [
+      `${group.companyId}:${group.currency}`,
+      (group._sum.amount ?? new Prisma.Decimal(0)).minus(group._sum.paidAmount ?? 0),
+    ]))
+    const items = groups.map((group) => {
+      const amount = group._sum.amount ?? new Prisma.Decimal(0)
+      const paid = group._sum.paidAmount ?? new Prisma.Decimal(0)
+      return {
+        companyId: group.companyId,
+        company: companyById.get(group.companyId) ?? null,
+        currency: group.currency,
+        openCount: group._count._all,
+        amount: amount.toString(),
+        paidAmount: paid.toString(),
+        outstanding: amount.minus(paid).toString(),
+        overdue: (overdueByKey.get(`${group.companyId}:${group.currency}`) ?? new Prisma.Decimal(0)).toString(),
+        oldestDueDate: group._min.dueDate,
+      }
+    }).sort((a, b) => (a.company?.name ?? '').localeCompare(b.company?.name ?? '', 'es') || a.currency.localeCompare(b.currency))
+
+    const totals = new Map<string, { currency: string; outstanding: Prisma.Decimal; overdue: Prisma.Decimal; clients: number }>()
+    for (const item of items) {
+      const total = totals.get(item.currency) ?? { currency: item.currency, outstanding: new Prisma.Decimal(0), overdue: new Prisma.Decimal(0), clients: 0 }
+      total.outstanding = total.outstanding.plus(item.outstanding)
+      total.overdue = total.overdue.plus(item.overdue)
+      total.clients += 1
+      totals.set(item.currency, total)
+    }
+    return {
+      items,
+      totals: [...totals.values()].map((total) => ({ ...total, outstanding: total.outstanding.toString(), overdue: total.overdue.toString() })),
+    }
+  }
+
   async exportReceivables(
     ctx: WorkspaceContext,
     filters: { companyId?: string; status?: ReceivableStatus; currency?: string }

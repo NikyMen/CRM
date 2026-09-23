@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Boxes, BriefcaseBusiness, Building2, ChevronDown, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/clients', label: 'Clientes', icon: Building2, module: 'clients' },
   { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },
   { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
+  { href: '/balances', label: 'Saldos', icon: Scale, module: 'collections' },
   { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign, module: 'collections' },
   { href: '/customer-service', label: 'Atención al cliente', icon: Headphones, module: 'customer-service' },
   { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets' },

@@ -15,6 +15,8 @@ type ClientPickerProps = {
   invalidHint?: string
   placeholder?: string
   disabled?: boolean
+  /** Cliente ya elegido al montar (por ejemplo al llegar desde Saldos). */
+  initialClient?: Pick<Client, 'id' | 'name' | 'ruc'> | null
 }
 
 /**
@@ -27,11 +29,12 @@ export function ClientPicker({
   invalidHint = 'Elegí un cliente de la lista para poder guardar la venta.',
   placeholder = 'Buscar por nombre, RUC o teléfono…',
   disabled,
+  initialClient,
 }: ClientPickerProps) {
   const listId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<Client | null>(null)
+  const [query, setQuery] = useState(initialClient?.name ?? '')
+  const [selected, setSelected] = useState<Pick<Client, 'id' | 'name' | 'ruc'> | null>(initialClient ?? null)
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(0)
   const deferredQuery = useDeferredValue(query)
