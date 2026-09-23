@@ -60,6 +60,11 @@ const paymentSchema = z.object({
     receivableId: z.string().min(1),
     amount: amountSchema,
   })).max(200).optional(),
+  documentId: nullableText(64),
+  documentWaived: z.boolean().default(false),
+}).refine((input) => Boolean(input.documentId) || input.documentWaived, {
+  message: 'Subí el comprobante o marcá que el cobro no tiene documento',
+  path: ['documentId'],
 })
 
 const recurringSchema = z.object({
@@ -156,6 +161,15 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     return reply.status(204).send()
   })
 
+  app.post('/receivables/:id/restore', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    await service.restoreReceivable(req.user as WorkspaceContext, (req.params as { id: string }).id)
+    return reply.status(204).send()
+  })
+
+  app.get('/trash', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    return reply.send(await service.trash(req.user as WorkspaceContext))
+  })
+
   app.patch('/receivables/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const { id } = req.params as { id: string }
@@ -215,6 +229,16 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const { id } = req.params as { id: string }
     const input = recurringSchema.partial().parse(req.body) as Partial<RecurringChargeInput>
     return reply.send(await service.updateRecurring(ctx, id, input))
+  })
+
+  app.delete('/recurring-charges/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    await service.deleteRecurring(req.user as WorkspaceContext, (req.params as { id: string }).id)
+    return reply.status(204).send()
+  })
+
+  app.post('/recurring-charges/:id/restore', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    await service.restoreRecurring(req.user as WorkspaceContext, (req.params as { id: string }).id)
+    return reply.status(204).send()
   })
 
   app.post('/recurring-charges/generate', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {

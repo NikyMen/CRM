@@ -931,8 +931,21 @@ export interface CollectionPayment {
   reference?: string | null
   notes?: string | null
   allocations?: Array<{ id: string; receivableId: string; amount: string }>
+  document?: { id: string; name: string } | null
+  documentWaived?: boolean
   paidAt: string
   createdAt: string
+}
+
+export interface CollectionTrashItem {
+  type: 'RECEIVABLE' | 'PAYMENT' | 'PLAN'
+  id: string
+  company: Pick<Client, 'id' | 'name' | 'ruc' | 'isArchived'> | null
+  description: string
+  amount: string
+  currency: string
+  deletedAt: string | null
+  deletedBy: { id: string; firstName: string; lastName?: string | null; email: string } | null
 }
 
 export interface CollectionSummary {
