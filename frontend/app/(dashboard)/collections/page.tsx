@@ -9,8 +9,8 @@ import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronLeft, ChevronRight,
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { clientsApi, collectionsApi } from '@/lib/api'
-import type { CollectionInsights, CollectionPayment, CollectionTrashItem, PaginatedResult, Receivable, RecurringCharge } from '@/types'
-import { formatDate, formatMoney, fullName, getErrorMessage } from '@/lib/format'
+import type { CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
+import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
 import { RECEIVABLE_LABELS, FREQUENCY_LABELS } from '@/lib/collection-labels'
@@ -21,6 +21,7 @@ import { MoneyInput } from '@/components/romez/MoneyInput'
 import { CollectionsDashboard } from '@/components/romez/CollectionsDashboard'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { PaymentDialog, invalidateCollections, type PaymentTarget } from '@/components/romez/PaymentDialog'
+import { CollectionsTrash } from '@/components/romez/CollectionsTrash'
 
 type View = 'receivables' | 'payments' | 'plans' | 'import' | 'trash'
 type ImportPreviewRow = { rowNumber: number; type: 'RECEIVABLE' | 'PAYMENT'; ruc?: string; description?: string; amount?: string; currency: string; errors: string[] }
@@ -95,11 +96,11 @@ export default function CollectionsPage() {
 
   const generationResult = generateRecurring.data?.data as { generated: number; skipped: number } | undefined
 
-  return <PageFrame><PageHeader eyebrow="Cuenta corriente" title="Gestión de cobranzas" description="Honorarios, cargos, pagos y vencimientos; cada moneda se mantiene separada." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={exportReceivables.isPending} onClick={() => exportReceivables.mutate()}><Download size={15} /> {exportReceivables.isPending ? 'Exportando…' : 'Exportar CSV'}</button>{canManage ? <button type="button" className="btn-secondary" onClick={() => { setView('import'); fileRef.current?.click() }}><Upload size={15} /> Importar</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => openPayment()}><HandCoins size={15} /> Cobrar</button> : null}<input ref={fileRef} type="file" accept=".xlsx,.csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); previewImport.mutate(file) } }} /></div>} />
+  return <PageFrame><PageHeader eyebrow="Cuenta corriente" title="Gestión de cobranzas" description="Honorarios, cargos, pagos y vencimientos; cada moneda se mantiene separada." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={exportReceivables.isPending} onClick={() => exportReceivables.mutate()}><Download size={15} /> {exportReceivables.isPending ? 'Exportando…' : 'Exportar CSV'}</button>{canManage ? <button type="button" className="btn-secondary" onClick={() => { setView('import'); fileRef.current?.click() }}><Upload size={15} /> Importar</button> : null}{canManage ? <button type="button" className={clsx('btn-secondary', view === 'trash' && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => setView((current) => current === 'trash' ? 'receivables' : 'trash')}>{view === 'trash' ? <ArchiveRestore size={15} /> : <Trash2 size={15} />} {view === 'trash' ? 'Volver a cobranzas' : 'Papelera'}</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => openPayment()}><HandCoins size={15} /> Cobrar</button> : null}<input ref={fileRef} type="file" accept=".xlsx,.csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); previewImport.mutate(file) } }} /></div>} />
 
     {insightsQuery.isLoading ? <LoadingState label="Calculando indicadores…" /> : insightsQuery.isError || !insightsQuery.data ? <ErrorState message={getErrorMessage(insightsQuery.error, 'No pudimos cargar los indicadores.')} retry={() => insightsQuery.refetch()} /> : <CollectionsDashboard data={insightsQuery.data} />}
 
-    <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['receivables', 'Cuentas por cobrar'], ['payments', 'Pagos'], ['plans', 'Planes mensuales'], ['import', 'Importar'], ['trash', 'Papelera']] as const).filter(([id]) => (id !== 'import' && id !== 'trash') || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-bold', id === 'trash' && 'ml-auto', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{id === 'trash' ? <Trash2 size={14} /> : null}{label}</button>)}</nav>
+    <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['receivables', 'Cuentas por cobrar'], ['payments', 'Pagos'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
 
     <PaymentDialog target={paymentTarget} onClose={() => setPaymentTarget(null)} />
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
@@ -107,7 +108,7 @@ export default function CollectionsPage() {
     {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} setSearch={setSearch} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={openPayment} page={receivablesPage} setPage={setReceivablesPage} /> : null}
     {view === 'payments' ? <PaymentsView includeVoided={includeVoided} setIncludeVoided={(value) => { setIncludeVoided(value); setPaymentsPage(0) }} canManage={canManage} busy={removePayment.isPending || changePaymentStatus.isPending} error={removePayment.error || changePaymentStatus.error} remove={(id) => removePayment.mutate(id)} changeStatus={(id, status) => changePaymentStatus.mutate({ id, status })} query={paymentsQuery} canWrite={canWrite} onNew={() => openPayment()} page={paymentsPage} setPage={setPaymentsPage} /> : null}
     {view === 'plans' ? <PlansView query={plansQuery} onNew={() => setFormMode('plan')} canManage={canManage} generationPeriod={generationPeriod} setGenerationPeriod={setGenerationPeriod} generate={() => generateRecurring.mutate()} generating={generateRecurring.isPending} result={generationResult} error={generateRecurring.error || removePlan.error} page={plansPage} setPage={setPlansPage} remove={(id) => removePlan.mutate(id)} removing={removePlan.isPending} /> : null}
-    {view === 'trash' && canManage ? <TrashView onRestored={refresh} /> : null}
+    {view === 'trash' && canManage ? <CollectionsTrash description="Todo lo eliminado en Cobranzas: cuentas por cobrar, pagos y planes, con quién lo eliminó y cuándo. Restaurar lo devuelve a su lugar." emptyDescription="Lo que elimines en Cobranzas aparecerá acá." /> : null}
     {view === 'import' ? <ImportView file={importFile} preview={preview} previewing={previewImport.isPending} committing={commitImport.isPending} error={previewImport.error || commitImport.error} choose={(file) => { setImportFile(file); previewImport.mutate(file) }} confirm={() => commitImport.mutate()} /> : null}
   </PageFrame>
 }
@@ -178,32 +179,6 @@ async function downloadReceipt(clientId: string, document: { id: string; name: s
   anchor.download = document.name
   anchor.click()
   URL.revokeObjectURL(url)
-}
-
-const TRASH_LABELS: Record<CollectionTrashItem['type'], string> = { RECEIVABLE: 'Cuenta por cobrar', PAYMENT: 'Pago', PLAN: 'Plan mensual' }
-const DELETED_AT: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' }
-
-function TrashView({ onRestored }: { onRestored: () => void }) {
-  const query = useQuery<{ items: CollectionTrashItem[] }>({ queryKey: ['collections-trash'], queryFn: () => collectionsApi.trash().then((response) => response.data) })
-  const restore = useMutation({
-    mutationFn: (item: CollectionTrashItem) => item.type === 'RECEIVABLE' ? collectionsApi.restoreReceivable(item.id) : item.type === 'PAYMENT' ? collectionsApi.setPaymentStatus(item.id, 'RECEIVED') : collectionsApi.restoreRecurring(item.id),
-    onSuccess: onRestored,
-  })
-  if (query.isLoading) return <LoadingState label="Cargando papelera…" />
-  if (query.isError) return <ErrorState message={getErrorMessage(query.error)} retry={() => query.refetch()} />
-  const items = query.data?.items ?? []
-  return <SectionPanel title="Papelera" description="Cargos, pagos y planes eliminados, con quién los eliminó y cuándo. Restaurarlos los devuelve a su lugar.">
-    {restore.error ? <p role="alert" className="border-b border-[var(--line-soft)] px-4 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(restore.error, 'No pudimos restaurar el registro.')}</p> : null}
-    {items.length ? <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Tipo</th><th>Cliente</th><th>Detalle</th><th className="text-right">Importe</th><th>Eliminado por</th><th>Fecha y hora</th><th /></tr></thead><tbody>{items.map((item) => <tr key={`${item.type}-${item.id}`}>
-      <td><StatusPill tone={item.type === 'PAYMENT' ? 'success' : item.type === 'PLAN' ? 'brand' : 'warning'}>{TRASH_LABELS[item.type]}</StatusPill></td>
-      <td>{item.company?.name ?? '—'}{item.company?.isArchived ? <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--danger)]">Cliente eliminado</p> : null}</td>
-      <td className="max-w-56"><p className="truncate">{item.description}</p></td>
-      <td className="text-right font-mono tabular-nums">{formatMoney(item.amount, item.currency)}</td>
-      <td className="font-semibold text-[var(--ink-primary)]">{item.deletedBy ? fullName(item.deletedBy) : <span className="font-normal text-[var(--ink-muted)]">Sin registro</span>}</td>
-      <td className="whitespace-nowrap">{formatDate(item.deletedAt, DELETED_AT)} h</td>
-      <td className="text-right"><button type="button" className="btn-secondary whitespace-nowrap" disabled={restore.isPending} onClick={() => restore.mutate(item)}><ArchiveRestore size={14} /> Restaurar</button></td>
-    </tr>)}</tbody></table></div> : <EmptyState title="La papelera está vacía" description="Lo que elimines en Cobranzas aparecerá acá." />}
-  </SectionPanel>
 }
 
 function Pager({ data, page, setPage, label }: { data?: PaginatedResult<unknown>; page: number; setPage: React.Dispatch<React.SetStateAction<number>>; label: string }) { if (!data || data.totalPages <= 1) return null; return <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-4 py-3 text-xs text-[var(--ink-tertiary)] sm:flex-row sm:items-center sm:justify-between"><p><strong className="text-[var(--ink-primary)]">{data.total}</strong> {label} · página {data.page + 1} de {data.totalPages}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={page <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Anterior</button><button type="button" className="btn-secondary" disabled={page + 1 >= data.totalPages} onClick={() => setPage((current) => current + 1)}>Siguiente <ChevronRight size={14} /></button></div></div> }

@@ -9,7 +9,7 @@ import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { salesApi, type SalePayload } from '@/lib/api'
 import type { PaginatedResult, Role, Sale, SaleStatus, SaleSummary } from '@/types'
-import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
+import { formatDate, formatMoney, fullName, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail, Total } from '@/components/romez/SaleDetail'
 import { ClientPicker } from '@/components/romez/ClientPicker'
@@ -298,6 +298,8 @@ export default function SalesPage() {
                     <th>Cliente</th>
                     <th>Estado</th>
                     <th className="text-right">Total</th>
+                    {showTrash ? <th>Eliminado por</th> : null}
+                    {showTrash ? <th>Fecha y hora</th> : null}
                     <th className="text-right">Acciones</th>
                   </tr>
                 </thead>
@@ -314,14 +316,16 @@ export default function SalesPage() {
                       </td>
                       <td><StatusPill tone={SALE_STATUS_TONE[sale.status]}>{SALE_STATUS_LABEL[sale.status]}</StatusPill></td>
                       <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(sale.total, sale.currency)}</td>
+                      {showTrash ? <td className="font-semibold text-[var(--ink-primary)]">{sale.deletedBy ? fullName(sale.deletedBy) : <span className="font-normal text-[var(--ink-muted)]">Sin registro</span>}</td> : null}
+                      {showTrash ? <td className="whitespace-nowrap">{formatDate(sale.deletedAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' })} h</td> : null}
                       <td>
                         <div className="flex justify-end gap-1">
-                          {canWrite && sale.status === 'DRAFT' ? (
+                          {canWrite && !showTrash && sale.status === 'DRAFT' ? (
                             <button type="button" className="btn-secondary" disabled={confirmSale.isPending} onClick={() => confirmSale.mutate(sale.id)}>
                               <CheckCircle2 size={14} /> Confirmar
                             </button>
                           ) : null}
-                          {canManage && sale.status === 'CONFIRMED' ? (
+                          {canManage && !showTrash && sale.status === 'CONFIRMED' ? (
                             <button type="button" className="btn-secondary" disabled={cancelSale.isPending} onClick={() => cancelSale.mutate(sale.id)}>
                               <Ban size={14} /> Anular
                             </button>
@@ -349,7 +353,7 @@ export default function SalesPage() {
               </table>
             </div>
           ) : (
-            <EmptyState title="Sin ventas registradas" description="Cargá la primera venta para empezar a ver el facturado del estudio." />
+            showTrash ? <EmptyState title="La papelera está vacía" description="Las ventas que elimines aparecerán acá." /> : <EmptyState title="Sin ventas registradas" description="Cargá la primera venta para empezar a ver el facturado del estudio." />
           )
         ) : null}
 

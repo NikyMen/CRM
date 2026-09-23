@@ -1124,6 +1124,7 @@ export interface Sale {
   createdAt: string
   updatedAt: string
   deletedAt?: string | null
+  deletedBy?: AssigneeSummary | null
   company?: { id: string; name: string; ruc?: string | null; tradeName?: string | null }
   createdBy?: AssigneeSummary | null
   items: SaleItem[]
