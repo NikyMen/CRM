@@ -123,6 +123,11 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     return reply.send(await service.listReceivables(ctx, query))
   })
 
+  app.get('/balances', async (req, reply) => {
+    const { currency } = z.object({ currency: z.string().length(3).optional() }).parse(req.query)
+    return reply.send(await service.balances(req.user as WorkspaceContext, { currency }))
+  })
+
   app.get('/receivables/export', async (req, reply) => {
     const ctx = req.user as WorkspaceContext
     const query = z.object({

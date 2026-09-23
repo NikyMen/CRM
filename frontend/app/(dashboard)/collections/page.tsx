@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,7 +9,7 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileS
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { collectionsApi } from '@/lib/api'
-import type { CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
+import type { ClientBalances, CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
@@ -62,17 +62,43 @@ export default function CollectionsPage() {
   const [generationPeriod, setGenerationPeriod] = useState(BUSINESS_DATE.slice(0, 7))
   const [importFile, setImportFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
+  // Llegada desde Saldos: /collections?cobrar=<clientId>&moneda=PYG abre el pago con el cliente cargado.
+  const [prefill, setPrefill] = useState<{ companyId: string; currency: string } | null>(null)
 
   const insightsQuery = useQuery<CollectionInsights>({ queryKey: ['collections-insights'], queryFn: () => collectionsApi.insights().then((response) => response.data) })
   const receivablesQuery = useQuery<PaginatedResult<Receivable>>({ queryKey: ['receivables', { status, page: receivablesPage }], queryFn: () => collectionsApi.listReceivables({ status: status || undefined, page: receivablesPage, limit: PAGE_SIZE }).then((response) => response.data) })
   const paymentsQuery = useQuery<PaginatedResult<CollectionPayment>>({ queryKey: ['payments', { page: paymentsPage, includeVoided }], queryFn: () => collectionsApi.listPayments({ page: paymentsPage, limit: PAGE_SIZE, includeVoided }).then((response) => response.data) })
   const plansQuery = useQuery<PaginatedResult<RecurringCharge>>({ queryKey: ['recurring-charges', { page: plansPage }], queryFn: () => collectionsApi.listRecurring({ page: plansPage, limit: PAGE_SIZE }).then((response) => response.data) })
 
-  const refresh = () => { queryClient.invalidateQueries({ queryKey: ['collections-summary'] }); queryClient.invalidateQueries({ queryKey: ['collections-insights'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['recurring-charges'] }); queryClient.invalidateQueries({ queryKey: ['client-summary'] }) }
+  const balancesQuery = useQuery<ClientBalances>({ queryKey: ['balances'], queryFn: () => collectionsApi.balances().then((response) => response.data), enabled: formMode === 'payment' || Boolean(prefill) })
+  const prefillBalance = prefill ? balancesQuery.data?.items.find((item) => item.companyId === prefill.companyId && item.currency === prefill.currency) : undefined
+  const selectedBalance = balancesQuery.data?.items.find((item) => item.companyId === paymentForm.companyId && item.currency === paymentForm.currency)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const companyId = params.get('cobrar')
+    if (!companyId) return
+    const currency = /^[A-Z]{3}$/.test(params.get('moneda') ?? '') ? params.get('moneda')! : 'PYG'
+    setPrefill({ companyId, currency })
+    setPaymentForm({ ...PAYMENT_FORM, companyId, currency })
+    setView('payments')
+    setFormMode('payment')
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [])
+
+  // Si el cliente ya no tiene saldo en esa moneda, no dejamos un id oculto sin mostrar en el buscador.
+  useEffect(() => {
+    if (prefill && balancesQuery.data && !prefillBalance) {
+      setPaymentForm((current) => current.companyId === prefill.companyId ? { ...current, companyId: '' } : current)
+      setPrefill(null)
+    }
+  }, [prefill, prefillBalance, balancesQuery.data])
+
+  const refresh = () => { queryClient.invalidateQueries({ queryKey: ['balances'] }); queryClient.invalidateQueries({ queryKey: ['collections-summary'] }); queryClient.invalidateQueries({ queryKey: ['collections-insights'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['recurring-charges'] }); queryClient.invalidateQueries({ queryKey: ['client-summary'] }) }
   const removeReceivable = useMutation({ mutationFn: (id: string) => collectionsApi.removeReceivable(id), onSuccess: refresh })
   const removePayment = useMutation({ mutationFn: (id: string) => collectionsApi.removePayment(id), onSuccess: refresh })
   const changePaymentStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'RECEIVED' | 'VOID' }) => collectionsApi.setPaymentStatus(id, status), onSuccess: refresh })
-  const createPayment = useMutation({ mutationFn: () => collectionsApi.createPayment({ ...paymentForm, amount: paymentForm.amount }), onSuccess: () => { refresh(); setPaymentForm(PAYMENT_FORM); setFormMode(null) } })
+  const createPayment = useMutation({ mutationFn: () => collectionsApi.createPayment({ ...paymentForm, amount: paymentForm.amount }), onSuccess: () => { refresh(); setPaymentForm(PAYMENT_FORM); setPrefill(null); setFormMode(null) } })
   const createPlan = useMutation({ mutationFn: () => collectionsApi.createRecurring({ ...planForm, amount: planForm.amount, dayOfMonth: Number(planForm.dayOfMonth) }), onSuccess: () => { refresh(); setPlanForm(PLAN_FORM); setFormMode(null) } })
   const previewImport = useMutation({ mutationFn: (file: File) => collectionsApi.import(file, false), onSuccess: (response) => setPreview(response.data as ImportPreview) })
   const commitImport = useMutation({ mutationFn: () => collectionsApi.import(importFile!, true), onSuccess: () => { refresh(); setPreview(null); setImportFile(null); setView('receivables') } })
@@ -99,7 +125,7 @@ export default function CollectionsPage() {
 
     <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['payments', 'Pagos'], ['receivables', 'Cuentas por cobrar'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('shrink-0 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
 
-    {formMode === 'payment' ? <EntryForm title="Registrar pago" error={createPayment.error} cancel={() => setFormMode(null)} save={() => createPayment.mutate()} saving={createPayment.isPending} disabled={!paymentForm.companyId || !paymentForm.amount || !paymentForm.paidAt}><ClientField><ClientPicker value={paymentForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el pago." onChange={(companyId) => setPaymentForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Importe"><MoneyInput value={paymentForm.amount} decimals={paymentForm.currency !== 'PYG'} onChange={(amount) => setPaymentForm((current) => ({ ...current, amount }))} /></Field><Field label="Fecha (día / mes / año)"><DateField value={paymentForm.paidAt} onChange={(paidAt) => setPaymentForm((current) => ({ ...current, paidAt }))} /></Field><Field label="Medio"><select className="ctrl-input" value={paymentForm.method} onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></Field><Field label="Referencia"><input className="ctrl-input" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} /></Field></EntryForm> : null}
+    {formMode === 'payment' ? <EntryForm title="Registrar pago" error={createPayment.error} cancel={() => { setFormMode(null); setPrefill(null) }} save={() => createPayment.mutate()} saving={createPayment.isPending} disabled={!paymentForm.companyId || !paymentForm.amount || !paymentForm.paidAt}><ClientField>{prefill && balancesQuery.isLoading ? <p className="ctrl-input flex items-center text-xs text-[var(--ink-tertiary)]">Cargando cliente…</p> : <ClientPicker key={prefill?.companyId ?? 'manual'} initialClient={prefillBalance?.company ?? null} value={paymentForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el pago." onChange={(companyId) => setPaymentForm((current) => ({ ...current, companyId }))} />}{paymentForm.companyId && balancesQuery.data ? <p className="mt-1.5 text-[11px] font-semibold text-[var(--ink-secondary)]">{selectedBalance ? <>Saldo pendiente: <span className="font-mono">{formatMoney(selectedBalance.outstanding, selectedBalance.currency)}</span> en {selectedBalance.openCount} {selectedBalance.openCount === 1 ? 'deuda' : 'deudas'}. El pago cancela primero la más antigua.</> : `Sin saldo pendiente en ${paymentForm.currency}; el pago quedará como saldo a favor.`}</p> : null}</ClientField><Field label="Importe"><MoneyInput value={paymentForm.amount} decimals={paymentForm.currency !== 'PYG'} onChange={(amount) => setPaymentForm((current) => ({ ...current, amount }))} /></Field><Field label="Moneda"><select className="ctrl-input" value={paymentForm.currency} onChange={(event) => setPaymentForm((current) => ({ ...current, currency: event.target.value, amount: event.target.value === 'PYG' ? current.amount.split('.')[0] : current.amount }))}><option value="PYG">Guaraníes (PYG)</option><option value="USD">Dólares (USD)</option></select></Field><Field label="Fecha (día / mes / año)"><DateField value={paymentForm.paidAt} onChange={(paidAt) => setPaymentForm((current) => ({ ...current, paidAt }))} /></Field><Field label="Medio"><select className="ctrl-input" value={paymentForm.method} onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></Field><Field label="Referencia"><input className="ctrl-input" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} /></Field></EntryForm> : null}
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
 
     {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} setSearch={setSearch} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={() => setFormMode('payment')} page={receivablesPage} setPage={setReceivablesPage} /> : null}

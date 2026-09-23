@@ -8,7 +8,7 @@ import type {
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
   EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
   AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
-  ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CustomerServiceSummary,
+  ClientBalances, ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CustomerServiceSummary,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
@@ -314,6 +314,8 @@ export const collectionsApi = {
   removeReceivable: (id: string) => api.delete(`/collections/receivables/${id}`),
   setPaymentStatus: (id: string, status: 'RECEIVED' | 'VOID') => api.patch(`/collections/payments/${id}/status`, { status }),
   summary: () => api.get<CollectionSummary>('/collections/summary'),
+
+  balances: (currency?: string) => api.get<ClientBalances>('/collections/balances', { params: { currency } }),
 
   insights: (currency = 'PYG') => api.get<CollectionInsights>('/collections/insights', { params: { currency } }),
 

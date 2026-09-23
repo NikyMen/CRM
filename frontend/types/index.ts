@@ -903,6 +903,23 @@ export interface Receivable {
   createdAt: string
 }
 
+export interface ClientBalance {
+  companyId: string
+  company: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'isArchived'> | null
+  currency: string
+  openCount: number
+  amount: string
+  paidAmount: string
+  outstanding: string
+  overdue: string
+  oldestDueDate: string | null
+}
+
+export interface ClientBalances {
+  items: ClientBalance[]
+  totals: Array<{ currency: string; outstanding: string; overdue: string; clients: number }>
+}
+
 export interface CollectionPayment {
   voidedAt?: string | null
   id: string

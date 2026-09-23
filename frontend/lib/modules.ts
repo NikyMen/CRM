@@ -53,7 +53,7 @@ export const MODULE_PATHS: Record<ModuleKey, string[]> = {
   clients: ['/clients'],
   sales: ['/sales'],
   commercial: ['/commercial', '/leads', '/deals', '/pipelines', '/contacts'],
-  collections: ['/collections'],
+  collections: ['/collections', '/balances'],
   'customer-service': ['/customer-service', '/whatsapp', '/inbox', '/channels', '/messenger-instagram'],
   tickets: ['/tickets'],
   'internal-chat': ['/internal-chat'],
