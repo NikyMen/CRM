@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronDown, Minus } from 'lucide-react'
 import clsx from 'clsx'
 import type { CollectionInsights } from '@/types'
 import { formatMoney } from '@/lib/format'
@@ -69,12 +69,40 @@ export function CollectionsDashboard({ data }: { data: CollectionInsights }) {
       </StatTile>
     </section>
 
-    <section className="grid gap-4 lg:grid-cols-5">
-      <TrendChart data={data} className="lg:col-span-3" />
-      <AgingChart data={data} className="lg:col-span-2" />
-    </section>
+    <MoreStats>
+      <section className="grid gap-4 lg:grid-cols-5">
+        <TrendChart data={data} className="lg:col-span-3" />
+        <AgingChart data={data} className="lg:col-span-2" />
+      </section>
+      <TopDebtors data={data} />
+    </MoreStats>
+  </div>
+}
 
-    <TopDebtors data={data} />
+/**
+ * Los gráficos quedan plegados detrás de "Ver más" y se despliegan deslizando.
+ * Se montan recién al abrir, así sus animaciones de entrada se ven.
+ */
+function MoreStats({ children }: { children: React.ReactNode }) {
+  const [rendered, setRendered] = useState(false)
+  const [open, setOpen] = useState(false)
+  const toggle = () => {
+    if (open) { setOpen(false); return }
+    setRendered(true)
+    requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
+  }
+  return <div>
+    <div className="flex justify-center">
+      <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-4 py-2 text-xs font-bold text-[var(--brand-blue)] shadow-sm transition-colors hover:border-[var(--brand-blue)]" aria-expanded={open} onClick={toggle}>
+        {open ? 'Ver menos' : 'Ver más estadísticas'}
+        <ChevronDown size={14} className={clsx('transition-transform duration-300 motion-reduce:transition-none', open && 'rotate-180')} />
+      </button>
+    </div>
+    <div className={clsx('grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')} onTransitionEnd={(event) => { if (event.target === event.currentTarget && !open) setRendered(false) }}>
+      <div className="min-h-0 overflow-hidden">
+        {rendered ? <div className="space-y-4 pt-4">{children}</div> : null}
+      </div>
+    </div>
   </div>
 }
 
