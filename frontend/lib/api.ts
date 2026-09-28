@@ -12,6 +12,7 @@ import type {
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
+  DailyReport, MyDailyReportResponse, TeamDailyReportResponse,
 } from '@/types'
 
 export type WorkspaceSettingsResponse = {
@@ -781,4 +782,27 @@ export const salesApi = {
 
   export: (params?: Omit<SaleFiltersQuery, 'page' | 'limit'>) =>
     api.get('/sales/export', { params, responseType: 'blob' }),
+}
+
+export type DailyReportPayload = {
+  date: string
+  notes?: string | null
+  items: Array<{ companyId?: string | null; description: string; minutes?: number | null; isDone: boolean }>
+}
+
+export const dailyReportsApi = {
+  mine: (date?: string) =>
+    api.get<MyDailyReportResponse>('/daily-reports/mine', { params: { date } }),
+
+  save: (data: DailyReportPayload) =>
+    api.put<DailyReport>('/daily-reports/mine', data),
+
+  submit: (date: string) =>
+    api.post<DailyReport>('/daily-reports/mine/submit', { date }),
+
+  team: (date?: string) =>
+    api.get<TeamDailyReportResponse>('/daily-reports/team', { params: { date } }),
+
+  reopen: (id: string) =>
+    api.post<DailyReport>(`/daily-reports/${id}/reopen`),
 }
