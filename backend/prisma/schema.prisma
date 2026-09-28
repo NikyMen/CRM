@@ -127,6 +127,8 @@ model Workspace {
   sales                 Sale[]
   saleItems             SaleItem[]
   saleEvents            SaleEvent[]
+  dailyReports          DailyReport[]
+  dailyReportItems      DailyReportItem[]
 
   @@map("workspaces")
 }
@@ -169,6 +171,8 @@ model User {
   voidedPayments           Payment[]             @relation("PaymentVoidedBy")
   deletedRecurringCharges  RecurringCharge[]     @relation("RecurringChargeDeletedBy")
   saleEvents               SaleEvent[]           @relation("SaleEventActor")
+  dailyReports             DailyReport[]         @relation("DailyReportAuthor")
+  reopenedDailyReports     DailyReport[]         @relation("DailyReportReopenedBy")
 
   @@map("users")
 }
@@ -846,6 +850,7 @@ model Company {
   documents        ClientDocument[]
   tickets          Ticket[]
   sales            Sale[]
+  dailyReportItems DailyReportItem[]
 
   @@unique([workspaceId, ruc])
   @@index([workspaceId])
@@ -1162,6 +1167,56 @@ model SaleItem {
 
   @@index([saleId, position])
   @@map("sale_items")
+}
+
+enum DailyReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// Planilla diaria: lo que cada integrante hizo en un día calendario de Paraguay.
+/// Se carga al final de la jornada y se envía para que owner/admin la revisen.
+model DailyReport {
+  id                String            @id @default(cuid())
+  workspaceId       String
+  userId            String
+  date              DateTime          @db.Date
+  status            DailyReportStatus @default(DRAFT)
+  notes             String?
+  submittedAt       DateTime?
+  reopenedAt        DateTime?
+  reopenedByUserId  String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user       User              @relation("DailyReportAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  reopenedBy User?             @relation("DailyReportReopenedBy", fields: [reopenedByUserId], references: [id], onDelete: SetNull)
+  items      DailyReportItem[]
+
+  @@unique([workspaceId, userId, date])
+  @@index([workspaceId, date])
+  @@map("daily_reports")
+}
+
+model DailyReportItem {
+  id          String   @id @default(cuid())
+  workspaceId String
+  reportId    String
+  companyId   String?
+  description String
+  minutes     Int?
+  isDone      Boolean  @default(true)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  report    DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([reportId, position])
+  @@index([workspaceId, companyId])
+  @@map("daily_report_items")
 }
 
 model Ticket {

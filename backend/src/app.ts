@@ -42,6 +42,7 @@ import { collectionRoutes } from './modules/collections/collection.routes'
 import { checklistRoutes } from './modules/checklists/checklist.routes'
 import { internalChatRoutes } from './modules/internal-chat/internal-chat.routes'
 import { saleRoutes } from './modules/sales/sale.routes'
+import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
 
 export async function buildApp() {
@@ -197,6 +198,7 @@ export async function buildApp() {
   await app.register(checklistRoutes, { prefix: API, eventBus })
   await app.register(internalChatRoutes, { prefix: `${API}/internal-chat` })
   await app.register(saleRoutes, { prefix: `${API}/sales`, eventBus })
+  await app.register(dailyReportRoutes, { prefix: `${API}/daily-reports` })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
 
   app.addHook('onReady', async () => {

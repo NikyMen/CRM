@@ -1144,3 +1144,66 @@ export interface SaleSummary {
   draftCount: number
   currencies: Array<{ currency: string; confirmedCount: number; confirmedTotal: string }>
 }
+
+// Planilla diaria
+export type DailyReportStatus = 'DRAFT' | 'SUBMITTED'
+
+export interface DailyReportPerson {
+  id: string
+  firstName: string
+  lastName?: string | null
+  email: string
+}
+
+export interface DailyReportItem {
+  id: string
+  companyId?: string | null
+  company?: { id: string; name: string; ruc?: string | null } | null
+  description: string
+  minutes?: number | null
+  isDone: boolean
+  position: number
+}
+
+export interface DailyReportSummary {
+  tasks: number
+  done: number
+  pending: number
+  minutes: number
+}
+
+export interface DailyReport {
+  id: string
+  userId: string
+  /** Día calendario de Paraguay, `yyyy-mm-dd`. */
+  date: string
+  status: DailyReportStatus
+  notes?: string | null
+  submittedAt?: string | null
+  reopenedAt?: string | null
+  user: DailyReportPerson
+  reopenedBy?: DailyReportPerson | null
+  items: DailyReportItem[]
+  summary: DailyReportSummary
+  updatedAt: string
+}
+
+export interface MyDailyReportResponse {
+  date: string
+  today: string
+  report: DailyReport | null
+}
+
+export interface TeamDailyReportRow {
+  user: DailyReportPerson
+  role: Role
+  state: DailyReportStatus | 'MISSING'
+  report: DailyReport | null
+}
+
+export interface TeamDailyReportResponse {
+  date: string
+  today: string
+  totals: { members: number; submitted: number; draft: number; missing: number; tasks: number; pending: number; minutes: number }
+  members: TeamDailyReportRow[]
+}
