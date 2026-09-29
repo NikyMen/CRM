@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
     root: workspaceRoot,
   },
   ...(distDir ? { distDir } : {}),
+  // Redirigir la raíz desde el servidor: el redirect() de app/(dashboard)/page.tsx
+  // dentro del layout cliente rompía el render (React #310) o quedaba colgado.
+  async redirects() {
+    return [{ source: '/', destination: '/dashboard', permanent: false }]
+  },
 }
 
 export default nextConfig
