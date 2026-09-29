@@ -1183,6 +1183,9 @@ model DailyReport {
   date              DateTime          @db.Date
   status            DailyReportStatus @default(DRAFT)
   notes             String?
+  /// "Carga físico" e "Imputado / migrado" de la planilla en papel: cantidades de comprobantes.
+  physicalCount     Int?
+  migratedCount     Int?
   submittedAt       DateTime?
   reopenedAt        DateTime?
   reopenedByUserId  String?

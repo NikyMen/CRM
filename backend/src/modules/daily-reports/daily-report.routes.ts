@@ -5,6 +5,7 @@ import { requireRole } from '../../core/auth/require-role'
 import { requireModule } from '../../core/modules/require-module'
 import type { WorkspaceContext } from '../../types'
 import { paraguayToday } from './daily-report-calculations'
+import { dailyReportFileName, renderDailyReportPdf } from './daily-report-pdf'
 import { DailyReportService, type DailyReportInput } from './daily-report.service'
 
 const dateKey = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
@@ -18,9 +19,13 @@ const itemSchema = z.object({
   isDone: z.boolean().default(true),
 })
 
+const countSchema = z.preprocess(emptyToNull, z.coerce.number().int().min(0).max(100000).nullable())
+
 const saveSchema = z.object({
   date: dateKey,
   notes: z.preprocess(emptyToNull, z.string().trim().max(2000).nullable()),
+  physicalCount: countSchema,
+  migratedCount: countSchema,
   items: z.array(itemSchema).max(100),
 })
 
@@ -47,6 +52,16 @@ export async function dailyReportRoutes(app: FastifyInstance) {
   app.get('/team', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
     const { date } = z.object({ date: dateKey.optional() }).parse(req.query)
     return reply.send(await service.teamDay(req.user as WorkspaceContext, date ?? paraguayToday()))
+  })
+
+  app.get('/team/pdf', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const { date } = z.object({ date: dateKey.optional() }).parse(req.query)
+    const day = await service.teamDay(req.user as WorkspaceContext, date ?? paraguayToday())
+    const fileName = dailyReportFileName(day.date)
+    const asciiName = fileName.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '')
+    return reply.header('Cache-Control', 'no-store')
+      .header('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`)
+      .type('application/pdf').send(renderDailyReportPdf(day))
   })
 
   app.post('/:id/reopen', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
