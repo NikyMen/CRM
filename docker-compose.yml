@@ -1,32 +1,33 @@
+name: crm-base
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: crm_postgres
+    container_name: crmbase_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: crm_user
-      POSTGRES_PASSWORD: crm_password
-      POSTGRES_DB: crm_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_user} -d ${POSTGRES_DB:-crm_db}"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: crm_redis
+    container_name: crmbase_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD requerido}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -35,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: backend/DockerFile
-    container_name: crm_backend
+    container_name: crmbase_backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -45,25 +46,27 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
-      - DIRECT_URL=postgresql://crm_user:crm_password@postgres:5432/crm_db
-      - REDIS_URL=redis://redis:6379
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - DIRECT_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - FRONTEND_URL=${FRONTEND_URL:-http://72.60.15.125:8080}
       - WHATSAPP_AUTH_DIR=.data/whatsapp-auth
       - WHATSAPP_MEDIA_DIR=.data/whatsapp-media
+    # Solo localhost: nginx publica todo en el puerto 8080 (ver ops/nginx-crm-base.conf)
     ports:
-      - "8080:3000"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-18090}:3000"
     volumes:
-      - ./.data/whatsapp-auth:/app/.data/whatsapp-auth
-      - ./.data/whatsapp-media:/app/.data/whatsapp-media
+      - ./.data/whatsapp-auth:/app/backend/.data/whatsapp-auth
+      - ./.data/whatsapp-media:/app/backend/.data/whatsapp-media
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
-    container_name: crm_frontend
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://72.60.15.125:8080/api/v1}
+    container_name: crmbase_frontend
     restart: unless-stopped
     depends_on:
       backend:
@@ -73,8 +76,10 @@ services:
       PORT: 3001
       HOSTNAME: 0.0.0.0
     ports:
-      - "8081:3001"
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-18091}:3001"
 
 volumes:
   postgres_data:
+    name: crmbase_postgres_data
   redis_data:
+    name: crmbase_redis_data
