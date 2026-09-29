@@ -12,7 +12,7 @@ import type {
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
-  DailyReport, MyDailyReportResponse, TeamDailyReportResponse,
+  DailyReport, MyDailyReportResponse,
 } from '@/types'
 
 export type WorkspaceSettingsResponse = {
@@ -802,12 +802,6 @@ export const dailyReportsApi = {
   submit: (date: string) =>
     api.post<DailyReport>('/daily-reports/mine/submit', { date }),
 
-  team: (date?: string) =>
-    api.get<TeamDailyReportResponse>('/daily-reports/team', { params: { date } }),
-
   teamPdf: (date: string) =>
     api.get<Blob>('/daily-reports/team/pdf', { params: { date }, responseType: 'blob' }),
-
-  reopen: (id: string) =>
-    api.post<DailyReport>(`/daily-reports/${id}/reopen`),
 }
