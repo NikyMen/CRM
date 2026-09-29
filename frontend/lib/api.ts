@@ -787,6 +787,8 @@ export const salesApi = {
 export type DailyReportPayload = {
   date: string
   notes?: string | null
+  physicalCount?: number | null
+  migratedCount?: number | null
   items: Array<{ companyId?: string | null; description: string; minutes?: number | null; isDone: boolean }>
 }
 
@@ -802,6 +804,9 @@ export const dailyReportsApi = {
 
   team: (date?: string) =>
     api.get<TeamDailyReportResponse>('/daily-reports/team', { params: { date } }),
+
+  teamPdf: (date: string) =>
+    api.get<Blob>('/daily-reports/team/pdf', { params: { date }, responseType: 'blob' }),
 
   reopen: (id: string) =>
     api.post<DailyReport>(`/daily-reports/${id}/reopen`),

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Plus, RotateCcw, Save, Send, Trash2, UsersRound } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, FileDown, Plus, RotateCcw, Save, Send, Trash2, UsersRound } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { dailyReportsApi, type DailyReportPayload } from '@/lib/api'
@@ -56,6 +56,20 @@ function formatMinutes(total: number) {
 
 const submittedTime = (value?: string | null) => formatDate(value, { hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' })
 
+/** "Planilla Diaria - Jueves 24-09-2026.pdf": el nombre del servidor y, si el navegador no lo expone, el mismo armado acá. */
+function planillaFileName(disposition: string | undefined, iso: string) {
+  const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try { return decodeURIComponent(encoded) } catch { /* se arma localmente */ }
+  }
+  const [year, month, day] = iso.split('-')
+  const weekday = new Intl.DateTimeFormat('es-PY', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${iso}T12:00:00Z`))
+  return `Planilla Diaria - ${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${day}-${month}-${year}.pdf`
+}
+
+const isCount = (value: string) => value === '' || /^\d{1,6}$/.test(value.trim())
+const toCount = (value: string) => value.trim() === '' ? null : Number(value.trim())
+
 export default function DailyReportsPage() {
   const [role, setRole] = useState<Role>()
   useEffect(() => { setRole(auth.get()?.role as Role | undefined) }, [])
@@ -72,6 +86,18 @@ export default function DailyReportsPage() {
 
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
 
+  const downloadPdf = useMutation({
+    mutationFn: () => dailyReportsApi.teamPdf(date),
+    onSuccess: ({ data, headers }) => {
+      const url = URL.createObjectURL(data)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = planillaFileName(headers['content-disposition'] as string | undefined, date)
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    },
+  })
+
   return (
     <PageFrame>
       <PageHeader
@@ -80,6 +106,9 @@ export default function DailyReportsPage() {
         description="Al terminar el día, cada integrante carga lo que hizo y envía su planilla. Owner y admin ven el resumen de todo el equipo."
         action={canManage ? (
           <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" disabled={!validDate || downloadPdf.isPending} onClick={() => downloadPdf.mutate()}>
+              <FileDown size={15} /> {downloadPdf.isPending ? 'Generando…' : 'Descargar planilla PDF'}
+            </button>
             <button type="button" className={clsx('btn-secondary', view === 'team' && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => setView('team')}>
               <UsersRound size={15} /> Resumen del equipo
             </button>
@@ -89,6 +118,8 @@ export default function DailyReportsPage() {
           </div>
         ) : null}
       />
+
+      {downloadPdf.error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(downloadPdf.error, 'No pudimos generar el PDF de la planilla.')}</p> : null}
 
       <DayNavigator date={date} today={today} onChange={setDate} />
 
@@ -143,6 +174,8 @@ function MyReport({ date }: { date: string }) {
   const queryClient = useQueryClient()
   const [tasks, setTasks] = useState<DraftTask[]>(() => [newTask()])
   const [notes, setNotes] = useState('')
+  const [physical, setPhysical] = useState('')
+  const [migrated, setMigrated] = useState('')
   const [dirty, setDirty] = useState(false)
 
   const reportQuery = useQuery<MyDailyReportResponse>({
@@ -157,6 +190,8 @@ function MyReport({ date }: { date: string }) {
     if (!reportQuery.data) return
     setTasks(toDraft(reportQuery.data.report))
     setNotes(reportQuery.data.report?.notes ?? '')
+    setPhysical(reportQuery.data.report?.physicalCount?.toString() ?? '')
+    setMigrated(reportQuery.data.report?.migratedCount?.toString() ?? '')
     setDirty(false)
   }, [serverVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -168,6 +203,8 @@ function MyReport({ date }: { date: string }) {
   const payload = (): DailyReportPayload => ({
     date,
     notes: notes.trim() || null,
+    physicalCount: toCount(physical),
+    migratedCount: toCount(migrated),
     items: tasks
       .filter((task) => task.description.trim())
       .map((task) => ({
@@ -197,6 +234,7 @@ function MyReport({ date }: { date: string }) {
   const submitted = report?.status === 'SUBMITTED'
   const filled = tasks.filter((task) => task.description.trim())
   const invalidMinutes = tasks.some((task) => task.minutes !== '' && (!Number.isFinite(Number(task.minutes)) || Number(task.minutes) < 0 || Number(task.minutes) > 1440))
+  const invalidCounts = !isCount(physical) || !isCount(migrated)
   const totalMinutes = filled.reduce((sum, task) => sum + (Number(task.minutes) || 0), 0)
   const pending = filled.filter((task) => !task.isDone).length
   const busy = save.isPending || submit.isPending
@@ -284,6 +322,16 @@ function MyReport({ date }: { date: string }) {
       </div>
 
       <div className="border-t border-[var(--line-soft)] p-4 sm:p-5">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:max-w-md">
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Carga físico</span>
+            <input className="ctrl-input font-mono tabular-nums" inputMode="numeric" placeholder="Cantidad" value={physical} onChange={(event) => { setPhysical(event.target.value); setDirty(true) }} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Imputado / migrado</span>
+            <input className="ctrl-input font-mono tabular-nums" inputMode="numeric" placeholder="Cantidad" value={migrated} onChange={(event) => { setMigrated(event.target.value); setDirty(true) }} />
+          </label>
+        </div>
         <label className="block">
           <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Observaciones del día (opcional)</span>
           <textarea
@@ -306,14 +354,16 @@ function MyReport({ date }: { date: string }) {
           <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(save.error ?? submit.error, 'No pudimos guardar la planilla.')}</p>
         ) : invalidMinutes ? (
           <p className="text-xs font-semibold text-[var(--danger)]">Los minutos tienen que estar entre 0 y 1440.</p>
+        ) : invalidCounts ? (
+          <p className="text-xs font-semibold text-[var(--danger)]">Carga físico e Imputado / migrado van como números enteros, sin puntos.</p>
         ) : (
           <p className="text-xs text-[var(--ink-tertiary)]">{dirty ? 'Tenés cambios sin guardar.' : report ? `Borrador guardado a las ${submittedTime(report.updatedAt)} h.` : 'Todavía no guardaste nada para este día.'}</p>
         )}
         <div className="flex gap-2">
-          <button type="button" className="btn-secondary" disabled={busy || invalidMinutes || !dirty} onClick={() => save.mutate()}>
+          <button type="button" className="btn-secondary" disabled={busy || invalidMinutes || invalidCounts || !dirty} onClick={() => save.mutate()}>
             <Save size={14} /> {save.isPending ? 'Guardando…' : 'Guardar borrador'}
           </button>
-          <button type="button" className="btn-primary" disabled={busy || invalidMinutes || !filled.length} onClick={() => submit.mutate()}>
+          <button type="button" className="btn-primary" disabled={busy || invalidMinutes || invalidCounts || !filled.length} onClick={() => submit.mutate()}>
             <Send size={14} /> {submit.isPending ? 'Enviando…' : 'Enviar planilla'}
           </button>
         </div>
@@ -448,6 +498,12 @@ function ReportDetail({ report }: { report: DailyReport }) {
       ) : (
         <p className="px-5 py-4 text-sm text-[var(--ink-tertiary)]">El borrador todavía no tiene tareas.</p>
       )}
+      {report.physicalCount !== null && report.physicalCount !== undefined || report.migratedCount !== null && report.migratedCount !== undefined ? (
+        <dl className="flex flex-wrap gap-6 border-t border-[var(--line-soft)] px-5 py-4 text-sm">
+          <Datum label="Carga físico" value={report.physicalCount?.toString() ?? '—'} />
+          <Datum label="Imputado / migrado" value={report.migratedCount?.toString() ?? '—'} />
+        </dl>
+      ) : null}
       {report.notes ? (
         <div className="border-t border-[var(--line-soft)] px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Observaciones</p>

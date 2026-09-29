@@ -14,6 +14,8 @@ export interface DailyReportItemInput {
 
 export interface DailyReportInput {
   notes?: string | null
+  physicalCount?: number | null
+  migratedCount?: number | null
   items: DailyReportItemInput[]
 }
 
@@ -68,7 +70,11 @@ export class DailyReportService {
     if (ctx.role === 'viewer') throw new ForbiddenError('El rol viewer no carga planillas')
     const date = parseReportDate(dateKey)
     await this.ensureClients(ctx, input.items)
-    const notes = input.notes?.trim() || null
+    const fields = {
+      notes: input.notes?.trim() || null,
+      physicalCount: input.physicalCount ?? null,
+      migratedCount: input.migratedCount ?? null,
+    }
 
     try {
       const report = await db.$transaction(async (tx) => {
@@ -81,12 +87,12 @@ export class DailyReportService {
           // El update condicional bloquea la fila: un envío simultáneo no puede colarse entre medio.
           const updated = await tx.dailyReport.updateMany({
             where: { id: existing.id, status: DailyReportStatus.DRAFT },
-            data: { notes },
+            data: fields,
           })
           if (updated.count !== 1) throw new ConflictError('La planilla ya fue enviada. Pedile a un administrador que la reabra para corregirla.')
           reportId = existing.id
         } else {
-          reportId = (await tx.dailyReport.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, date, notes } })).id
+          reportId = (await tx.dailyReport.create({ data: { workspaceId: ctx.workspaceId, userId: ctx.userId, date, ...fields } })).id
         }
         await tx.dailyReportItem.deleteMany({ where: { reportId } })
         if (input.items.length) {
@@ -176,9 +182,11 @@ export class DailyReportService {
         acc.tasks += row.report.summary.tasks
         acc.pending += row.report.summary.pending
         acc.minutes += row.report.summary.minutes
+        acc.physical += row.report.physicalCount ?? 0
+        acc.migrated += row.report.migratedCount ?? 0
       }
       return acc
-    }, { members: rows.length, submitted: 0, draft: 0, missing: 0, tasks: 0, pending: 0, minutes: 0 })
+    }, { members: rows.length, submitted: 0, draft: 0, missing: 0, tasks: 0, pending: 0, minutes: 0, physical: 0, migrated: 0 })
 
     return { date: dateKey, today: paraguayToday(), totals, members: rows }
   }

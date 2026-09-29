@@ -1179,6 +1179,10 @@ export interface DailyReport {
   date: string
   status: DailyReportStatus
   notes?: string | null
+  /** "Carga físico" de la planilla en papel. */
+  physicalCount?: number | null
+  /** "Imputado / migrado" de la planilla en papel. */
+  migratedCount?: number | null
   submittedAt?: string | null
   reopenedAt?: string | null
   user: DailyReportPerson
@@ -1204,6 +1208,6 @@ export interface TeamDailyReportRow {
 export interface TeamDailyReportResponse {
   date: string
   today: string
-  totals: { members: number; submitted: number; draft: number; missing: number; tasks: number; pending: number; minutes: number }
+  totals: { members: number; submitted: number; draft: number; missing: number; tasks: number; pending: number; minutes: number; physical: number; migrated: number }
   members: TeamDailyReportRow[]
 }

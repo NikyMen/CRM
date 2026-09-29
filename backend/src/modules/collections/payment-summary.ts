@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client'
 type PaymentRow = { paidAt: Date; amount: Prisma.Decimal; currency: string; method: string | null; reference: string | null; voidedAt: Date | null }
 type ChargeRow = { amount: Prisma.Decimal; paidAmount: Prisma.Decimal; currency: string; description?: string; dueDate?: Date; status?: string }
 type Client = { name: string; ruc: string | null; dv: string | null }
-type Rgb = [number, number, number]
+export type Rgb = [number, number, number]
 
 // Informe A4 dibujado a mano: fuentes PDF estándar (Helvetica, WinAnsi) y el logo ROMEZ
 // incrustado como imagen con canal alfa. Los datos sólo se escriben como cadenas escapadas,
@@ -18,21 +18,21 @@ const RIGHT = PAGE_W - 42
 const CONTENT_W = RIGHT - LEFT
 const BOTTOM = 72
 
-const NAVY: Rgb = [0, 0.149, 0.376]
-const BLUE: Rgb = [0.2, 0.345, 0.647]
-const INK: Rgb = [0.122, 0.161, 0.216]
-const MUTED: Rgb = [0.42, 0.447, 0.502]
-const LINE: Rgb = [0.886, 0.898, 0.918]
-const SOFT: Rgb = [0.957, 0.965, 0.98]
+export const NAVY: Rgb = [0, 0.149, 0.376]
+export const BLUE: Rgb = [0.2, 0.345, 0.647]
+export const INK: Rgb = [0.122, 0.161, 0.216]
+export const MUTED: Rgb = [0.42, 0.447, 0.502]
+export const LINE: Rgb = [0.886, 0.898, 0.918]
+export const SOFT: Rgb = [0.957, 0.965, 0.98]
 const WHITE: Rgb = [1, 1, 1]
-const DANGER: Rgb = [0.706, 0.137, 0.094]
-const SUCCESS: Rgb = [0.024, 0.463, 0.278]
+export const DANGER: Rgb = [0.706, 0.137, 0.094]
+export const SUCCESS: Rgb = [0.024, 0.463, 0.278]
 
-const LOGO_W = 480
-const LOGO_H = 817
+export const LOGO_W = 480
+export const LOGO_H = 817
 
 let cachedLogo: { rgb: Buffer; alpha: Buffer } | null | undefined
-function loadLogo() {
+export function loadLogo() {
   if (cachedLogo !== undefined) return cachedLogo
   // src/modules/collections (tsx) o dist/src/modules/collections (build) → backend/assets
   const candidates = [path.resolve(__dirname, '..', '..', '..', 'assets'), path.resolve(__dirname, '..', '..', '..', '..', 'assets')]
@@ -55,12 +55,12 @@ const SPECIAL_WIDTH: Record<string, [number, number]> = { '\x97': [1000, 1000], 
 const WIN_ANSI: Record<string, string> = { '—': '\x97', '–': '\x96', '•': '\x95', '…': '\x85', '“': '\x93', '”': '\x94', '‘': '\x91', '’': '\x92', '€': '\x80' }
 
 /** Convierte a WinAnsi (un carácter = un byte latin1); lo no representable queda como "?". */
-function toWinAnsi(value: string) {
+export function toWinAnsi(value: string) {
   // 0x80–0x9F se conservan: son los glifos WinAnsi (…, —, •) que ya produjo esta misma función.
   return value.normalize('NFC').replace(/[\r\n\t]/g, ' ').replace(/[^\x20-\x7e\x80-\xff]/g, (char) => WIN_ANSI[char] ?? '?')
 }
 
-function textWidth(value: string, size: number, bold = false) {
+export function textWidth(value: string, size: number, bold = false) {
   const table = bold ? HELVETICA_BOLD : HELVETICA
   let units = 0
   for (const char of value) {
@@ -74,7 +74,7 @@ function textWidth(value: string, size: number, bold = false) {
 }
 
 /** Recorta con "…" para que el texto no invada la columna siguiente. */
-function fit(value: string, width: number, size: number, bold = false) {
+export function fit(value: string, width: number, size: number, bold = false) {
   const text = toWinAnsi(value)
   if (textWidth(text, size, bold) <= width) return text
   let cut = text
@@ -117,7 +117,7 @@ const STATUS_LABELS: Record<string, string> = { PENDING: 'Pendiente', PARTIAL: '
 
 type TextOptions = { size?: number; bold?: boolean; rgb?: Rgb; align?: 'left' | 'right' | 'center'; spacing?: number }
 
-class Page {
+export class Page {
   ops: string[] = []
   text(value: string, x: number, y: number, { size = 9, bold = false, rgb = INK, align = 'left', spacing = 0 }: TextOptions = {}) {
     const text = toWinAnsi(value)
@@ -350,7 +350,7 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   return buildPdf(pages, logo)
 }
 
-function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | null) {
+export function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | null, title = 'Resumen de cuenta') {
   // Objetos fijos: 1 catálogo, 2 páginas, 3–4 fuentes, 5 estado gráfico, 6–7 logo y su máscara.
   const chunks: Buffer[] = []
   const objects: Array<Buffer | string> = [
@@ -376,7 +376,7 @@ function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | null) {
     objects.push(streamObject('', content))
   }
   objects[1] = `<< /Type /Pages /Kids [${kids.map((id) => `${id} 0 R`).join(' ')}] /Count ${kids.length} >>`
-  objects.push(`<< /Title (${escapeText(toWinAnsi('Resumen de cuenta'))}) /Author (Gestión ROMEZ) /Producer (Gestión ROMEZ) >>`)
+  objects.push(`<< /Title (${escapeText(toWinAnsi(title))}) /Author (Gestión ROMEZ) /Producer (Gestión ROMEZ) >>`)
   const infoId = objects.length
 
   let length = 0
