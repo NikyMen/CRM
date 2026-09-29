@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ChevronLeft, ChevronRight, FileDown, Plus, Save, Send, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, FileDown, Plus, RotateCcw, Save, Send, Trash2, UsersRound } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { dailyReportsApi, type DailyReportPayload } from '@/lib/api'
-import type { DailyReport, MyDailyReportResponse, Role } from '@/types'
+import type { DailyReport, MyDailyReportResponse, Role, TeamDailyReportResponse, TeamDailyReportRow } from '@/types'
 import { formatDate, fullName, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 import { ClientPicker } from '@/components/romez/ClientPicker'
@@ -78,7 +78,11 @@ export default function DailyReportsPage() {
 
   const [today, setToday] = useState('')
   const [date, setDate] = useState('')
+  const [view, setView] = useState<'mine' | 'team'>('mine')
   useEffect(() => { const current = paraguayBusinessDate(); setToday(current); setDate(current) }, [])
+
+  // Owner y admin llegan acá sobre todo a revisar: arrancan en el resumen del equipo.
+  useEffect(() => { if (canManage) setView('team') }, [canManage])
 
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
 
@@ -99,11 +103,23 @@ export default function DailyReportsPage() {
       <PageHeader
         eyebrow="Cierre de jornada"
         title="Planilla diaria"
-        description="Al terminar el día, cada integrante carga lo que hizo y envía su planilla. Owner y admin descargan la planilla de todo el equipo en PDF."
+        description="Al terminar el día, cada integrante carga lo que hizo y envía su planilla. Owner y admin ven el resumen de todo el equipo."
         action={canManage ? (
-          <button type="button" className="btn-primary" disabled={!validDate || downloadPdf.isPending} onClick={() => downloadPdf.mutate()}>
-            <FileDown size={15} /> {downloadPdf.isPending ? 'Generando…' : 'Descargar planilla PDF'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" disabled={!validDate || downloadPdf.isPending} onClick={() => downloadPdf.mutate()}>
+              <FileDown size={15} /> {downloadPdf.isPending ? 'Generando…' : 'Descargar planilla PDF'}
+            </button>
+            {/* Un solo botón que alterna: el equipo es la vista inicial de owner/admin. */}
+            {view === 'team' ? (
+              <button type="button" className="btn-secondary" onClick={() => setView('mine')}>
+                <ClipboardCheck size={15} /> Mi planilla
+              </button>
+            ) : (
+              <button type="button" className="btn-secondary" onClick={() => setView('team')}>
+                <UsersRound size={15} /> Volver al equipo
+              </button>
+            )}
+          </div>
         ) : null}
       />
 
@@ -113,6 +129,8 @@ export default function DailyReportsPage() {
 
       {!role || !validDate ? null : !canWrite ? (
         <EmptyState title="Sin planilla para tu rol" description="El rol viewer consulta información pero no carga planillas diarias." />
+      ) : view === 'team' && canManage ? (
+        <TeamSummary date={date} />
       ) : (
         <MyReport date={date} />
       )}
@@ -230,7 +248,7 @@ function MyReport({ date }: { date: string }) {
     return (
       <SectionPanel
         title="Mi planilla"
-        description={`Enviada a las ${submittedTime(report.submittedAt)} h. Ya no se puede modificar.`}
+        description={`Enviada a las ${submittedTime(report.submittedAt)} h. Si necesitás corregirla, pedile a un administrador que la reabra.`}
         action={<StatusPill tone="success">Enviada</StatusPill>}
       >
         <ReportDetail report={report} />
@@ -358,6 +376,103 @@ function MyReport({ date }: { date: string }) {
   )
 }
 
+function TeamSummary({ date }: { date: string }) {
+  const queryClient = useQueryClient()
+  const [openUserId, setOpenUserId] = useState<string | null>(null)
+
+  const teamQuery = useQuery<TeamDailyReportResponse>({
+    queryKey: ['daily-report', 'team', date],
+    queryFn: () => dailyReportsApi.team(date).then((response) => response.data),
+    refetchInterval: 60_000,
+  })
+
+  const reopen = useMutation({
+    mutationFn: (id: string) => dailyReportsApi.reopen(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['daily-report'] }),
+  })
+
+  if (teamQuery.isLoading) return <LoadingState />
+  if (teamQuery.isError) return <ErrorState message={getErrorMessage(teamQuery.error)} retry={() => teamQuery.refetch()} />
+  const data = teamQuery.data
+  if (!data) return null
+  const { totals } = data
+
+  return (
+    <>
+      <section className="grid overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-3 xl:grid-cols-6">
+        <Metric label="Enviaron" value={`${totals.submitted} de ${totals.members}`} tone={totals.submitted === totals.members && totals.members > 0 ? 'success' : undefined} />
+        <Metric label="En borrador" value={String(totals.draft)} tone={totals.draft ? 'warning' : undefined} />
+        <Metric label="Sin cargar" value={String(totals.missing)} tone={totals.missing ? 'danger' : undefined} />
+        <Metric label="Tareas" value={String(totals.tasks)} />
+        <Metric label="Pendientes" value={String(totals.pending)} tone={totals.pending ? 'warning' : undefined} />
+        <Metric label="Tiempo total" value={formatMinutes(totals.minutes)} />
+      </section>
+
+      <SectionPanel title="Equipo" description="Se actualiza solo cada minuto. Tocá una persona para ver el detalle de su día.">
+        {data.members.length ? (
+          <ul className="divide-y divide-[var(--line-soft)]">
+            {data.members.map((row) => (
+              <TeamRow
+                key={row.user.id}
+                row={row}
+                open={openUserId === row.user.id}
+                onToggle={() => setOpenUserId((current) => current === row.user.id ? null : row.user.id)}
+                onReopen={(id) => reopen.mutate(id)}
+                reopening={reopen.isPending}
+              />
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title="Sin integrantes" description="Todavía no hay personas del equipo con la planilla diaria habilitada." />
+        )}
+        {reopen.error ? <p className="border-t border-[var(--line-soft)] px-5 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(reopen.error, 'No pudimos reabrir la planilla.')}</p> : null}
+      </SectionPanel>
+    </>
+  )
+}
+
+function TeamRow({ row, open, onToggle, onReopen, reopening }: { row: TeamDailyReportRow; open: boolean; onToggle: () => void; onReopen: (id: string) => void; reopening: boolean }) {
+  const report = row.report
+  const summary = report?.summary
+  return (
+    <li>
+      <button type="button" className="flex w-full flex-col gap-2 px-4 py-3 text-left hover:bg-[var(--paper-soft)] sm:flex-row sm:items-center sm:justify-between sm:px-5" onClick={onToggle} aria-expanded={open} disabled={!report}>
+        <span className="flex min-w-0 items-center gap-3">
+          <ChevronDown size={15} className={clsx('flex-none text-[var(--ink-muted)] transition-transform', open && 'rotate-180', !report && 'invisible')} />
+          <span className="min-w-0">
+            <span className="block truncate font-bold text-[var(--ink-primary)]">{fullName(row.user)}</span>
+            <span className="block text-[11px] text-[var(--ink-tertiary)]">
+              {row.state === 'SUBMITTED' ? `Enviada a las ${submittedTime(report?.submittedAt)} h` : row.state === 'DRAFT' ? 'Guardó un borrador pero no la envió' : 'No cargó nada para este día'}
+            </span>
+          </span>
+        </span>
+        <span className="flex flex-wrap items-center gap-3 pl-7 text-xs text-[var(--ink-secondary)] sm:pl-0">
+          {summary ? (
+            <>
+              <span><strong className="tabular-nums text-[var(--ink-primary)]">{summary.tasks}</strong> tareas</span>
+              {summary.pending ? <span className="font-semibold text-[var(--warning)]">{summary.pending} pendientes</span> : null}
+              <span className="font-mono tabular-nums">{formatMinutes(summary.minutes)}</span>
+            </>
+          ) : null}
+          <StatusPill tone={STATE_TONE[row.state]}>{STATE_LABEL[row.state]}</StatusPill>
+        </span>
+      </button>
+      {open && report ? (
+        <div className="border-t border-[var(--line-soft)] bg-[var(--paper-soft)]">
+          <ReportDetail report={report} />
+          {report.status === 'SUBMITTED' ? (
+            <div className="flex justify-end border-t border-[var(--line-soft)] px-5 py-3">
+              <button type="button" className="btn-secondary" disabled={reopening} onClick={() => onReopen(report.id)}>
+                <RotateCcw size={14} /> Reabrir para corregir
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
 function ReportDetail({ report }: { report: DailyReport }) {
   return (
     <div>
@@ -399,6 +514,15 @@ function ReportDetail({ report }: { report: DailyReport }) {
           <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink-primary)]">{report.notes}</p>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'warning' | 'danger' }) {
+  return (
+    <div className="bg-[var(--paper)] p-5">
+      <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p>
+      <p className={clsx('mt-2 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]', tone === 'success' && 'text-[var(--success)]', tone === 'warning' && 'text-[var(--warning)]', tone === 'danger' && 'text-[var(--danger)]')}>{value}</p>
     </div>
   )
 }

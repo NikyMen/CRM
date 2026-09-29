@@ -1197,3 +1197,17 @@ export interface MyDailyReportResponse {
   today: string
   report: DailyReport | null
 }
+
+export interface TeamDailyReportRow {
+  user: DailyReportPerson
+  role: Role
+  state: DailyReportStatus | 'MISSING'
+  report: DailyReport | null
+}
+
+export interface TeamDailyReportResponse {
+  date: string
+  today: string
+  totals: { members: number; submitted: number; draft: number; missing: number; tasks: number; pending: number; minutes: number; physical: number; migrated: number }
+  members: TeamDailyReportRow[]
+}
