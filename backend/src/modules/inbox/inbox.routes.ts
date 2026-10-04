@@ -6,6 +6,7 @@ import { requireRole } from '../../core/auth/require-role'
 import type { EventBus } from '../../core/event-bus'
 import { InboxService } from './inbox.service'
 import { MetaWebhookAdapter } from './meta.adapter'
+import { captureRawJsonBody, requireMetaSignature } from './meta-signature'
 
 const providerSchema = z.enum(['meta', 'tiktok'])
 const channelSchema = z.enum(['whatsapp', 'instagram', 'messenger', 'tiktok'])
@@ -88,7 +89,9 @@ export async function inboxRoutes(
     meta: metaAdapter,
   })
 
-  // Webhook publico para Meta. No lleva auth del CRM.
+  captureRawJsonBody(app)
+
+  // Webhook publico para Meta. No lleva auth del CRM; el POST valida la firma de Meta.
   app.get('/meta/webhook', async (req, reply) => {
     const result = await metaAdapter.verifyWebhook({
       headers: req.headers,
@@ -103,7 +106,7 @@ export async function inboxRoutes(
     return reply.type('text/plain').send(result.challenge)
   })
 
-  app.post('/meta/webhook', async (req, reply) => {
+  app.post('/meta/webhook', { preHandler: requireMetaSignature }, async (req, reply) => {
     const envelope = {
       headers: req.headers,
       query: req.query as Record<string, unknown>,

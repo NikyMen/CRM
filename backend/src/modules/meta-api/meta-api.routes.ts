@@ -13,6 +13,7 @@ import type {
   RegisterWhatsAppPhoneInput,
 } from '../inbox/inbox.service'
 import { MetaWebhookAdapter } from '../inbox/meta.adapter'
+import { captureRawJsonBody, requireMetaSignature } from '../inbox/meta-signature'
 
 const metaChannelSchema = z.enum(['whatsapp', 'instagram', 'messenger'])
 const connectionStatusSchema = z.enum(['disconnected', 'connected', 'error'])
@@ -156,6 +157,8 @@ export async function metaApiRoutes(
     meta: metaAdapter,
   })
 
+  captureRawJsonBody(app)
+
   app.get('/webhook', async (req, reply) => {
     const result = await metaAdapter.verifyWebhook({
       headers: req.headers,
@@ -170,7 +173,7 @@ export async function metaApiRoutes(
     return reply.type('text/plain').send(result.challenge)
   })
 
-  app.post('/webhook', async (req, reply) => {
+  app.post('/webhook', { preHandler: requireMetaSignature }, async (req, reply) => {
     const envelope = {
       headers: req.headers,
       query: req.query as Record<string, unknown>,
