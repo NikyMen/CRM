@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* El tema lo maneja la clase .dark en <html> (theme-script), no prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --canvas: #f8fafc;
   --surface-0: #ffffff;
