@@ -151,6 +151,8 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
       throw new ValidationError('La conexion de Messenger no tiene Page Access Token configurado')
     }
 
+    await this.assertPageToken(input, accessToken, { pageId })
+
     const query = new URLSearchParams({
       fields: 'id,name,category,username,link',
     })
@@ -188,6 +190,8 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
     if (!accessToken) {
       throw new ValidationError('La conexion de Instagram no tiene Page Access Token configurado')
     }
+
+    await this.assertPageToken(input, accessToken, { igUserId })
 
     const query = new URLSearchParams({
       fields: 'id,username,name,profile_picture_url,followers_count,media_count',
@@ -305,21 +309,45 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
     const accessToken = this.readString(input.credentials, 'accessToken')
     if (!accessToken) return null
 
-    const fields = input.channel === 'messenger' ? 'first_name,last_name' : 'name,username'
+    const fields = input.channel === 'messenger' ? 'first_name,last_name,profile_pic' : 'name,username,profile_pic'
     const query = new URLSearchParams({ fields })
     const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${input.externalUserId}?${query.toString()}`
     const rawResponse = await this.getJson(endpoint, accessToken)
+    const profilePicUrl = this.asString(rawResponse.profile_pic)
 
     if (input.channel === 'messenger') {
       const fullName = [this.asString(rawResponse.first_name), this.asString(rawResponse.last_name)]
         .filter(Boolean)
         .join(' ')
-      return fullName ? { displayName: fullName } : null
+      return fullName ? { displayName: fullName, profilePicUrl } : null
     }
 
     const username = this.asString(rawResponse.username)
     const displayName = this.asString(rawResponse.name) ?? (username ? `@${username}` : undefined)
-    return displayName ? { displayName, username } : null
+    return displayName ? { displayName, username, profilePicUrl } : null
+  }
+
+  // Enviar y leer perfiles exige el Page Access Token. Un token de usuario o de usuario del
+  // sistema pasa la lectura de la cuenta pero despues falla con "An unknown error has occurred".
+  private async assertPageToken(
+    input: ConnectionInspectionInput,
+    accessToken: string,
+    expected: { pageId?: string; igUserId?: string }
+  ) {
+    const query = new URLSearchParams({ fields: 'id,instagram_business_account' })
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/me?${query.toString()}`
+    const owner = await this.getJson(endpoint, accessToken)
+    const ownerIgId = this.asString((owner.instagram_business_account as PlainObject | undefined)?.id)
+
+    const matches = expected.pageId
+      ? this.asString(owner.id) === expected.pageId
+      : Boolean(ownerIgId) && ownerIgId === expected.igUserId
+
+    if (!matches) {
+      throw new ValidationError(
+        'El token no es el de la Pagina. Usa el access_token que devuelve me/accounts (o {page-id}?fields=access_token), no el token del usuario del sistema.'
+      )
+    }
   }
 
   async sendMessage(input: OutboundMessageDraft): Promise<OutboundMessageResult> {

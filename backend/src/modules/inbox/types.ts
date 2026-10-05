@@ -135,6 +135,8 @@ export interface SenderProfileInput {
 export interface SenderProfile {
   displayName: string
   username?: string
+  // URL firmada del CDN de Meta: vence, por eso se descarga y se guarda en el contacto.
+  profilePicUrl?: string
 }
 
 export interface OutboundMessageResult {

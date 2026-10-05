@@ -85,6 +85,20 @@ function conversationName(conversation: InboxConversation) {
   return [firstName, lastName].filter(Boolean).join(' ').trim() || 'Contacto sin nombre'
 }
 
+function ContactAvatar({ conversation, className }: { conversation: InboxConversation; className: string }) {
+  const name = conversationName(conversation)
+
+  return (
+    <div className={clsx('flex shrink-0 items-center justify-center overflow-hidden rounded-2xl text-sm font-black', className)}>
+      {conversation.contact.avatar ? (
+        <img src={conversation.contact.avatar} alt={name} className="h-full w-full object-cover" />
+      ) : (
+        name.slice(0, 2).toUpperCase()
+      )}
+    </div>
+  )
+}
+
 function messagePreview(conversation: InboxConversation) {
   const latest = conversation.messages[0]
   if (!latest) return 'Sin mensajes'
@@ -411,9 +425,10 @@ export default function MessengerInstagramPage() {
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-sm font-black text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                          {conversationName(conversation).slice(0, 2).toUpperCase()}
-                        </div>
+                        <ContactAvatar
+                          conversation={conversation}
+                          className="h-11 w-11 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
@@ -463,9 +478,10 @@ export default function MessengerInstagramPage() {
               <div className="shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary-100 text-sm font-black text-primary-700 dark:bg-slate-800 dark:text-slate-100">
-                      {conversationName(selectedConversation).slice(0, 2).toUpperCase()}
-                    </div>
+                    <ContactAvatar
+                      conversation={selectedConversation}
+                      className="h-12 w-12 bg-primary-100 text-primary-700 dark:bg-slate-800 dark:text-slate-100"
+                    />
                     <div className="min-w-0">
                       <h2 className="truncate text-xl font-black tracking-tight text-slate-900 dark:text-slate-50">
                         {conversationName(selectedConversation)}

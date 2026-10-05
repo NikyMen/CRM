@@ -23,6 +23,27 @@ import type {
 
 const inboxDb = db as any
 
+const PROFILE_RETRY_MS = 60 * 60 * 1000
+const PROFILE_PHOTO_MAX_BYTES = 500_000
+
+// Igual que WhatsApp: la foto se guarda como data URL en contact.avatar porque la URL de Meta vence.
+async function downloadImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+    if (!response.ok) return null
+
+    const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
+    if (!contentType?.startsWith('image/')) return null
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (!buffer.length || buffer.length > PROFILE_PHOTO_MAX_BYTES) return null
+
+    return `data:${contentType};base64,${buffer.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
 export interface ChannelConnectionInput {
   provider: 'meta' | 'tiktok'
   channel: 'whatsapp' | 'instagram' | 'messenger' | 'tiktok'
@@ -705,8 +726,6 @@ export class InboxService {
       }
     }
 
-    await this.attachSenderProfile(connection, message)
-
     const result = await inboxDb.$transaction(async (tx: any) => {
       const identity = await this.ensureIdentity(tx, connection.workspaceId, message)
 
@@ -787,6 +806,8 @@ export class InboxService {
         contactId: identity.contactId,
       }
     })
+
+    await this.syncSenderProfile(connection, message)
 
     await this.eventBus.emit('message.received', {
       workspaceId: result.workspaceId,
@@ -929,6 +950,7 @@ export class InboxService {
               lastName: true,
               email: true,
               phone: true,
+              avatar: true,
             },
           },
           connection: {
@@ -1103,16 +1125,16 @@ export class InboxService {
     }
   }
 
-  // Messenger e Instagram no mandan el nombre en el webhook. Se pide una sola vez, cuando el
-  // contacto todavia no existe, para que no quede como "Contacto Instagram".
-  private async attachSenderProfile(connection: any, message: NormalizedInboundMessage) {
+  // Messenger e Instagram no mandan nombre ni foto en el webhook: se piden a la User Profile API
+  // con el token de la Pagina. Si falla (token equivocado, permiso faltante) el mensaje entra
+  // igual y se reintenta con el proximo mensaje del contacto, como maximo una vez por hora.
+  private async syncSenderProfile(connection: any, message: NormalizedInboundMessage) {
     if (message.channel !== 'messenger' && message.channel !== 'instagram') return
-    if (typeof message.metadata?.displayName === 'string' && message.metadata.displayName.trim()) return
 
     const adapter = this.adapters[message.provider]
     if (!adapter?.fetchSenderProfile) return
 
-    const knownIdentity = await inboxDb.contactIdentity.findUnique({
+    const identity = await inboxDb.contactIdentity.findUnique({
       where: {
         workspaceId_channel_externalUserId: {
           workspaceId: connection.workspaceId,
@@ -1120,10 +1142,20 @@ export class InboxService {
           externalUserId: message.externalUserId,
         },
       },
-      select: { id: true },
+      select: { id: true, contactId: true, metadata: true },
     })
 
-    if (knownIdentity) return
+    if (!identity) return
+
+    const identityMetadata = this.asJsonRecord(identity.metadata) ?? {}
+    if (identityMetadata.profileSyncedAt) return
+
+    const lastAttempt = typeof identityMetadata.profileAttemptAt === 'string'
+      ? Date.parse(identityMetadata.profileAttemptAt)
+      : NaN
+    if (Number.isFinite(lastAttempt) && Date.now() - lastAttempt < PROFILE_RETRY_MS) return
+
+    const now = new Date().toISOString()
 
     try {
       const profile = await adapter.fetchSenderProfile({
@@ -1133,17 +1165,51 @@ export class InboxService {
         settings: this.asJsonRecord(connection.settings),
       })
 
-      if (profile) {
-        message.metadata = {
-          ...message.metadata,
-          displayName: profile.displayName,
-          ...(profile.username && { username: profile.username }),
-        }
-      }
+      if (!profile) throw new Error('Meta no devolvio nombre')
+
+      const avatar = profile.profilePicUrl ? await downloadImageAsDataUrl(profile.profilePicUrl) : null
+      const contact = await inboxDb.contact.findUnique({
+        where: { id: identity.contactId },
+        select: { firstName: true, lastName: true, avatar: true },
+      })
+
+      // Solo se pisa el nombre generico: si alguien ya lo edito a mano, se respeta.
+      const hasGenericName = contact?.firstName === this.genericDisplayName(message.channel) && !contact?.lastName
+      // Sin foto descargada no se marca como sincronizado, asi se reintenta la foto.
+      const synced = !profile.profilePicUrl || Boolean(avatar)
+
+      await inboxDb.$transaction([
+        inboxDb.contactIdentity.update({
+          where: { id: identity.id },
+          data: {
+            externalDisplayName: profile.displayName,
+            ...(profile.username && { externalUsername: profile.username }),
+            metadata: {
+              ...identityMetadata,
+              profileAttemptAt: now,
+              ...(synced && { profileSyncedAt: now }),
+            } as Prisma.InputJsonValue,
+          },
+        }),
+        inboxDb.contact.update({
+          where: { id: identity.contactId },
+          data: {
+            ...(hasGenericName && { firstName: profile.displayName.slice(0, 100) }),
+            ...(avatar && !contact?.avatar && { avatar }),
+          },
+        }),
+      ])
     } catch (error) {
-      // Sin perfil el mensaje entra igual, con el nombre generico.
       console.warn(`No se pudo leer el perfil de ${message.channel} ${message.externalUserId}:`, error instanceof Error ? error.message : error)
+      await inboxDb.contactIdentity.update({
+        where: { id: identity.id },
+        data: { metadata: { ...identityMetadata, profileAttemptAt: now } as Prisma.InputJsonValue },
+      }).catch(() => {})
     }
+  }
+
+  private genericDisplayName(channel: string): string {
+    return `Contacto ${channel.charAt(0).toUpperCase()}${channel.slice(1)}`
   }
 
   private extractDisplayName(message: NormalizedInboundMessage): string {
@@ -1153,8 +1219,7 @@ export class InboxService {
 
     if (candidate?.trim()) return candidate.trim()
 
-    const fallback = message.channel.charAt(0).toUpperCase() + message.channel.slice(1)
-    return `Contacto ${fallback}`
+    return this.genericDisplayName(message.channel)
   }
 
   private extractUsername(message: NormalizedInboundMessage): string | undefined {
