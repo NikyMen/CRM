@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { auth } from './auth'
 import type {
-  ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal, Webhook,
+  Contact, Deal, Webhook,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
   StockMovement, StockMovementType, StockProduct, WhatsAppChat,
@@ -379,6 +379,8 @@ export const inboxApi = {
 
   listConversations: (params?: {
     channel?: 'whatsapp' | 'instagram' | 'messenger' | 'tiktok'
+    // Varios canales separados por coma, ej: 'messenger,instagram'
+    channels?: string
     status?: string
     page?: number
     limit?: number
@@ -466,24 +468,4 @@ export const metaApi = {
     redirectUri?: string
   }) =>
     api.post<EmbeddedSignupCompletionResult>('/meta-api/embedded-signup/complete-code', data),
-}
-
-export const chatwootApi = {
-  status: () =>
-    api.get<ChatwootStatus>('/chatwoot/status'),
-
-  listConversations: (params?: {
-    channel?: 'all' | 'messenger' | 'instagram'
-    status?: 'all' | 'open' | 'resolved' | 'pending' | 'snoozed'
-    q?: string
-    page?: number
-    limit?: number
-  }) =>
-    api.get<PaginatedResult<ChatwootConversation>>('/chatwoot/conversations', { params }),
-
-  listMessages: (conversationId: number, params?: { before?: number; after?: number }) =>
-    api.get<ChatwootMessage[]>(`/chatwoot/conversations/${conversationId}/messages`, { params }),
-
-  sendMessage: (conversationId: number, data: { content: string }) =>
-    api.post<ChatwootMessage>(`/chatwoot/conversations/${conversationId}/messages`, data),
 }

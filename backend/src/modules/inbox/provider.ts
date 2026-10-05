@@ -9,6 +9,8 @@ import type {
   OutboundMessageResult,
   PhoneRegistrationInput,
   PhoneRegistrationResult,
+  SenderProfile,
+  SenderProfileInput,
 } from './types'
 
 export interface VerifyWebhookResult {
@@ -34,6 +36,7 @@ export interface ChannelProviderAdapter {
   inspectConnection(input: ConnectionInspectionInput): Promise<ConnectionInspectionResult>
   exchangeEmbeddedSignupCode?(input: EmbeddedSignupCodeExchangeInput): Promise<EmbeddedSignupCodeExchangeResult>
   registerPhoneNumber?(input: PhoneRegistrationInput): Promise<PhoneRegistrationResult>
+  fetchSenderProfile?(input: SenderProfileInput): Promise<SenderProfile | null>
   sendMessage(input: OutboundMessageDraft): Promise<OutboundMessageResult>
 }
 

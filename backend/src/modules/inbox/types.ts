@@ -125,6 +125,18 @@ export interface OutboundMessageDraft {
   settings?: Record<string, unknown>
 }
 
+export interface SenderProfileInput {
+  channel: ChannelKind
+  externalUserId: string
+  credentials?: Record<string, unknown>
+  settings?: Record<string, unknown>
+}
+
+export interface SenderProfile {
+  displayName: string
+  username?: string
+}
+
 export interface OutboundMessageResult {
   providerMessageId: string
   acceptedAt: Date

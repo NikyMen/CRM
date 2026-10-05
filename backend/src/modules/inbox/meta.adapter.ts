@@ -18,6 +18,8 @@ import type {
   OutboundMessageResult,
   PhoneRegistrationInput,
   PhoneRegistrationResult,
+  SenderProfile,
+  SenderProfileInput,
 } from './types'
 
 type PlainObject = Record<string, any>
@@ -295,6 +297,31 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
       rawResponse,
     }
   }
+  // Los webhooks de Messenger e Instagram solo traen el PSID/IGSID, sin nombre.
+  // El nombre se pide a la User Profile API con el Page Access Token de la conexion.
+  async fetchSenderProfile(input: SenderProfileInput): Promise<SenderProfile | null> {
+    if (input.channel !== 'messenger' && input.channel !== 'instagram') return null
+
+    const accessToken = this.readString(input.credentials, 'accessToken')
+    if (!accessToken) return null
+
+    const fields = input.channel === 'messenger' ? 'first_name,last_name' : 'name,username'
+    const query = new URLSearchParams({ fields })
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${input.externalUserId}?${query.toString()}`
+    const rawResponse = await this.getJson(endpoint, accessToken)
+
+    if (input.channel === 'messenger') {
+      const fullName = [this.asString(rawResponse.first_name), this.asString(rawResponse.last_name)]
+        .filter(Boolean)
+        .join(' ')
+      return fullName ? { displayName: fullName } : null
+    }
+
+    const username = this.asString(rawResponse.username)
+    const displayName = this.asString(rawResponse.name) ?? (username ? `@${username}` : undefined)
+    return displayName ? { displayName, username } : null
+  }
+
   async sendMessage(input: OutboundMessageDraft): Promise<OutboundMessageResult> {
     switch (input.channel) {
       case 'whatsapp':
@@ -411,7 +438,12 @@ export class MetaWebhookAdapter implements ChannelProviderAdapter {
       if (tag) payload.tag = tag
     }
 
-    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${externalAccountId}/messages`
+    // Instagram con Facebook Login se envia por la Pagina vinculada (/{page-id}/messages o /me/messages
+    // con Page Access Token); el IG User ID no acepta /messages en graph.facebook.com.
+    const senderId = channel === 'instagram'
+      ? this.readString(input.settings, 'pageId') ?? 'me'
+      : externalAccountId
+    const endpoint = `${this.resolveBaseUrl(input)}/${this.resolveApiVersion(input)}/${senderId}/messages`
     const rawResponse = await this.postJson(endpoint, accessToken, payload)
     const providerMessageId = this.asString(rawResponse.message_id) ?? this.asString(rawResponse.mid)
 

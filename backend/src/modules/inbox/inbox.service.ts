@@ -58,6 +58,7 @@ export interface SendConversationMessageInput {
 
 export interface ConversationFilters extends PaginationQuery {
   channel?: string
+  channels?: string[]
   status?: string
 }
 
@@ -704,6 +705,8 @@ export class InboxService {
       }
     }
 
+    await this.attachSenderProfile(connection, message)
+
     const result = await inboxDb.$transaction(async (tx: any) => {
       const identity = await this.ensureIdentity(tx, connection.workspaceId, message)
 
@@ -905,6 +908,7 @@ export class InboxService {
     const where = {
       workspaceId,
       ...(filters.channel && { channel: filters.channel }),
+      ...(filters.channels?.length && { channel: { in: filters.channels } }),
       ...(filters.status && { status: filters.status }),
     }
 
@@ -1096,6 +1100,49 @@ export class InboxService {
       }
 
       throw error
+    }
+  }
+
+  // Messenger e Instagram no mandan el nombre en el webhook. Se pide una sola vez, cuando el
+  // contacto todavia no existe, para que no quede como "Contacto Instagram".
+  private async attachSenderProfile(connection: any, message: NormalizedInboundMessage) {
+    if (message.channel !== 'messenger' && message.channel !== 'instagram') return
+    if (typeof message.metadata?.displayName === 'string' && message.metadata.displayName.trim()) return
+
+    const adapter = this.adapters[message.provider]
+    if (!adapter?.fetchSenderProfile) return
+
+    const knownIdentity = await inboxDb.contactIdentity.findUnique({
+      where: {
+        workspaceId_channel_externalUserId: {
+          workspaceId: connection.workspaceId,
+          channel: message.channel,
+          externalUserId: message.externalUserId,
+        },
+      },
+      select: { id: true },
+    })
+
+    if (knownIdentity) return
+
+    try {
+      const profile = await adapter.fetchSenderProfile({
+        channel: message.channel,
+        externalUserId: message.externalUserId,
+        credentials: this.asJsonRecord(connection.credentials),
+        settings: this.asJsonRecord(connection.settings),
+      })
+
+      if (profile) {
+        message.metadata = {
+          ...message.metadata,
+          displayName: profile.displayName,
+          ...(profile.username && { username: profile.username }),
+        }
+      }
+    } catch (error) {
+      // Sin perfil el mensaje entra igual, con el nombre generico.
+      console.warn(`No se pudo leer el perfil de ${message.channel} ${message.externalUserId}:`, error instanceof Error ? error.message : error)
     }
   }
 

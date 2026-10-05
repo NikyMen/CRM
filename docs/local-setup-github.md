@@ -27,7 +27,6 @@ copy frontend\.env.example frontend\.env.local
 - `META_APP_ID`
 - `META_APP_SECRET`
 - `META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID`
-- `CHATWOOT_*` si se usa Chatwoot
 
 4. Preparar Prisma cuando la base local este disponible:
 
