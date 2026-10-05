@@ -175,7 +175,7 @@
 - `backend/src/modules/deals/deal.routes.ts` tiene un bug claro:
   - `GET /deals/:id` devuelve `service.search(...)` en vez de un deal puntual.
 - `frontend/app/(dashboard)/webhooks/page.tsx` ofrece el evento `deal.moved`, pero el backend expone/emite `deal.stage_changed`.
-- `frontend/types/index.ts` define `Webhook.successCount`, pero el backend no lo persiste ni lo devuelve.
+- `webhook_endpoints.successCount` existe en `schema.prisma` desde el inicio pero recien la crea la migracion `20261005120000_webhook_success_count`; antes de eso cada evento del `EventBus` tiraba 500.
 - `frontend` y la raiz tienen lockfiles mezclados (`pnpm-lock.yaml` y `package-lock.json`); Next ya avisa que eso le ensucia la deteccion del workspace root.
 - `backend/package.json` usa `start: node dist/server.js`, pero con el `tsconfig` actual el output esperado cae bajo `dist/src/...`.
 - `backend/DockerFile` termina con `node dist/app.js`; por el mismo motivo, ese path parece incorrecto.
