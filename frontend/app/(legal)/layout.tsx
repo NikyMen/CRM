@@ -10,8 +10,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
 
         <footer className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-6 text-xs font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
           <span>Última actualización: {LEGAL_INFO.lastUpdated}</span>
-          <nav className="flex gap-4">
+          <nav className="flex flex-wrap gap-4">
             <Link href="/privacidad" className="hover:text-slate-900 hover:underline dark:hover:text-white">Política de privacidad</Link>
+            <Link href="/condiciones" className="hover:text-slate-900 hover:underline dark:hover:text-white">Condiciones del servicio</Link>
             <Link href="/eliminacion-de-datos" className="hover:text-slate-900 hover:underline dark:hover:text-white">Eliminación de datos</Link>
           </nav>
         </footer>
