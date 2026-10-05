@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
 import { useQuery } from '@tanstack/react-query'
-import { Braces, KanbanSquare, LayoutDashboard, LogOut, Menu, MessagesSquare, Package, Settings, Users, X } from 'lucide-react'
+import { Braces, ChevronDown, KanbanSquare, LayoutDashboard, LogOut, Menu, MessagesSquare, Package, Settings, Users, X } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 import clsx from 'clsx'
 import { authApi } from '@/lib/api'
@@ -32,8 +32,28 @@ const navItems: NavItem[] = [
   { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
-function Brand() {
-  return <div className="relative z-10 flex items-center gap-3"><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={40} height={40} className="h-10 w-10 object-contain" /><div><p className="font-display text-sm font-black text-white">Consultoría Digital</p><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c5ed1b]">CRM operativo</p></div></div>
+function Brand({ user, onLogout }: { user: ReturnType<typeof auth.get>; onLogout: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  return <div ref={ref} className="relative z-20">
+    <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Menú de usuario" className="flex items-center gap-3 rounded-xl p-1 text-left transition hover:bg-white/[0.06]">
+      <Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={40} height={40} className="h-10 w-10 object-contain" />
+      <div><p className="font-display text-sm font-black text-white">Consultoría Digital</p><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c5ed1b]">CRM operativo</p></div>
+      <ChevronDown size={16} className={clsx('shrink-0 text-white/50 transition-transform', open && 'rotate-180')} />
+    </button>
+    {open && <div className="absolute left-0 top-full z-30 mt-2 w-[200px] overflow-hidden rounded-xl border border-white/10 bg-[#0c1015] shadow-2xl">
+      <div className="flex items-center gap-3 border-b border-white/10 px-3 py-3"><UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" /><div className="min-w-0"><p className="truncate text-xs font-black text-white">{user?.firstName} {user?.lastName}</p><p className="truncate text-[10px] font-bold uppercase tracking-wider text-white/45">{user?.role}</p></div></div>
+      <button type="button" onClick={onLogout} className="flex w-full items-center gap-2 px-3 py-3 text-xs font-black text-white/65 transition hover:bg-white/5 hover:text-white"><LogOut size={15} /> Cerrar sesión</button>
+    </div>}
+  </div>
 }
 
 function Navigation({ items, pathname, onNavigate }: { items: NavItem[]; pathname: string; onNavigate?: () => void }) {
@@ -43,12 +63,10 @@ function Navigation({ items, pathname, onNavigate }: { items: NavItem[]; pathnam
 function Sidebar({ items, pathname, user, onLogout, onClose }: { items: NavItem[]; pathname: string; user: ReturnType<typeof auth.get>; onLogout: () => void; onClose?: () => void }) {
   return <div className="relative flex h-full flex-col overflow-hidden bg-[#0c1015]">
     <LightRays />
-    <div className="relative z-10 flex items-center justify-between border-b border-white/10 px-5 py-5"><Brand />{onClose && <button onClick={onClose} className="text-white/70 md:hidden" aria-label="Cerrar menú"><X size={20} /></button>}</div>
+    <div className="relative z-20 flex items-center justify-between border-b border-white/10 px-5 py-5"><Brand user={user} onLogout={onLogout} />{onClose && <button onClick={onClose} className="text-white/70 md:hidden" aria-label="Cerrar menú"><X size={20} /></button>}</div>
     <Navigation items={items} pathname={pathname} onNavigate={onClose} />
     <div className="relative z-10 border-t border-white/10 p-4">
-      <div className="mb-3 flex items-center gap-3"><UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" /><div className="min-w-0"><p className="truncate text-xs font-black text-white">{user?.firstName} {user?.lastName}</p><p className="truncate text-[10px] font-bold uppercase tracking-wider text-white/45">{user?.role}</p></div></div>
-      <button onClick={onLogout} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-xs font-black text-white/65 hover:bg-white/5 hover:text-white"><LogOut size={15} /> Cerrar sesión</button>
-      <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-4"><Image src="/brand/logo-cd.webp" alt="" width={22} height={22} className="h-5 w-5 object-contain" /><p className="text-[9px] font-bold leading-tight text-white/40">Desarrollado por<br/><span className="text-white/65">Consultoría Digital</span></p></div>
+      <div className="flex items-center gap-2"><Image src="/brand/logo-cd.webp" alt="" width={22} height={22} className="h-5 w-5 object-contain" /><p className="text-[9px] font-bold leading-tight text-white/40">Desarrollado por<br/><span className="text-white/65">Consultoría Digital</span></p></div>
     </div>
   </div>
 }
