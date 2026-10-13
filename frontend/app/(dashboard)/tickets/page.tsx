@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowLeft, BarChart3, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Download, Headphones, Loader2, MessageCircle, MessageSquareText, Paperclip, Play, Radio, Search, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, BarChart3, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Download, Headphones, Loader2, MessageCircle, MessageSquareText, Paperclip, Play, Radio, Search, Settings, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
 import clsx from 'clsx'
 import { customerServiceApi, teamApi, ticketsApi, whatsappApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
@@ -13,6 +13,7 @@ import { formatDateTime, fullName, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, StatusPill } from '@/components/romez/OperationalUI'
 import { TopbarContent } from '@/components/romez/Topbar'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
+import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 
 type Inbox = 'free' | 'mine' | 'all'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
@@ -32,6 +33,7 @@ export default function TicketsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [internalNote, setInternalNote] = useState('')
   const [metricsOpen, setMetricsOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<'conversation' | 'notes'>('conversation')
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export default function TicketsPage() {
           <span className="max-w-36 truncate">{summary?.whatsapp?.pushName || 'WhatsApp'}</span>
         </button>
         <button type="button" className="btn-secondary h-9" onClick={() => setMetricsOpen(true)} aria-label="Métricas de atención"><BarChart3 size={15} /><span className="hidden lg:inline">Métricas</span>{summary?.unassigned ? <span className="rounded-full bg-[var(--warning)] px-1.5 text-[10px] font-extrabold text-white">{summary.unassigned}</span> : null}</button>
+        {canManage ? <button type="button" className="btn-secondary h-9" onClick={() => setLinkOpen(true)} aria-label="Configurar WhatsApp de Tickets" title="Vincular el WhatsApp de Tickets (QR)"><Settings size={15} /></button> : null}
       </TopbarContent>
       <div className="grid min-h-[650px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] md:h-[calc(100dvh-64px-56px)] md:min-h-[520px] md:grid-cols-[minmax(320px,390px)_1fr]">
         <section className={clsx('min-h-0 flex-col border-r border-[var(--line)]', selectedId ? 'hidden md:flex' : 'flex')}>
@@ -110,6 +113,7 @@ export default function TicketsPage() {
         </section>
       </div>
       {metricsOpen ? <ServiceMetricsModal summary={summary} loading={summaryQuery.isLoading} error={summaryQuery.error} retry={() => summaryQuery.refetch()} onClose={() => setMetricsOpen(false)} /> : null}
+      {linkOpen ? <WhatsAppLinkDialog title="WhatsApp de Tickets" description="El número compartido que alimenta la bandeja de tickets de todo el estudio." queryKey="whatsapp-session" getSession={() => whatsappApi.getSession().then((response) => response.data)} connect={() => whatsappApi.connect()} disconnect={async () => { await whatsappApi.disconnect(); queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] }) }} disconnectConfirm="¿Desconectar el WhatsApp compartido de ROMEZ?" canManage={canManage} onClose={() => setLinkOpen(false)} /> : null}
     </PageFrame>
   )
 }

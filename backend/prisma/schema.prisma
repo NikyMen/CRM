@@ -130,6 +130,9 @@ model Workspace {
   dailyReports          DailyReport[]
   dailyReportItems      DailyReportItem[]
   quickReplies          QuickReply[]
+  collectionWhatsAppSessions CollectionWhatsAppSession[]
+  collectionWhatsAppChats    CollectionWhatsAppChat[]
+  collectionWhatsAppMessages CollectionWhatsAppMessage[]
 
   @@map("workspaces")
 }
@@ -175,6 +178,7 @@ model User {
   dailyReports             DailyReport[]         @relation("DailyReportAuthor")
   reopenedDailyReports     DailyReport[]         @relation("DailyReportReopenedBy")
   quickReplies             QuickReply[]          @relation("QuickReplyAuthor")
+  collectionWhatsAppMessages CollectionWhatsAppMessage[] @relation("CollectionWhatsAppSender")
 
   @@map("users")
 }
@@ -853,6 +857,7 @@ model Company {
   tickets          Ticket[]
   sales            Sale[]
   dailyReportItems DailyReportItem[]
+  collectionWhatsAppChats CollectionWhatsAppChat[]
 
   @@unique([workspaceId, ruc])
   @@index([workspaceId])
@@ -1316,4 +1321,77 @@ model QuickReply {
 
   @@unique([workspaceId, shortcut])
   @@map("quick_replies")
+}
+
+/// Segundo número de WhatsApp, exclusivo de Cobranzas: chat compartido sin tickets.
+model CollectionWhatsAppSession {
+  id                 String                   @id @default(cuid())
+  workspaceId        String                   @unique
+  status             WhatsAppConnectionStatus @default(DISCONNECTED)
+  phoneJid           String?
+  pushName           String?
+  qrCode             String?
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastDisconnectCode Int?
+  lastError          String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("collection_whatsapp_sessions")
+}
+
+model CollectionWhatsAppChat {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  jid                String
+  lidJid             String?
+  phoneNumber        String?
+  displayName        String?
+  companyId          String?
+  unreadCount        Int       @default(0)
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  lastMessageFromMe  Boolean?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  messages  CollectionWhatsAppMessage[]
+
+  @@unique([workspaceId, jid])
+  @@index([workspaceId, lastMessageAt])
+  @@index([workspaceId, companyId])
+  @@map("collection_whatsapp_chats")
+}
+
+model CollectionWhatsAppMessage {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  chatId         String
+  messageId      String
+  fromMe         Boolean  @default(false)
+  pushName       String?
+  messageType    String   @default("text")
+  text           String?
+  status         String?
+  mediaPath      String?
+  mediaMimeType  String?
+  mediaFileName  String?
+  mediaSizeBytes Int?
+  sentByUserId   String?
+  sentAt         DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chat      CollectionWhatsAppChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sentBy    User?                  @relation("CollectionWhatsAppSender", fields: [sentByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([chatId, messageId])
+  @@index([workspaceId, chatId, sentAt])
+  @@map("collection_whatsapp_messages")
 }

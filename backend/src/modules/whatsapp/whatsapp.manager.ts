@@ -536,6 +536,24 @@ function isPersistableMessage(details: { messageType: string; text?: string | nu
   return true
 }
 
+// Funciones puras reutilizadas por el WhatsApp de Cobranzas.
+export {
+  extractMessageDetails,
+  extractPhoneNumberFromJid,
+  inferOutboundMessageType,
+  isDownloadableMediaMessage,
+  isLidJid,
+  isPersistableMessage,
+  isPhoneUserJid,
+  mediaExtension,
+  messagePreview,
+  normalizeMessageStatus,
+  safeFileName,
+  selectChatDisplayName,
+  supportsChat,
+  toDate,
+}
+
 export class WhatsAppManager {
   private sockets = new Map<string, SocketEntry>()
   private booting = new Map<string, Promise<SocketEntry>>()

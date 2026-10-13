@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { UseQueryResult } from '@tanstack/react-query'
-import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, FileSpreadsheet, HandCoins, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Settings, FileSpreadsheet, HandCoins, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
-import { clientsApi, collectionsApi } from '@/lib/api'
+import { clientsApi, collectionsApi, collectionsWhatsAppApi } from '@/lib/api'
 import type { ClientReceivableGroup, CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
@@ -22,6 +22,8 @@ import { CollectionsDashboard } from '@/components/romez/CollectionsDashboard'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { PaymentDialog, invalidateCollections, type PaymentTarget } from '@/components/romez/PaymentDialog'
 import { CollectionsTrash } from '@/components/romez/CollectionsTrash'
+import { CollectionsWhatsAppLinkDialog, CollectionsWhatsAppPanel } from '@/components/romez/CollectionsWhatsAppPanel'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 
 type View = 'receivables' | 'payments' | 'plans' | 'import' | 'trash'
 type ImportPreviewRow = { rowNumber: number; type: 'RECEIVABLE' | 'PAYMENT'; ruc?: string; description?: string; amount?: string; currency: string; errors: string[] }
@@ -47,7 +49,8 @@ const PLAN_FORM = { companyId: '', name: 'Honorarios mensuales', amount: '', cur
 export default function CollectionsPage() {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement | null>(null)
-  const role = auth.get()?.role
+  const currentUser = auth.get()
+  const role = currentUser?.role
   const canManage = role === 'owner' || role === 'admin'
   const canWrite = Boolean(role && role !== 'viewer')
   const [view, setView] = useState<View>('receivables')
@@ -65,6 +68,9 @@ export default function CollectionsPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   // Popup de cobro: libre (objeto vacío) o sobre un cargo puntual.
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null)
+  // WhatsApp de Cobranzas: panel de chats (con un chat abierto opcional) y popup de vinculación.
+  const [whatsAppPanel, setWhatsAppPanel] = useState<{ chatId?: string } | null>(null)
+  const [whatsAppLinkOpen, setWhatsAppLinkOpen] = useState(false)
 
   const insightsQuery = useQuery<CollectionInsights>({ queryKey: ['collections-insights'], queryFn: () => collectionsApi.insights().then((response) => response.data) })
   const receivablesQuery = useQuery<PaginatedResult<ClientReceivableGroup>>({ queryKey: ['receivables', 'by-client', { status, search: deferredSearch, page: receivablesPage }], queryFn: () => collectionsApi.listReceivablesByClient({ status: status || undefined, search: deferredSearch || undefined, page: receivablesPage, limit: PAGE_SIZE }).then((response) => response.data), placeholderData: (previous) => previous })
@@ -96,18 +102,23 @@ export default function CollectionsPage() {
     },
   })
 
+  const startWhatsApp = useMutation({ mutationFn: (companyId: string) => collectionsWhatsAppApi.startForClient(companyId).then((response) => response.data), onSuccess: (chat) => setWhatsAppPanel({ chatId: chat.id }) })
+
   const generationResult = generateRecurring.data?.data as { generated: number; skipped: number } | undefined
 
-  return <PageFrame><PageHeader eyebrow="Cuenta corriente" title="Gestión de cobranzas" description="Honorarios, cargos, pagos y vencimientos; cada moneda se mantiene separada." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={exportReceivables.isPending} onClick={() => exportReceivables.mutate()}><Download size={15} /> {exportReceivables.isPending ? 'Exportando…' : 'Exportar CSV'}</button>{canManage ? <button type="button" className="btn-secondary" onClick={() => { setView('import'); fileRef.current?.click() }}><Upload size={15} /> Importar</button> : null}{canManage ? <button type="button" className={clsx('btn-secondary', view === 'trash' && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => setView((current) => current === 'trash' ? 'receivables' : 'trash')}>{view === 'trash' ? <ArchiveRestore size={15} /> : <Trash2 size={15} />} {view === 'trash' ? 'Volver a cobranzas' : 'Papelera'}</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => openPayment()}><HandCoins size={15} /> Cobrar</button> : null}<input ref={fileRef} type="file" accept=".xlsx,.csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); previewImport.mutate(file) } }} /></div>} />
+  return <PageFrame><PageHeader eyebrow="Cuenta corriente" title="Gestión de cobranzas" description="Honorarios, cargos, pagos y vencimientos; cada moneda se mantiene separada." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={exportReceivables.isPending} onClick={() => exportReceivables.mutate()}><Download size={15} /> {exportReceivables.isPending ? 'Exportando…' : 'Exportar CSV'}</button><button type="button" className="btn-primary !border-[#1f8f4e] !bg-[#1f8f4e] hover:!bg-[#187a42]" onClick={() => setWhatsAppPanel({})}><WhatsAppLogo size={16} /> WhatsApp</button>{canManage ? <button type="button" className="btn-secondary" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Cobranzas" title="Vincular el WhatsApp de Cobranzas (QR)"><Settings size={15} /></button> : null}{canManage ? <button type="button" className="btn-secondary" onClick={() => { setView('import'); fileRef.current?.click() }}><Upload size={15} /> Importar</button> : null}{canManage ? <button type="button" className={clsx('btn-secondary', view === 'trash' && 'border-[var(--brand-blue)] text-[var(--brand-blue)]')} onClick={() => setView((current) => current === 'trash' ? 'receivables' : 'trash')}>{view === 'trash' ? <ArchiveRestore size={15} /> : <Trash2 size={15} />} {view === 'trash' ? 'Volver a cobranzas' : 'Papelera'}</button> : null}{canWrite ? <button type="button" className="btn-primary" onClick={() => openPayment()}><HandCoins size={15} /> Cobrar</button> : null}<input ref={fileRef} type="file" accept=".xlsx,.csv" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); previewImport.mutate(file) } }} /></div>} />
 
     {insightsQuery.isLoading ? <LoadingState label="Calculando indicadores…" /> : insightsQuery.isError || !insightsQuery.data ? <ErrorState message={getErrorMessage(insightsQuery.error, 'No pudimos cargar los indicadores.')} retry={() => insightsQuery.refetch()} /> : <CollectionsDashboard data={insightsQuery.data} />}
 
     <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['receivables', 'Cuentas por cobrar'], ['payments', 'Pagos'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
 
     <PaymentDialog target={paymentTarget} onClose={() => setPaymentTarget(null)} />
+    {whatsAppPanel ? <CollectionsWhatsAppPanel initialChatId={whatsAppPanel.chatId} canWrite={canWrite} canManage={canManage} currentUserId={currentUser?.userId} onClose={() => setWhatsAppPanel(null)} /> : null}
+    {whatsAppLinkOpen ? <CollectionsWhatsAppLinkDialog canManage={canManage} onClose={() => setWhatsAppLinkOpen(false)} /> : null}
+    {startWhatsApp.isError ? <p role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] px-4 py-3 text-xs font-semibold text-[var(--danger)]"><span>{getErrorMessage(startWhatsApp.error, 'No se pudo abrir el chat de WhatsApp.')}</span><button type="button" className="font-bold underline" onClick={() => startWhatsApp.reset()}>Cerrar</button></p> : null}
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
 
-    {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} deferredSearch={deferredSearch} setSearch={(value) => { setSearch(value); setReceivablesPage(0) }} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={openPayment} onClientPayment={openClientPayment} page={receivablesPage} setPage={setReceivablesPage} /> : null}
+    {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} deferredSearch={deferredSearch} setSearch={(value) => { setSearch(value); setReceivablesPage(0) }} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={openPayment} onClientPayment={openClientPayment} onWhatsApp={(group) => startWhatsApp.mutate(group.companyId)} whatsAppPendingId={startWhatsApp.isPending ? startWhatsApp.variables : undefined} page={receivablesPage} setPage={setReceivablesPage} /> : null}
     {view === 'payments' ? <PaymentsView includeVoided={includeVoided} setIncludeVoided={(value) => { setIncludeVoided(value); setPaymentsPage(0) }} canManage={canManage} busy={removePayment.isPending || changePaymentStatus.isPending} error={removePayment.error || changePaymentStatus.error} remove={(id) => removePayment.mutate(id)} changeStatus={(id, status) => changePaymentStatus.mutate({ id, status })} query={paymentsQuery} canWrite={canWrite} onNew={() => openPayment()} page={paymentsPage} setPage={setPaymentsPage} /> : null}
     {view === 'plans' ? <PlansView query={plansQuery} onNew={() => setFormMode('plan')} canManage={canManage} generationPeriod={generationPeriod} setGenerationPeriod={setGenerationPeriod} generate={() => generateRecurring.mutate()} generating={generateRecurring.isPending} result={generationResult} error={generateRecurring.error || removePlan.error} page={plansPage} setPage={setPlansPage} remove={(id) => removePlan.mutate(id)} removing={removePlan.isPending} /> : null}
     {view === 'trash' && canManage ? <CollectionsTrash description="Todo lo eliminado en Cobranzas: cuentas por cobrar, pagos y planes, con quién lo eliminó y cuándo. Restaurar lo devuelve a su lugar." emptyDescription="Lo que elimines en Cobranzas aparecerá acá." /> : null}
@@ -138,7 +149,7 @@ function EntryForm({ title, children, error, cancel, save, saving, disabled }: {
 const RECEIVABLE_STATUS_FILTERS = [['', 'Todos los estados'], ['OVERDUE', 'Vencidos'], ['PENDING', 'Pendientes'], ['PARTIAL', 'Parciales'], ['PAID', 'Pagados'], ['VOID', 'Anulados']] as const
 
 /** Cuentas por cobrar agrupadas por cliente: una fila por cliente y el mes a mes se despliega adentro. */
-function ReceivablesView({ query, search, deferredSearch, setSearch, status, setStatus, canWrite, canManage, remove, removing, removeError, onPayment, onClientPayment, page, setPage }: { query: UseQueryResult<PaginatedResult<ClientReceivableGroup>>; search: string; deferredSearch: string; setSearch: (value: string) => void; status: string; setStatus: (value: string) => void; canWrite: boolean; canManage: boolean; remove: (id: string) => void; removing: boolean; removeError: unknown; onPayment: (target?: Receivable) => void; onClientPayment: (group: ClientReceivableGroup, currency?: string) => void; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {
+function ReceivablesView({ query, search, deferredSearch, setSearch, status, setStatus, canWrite, canManage, remove, removing, removeError, onPayment, onClientPayment, onWhatsApp, whatsAppPendingId, page, setPage }: { query: UseQueryResult<PaginatedResult<ClientReceivableGroup>>; search: string; deferredSearch: string; setSearch: (value: string) => void; status: string; setStatus: (value: string) => void; canWrite: boolean; canManage: boolean; remove: (id: string) => void; removing: boolean; removeError: unknown; onPayment: (target?: Receivable) => void; onClientPayment: (group: ClientReceivableGroup, currency?: string) => void; onWhatsApp: (group: ClientReceivableGroup) => void; whatsAppPendingId?: string; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const groups = query.data?.items ?? []
   const toggle = (companyId: string) => setExpanded((current) => current === companyId ? null : companyId)
@@ -159,7 +170,7 @@ function ReceivablesView({ query, search, deferredSearch, setSearch, status, set
           <td>{group.overdueCount ? <StatusPill tone="danger">{group.overdueCount} {group.overdueCount === 1 ? 'vencido' : 'vencidos'}</StatusPill> : group.openCount ? <StatusPill tone="warning">{group.openCount} {group.openCount === 1 ? 'pendiente' : 'pendientes'}</StatusPill> : <StatusPill tone="success">Al día</StatusPill>}</td>
           <td className="text-right font-mono tabular-nums">{group.totals.map((total) => <p key={total.currency}>{formatMoney(total.amount, total.currency)}</p>)}</td>
           <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{group.totals.map((total) => <p key={total.currency}>{formatMoney(total.outstanding, total.currency)}</p>)}</td>
-          {canWrite ? <td className="text-right">{payable ? <button type="button" className="btn-primary whitespace-nowrap" onClick={() => onClientPayment(group, owing.length === 1 ? owing[0].currency : undefined)}><HandCoins size={14} /> Cobrar</button> : null}</td> : null}
+          {canWrite ? <td className="text-right"><div className="flex justify-end gap-2">{payable ? <button type="button" className="btn-primary whitespace-nowrap" onClick={() => onClientPayment(group, owing.length === 1 ? owing[0].currency : undefined)}><HandCoins size={14} /> Cobrar</button> : null}{client && !client.isArchived ? <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#1f8f4e] text-white hover:bg-[#187a42] disabled:opacity-60" disabled={whatsAppPendingId === group.companyId} onClick={() => onWhatsApp(group)} aria-label={`Abrir WhatsApp con ${client.name}`} title="Abrir chat por el WhatsApp de Cobranzas">{whatsAppPendingId === group.companyId ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <WhatsAppLogo size={17} />}</button> : null}</div></td> : null}
         </tr>
         {open ? <tr><td colSpan={canWrite ? 8 : 7} className="!p-0"><ClientReceivables companyId={group.companyId} status={status} search={deferredSearch} canWrite={canWrite} canManage={canManage} remove={remove} removing={removing} onPayment={onPayment} /></td></tr> : null}
       </Fragment>
