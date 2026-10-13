@@ -110,22 +110,44 @@ function csvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`
 }
 
+const OPEN_RECEIVABLE_STATUSES: ReceivableStatus[] = ['PENDING', 'PARTIAL', 'OVERDUE']
+
+/** Filtro común del listado de cuentas por cobrar: cartera visible, estado, moneda y búsqueda. */
+function receivableListWhere(
+  ctx: WorkspaceContext,
+  filters: { companyId?: string; status?: ReceivableStatus; currency?: string; search?: string }
+): Prisma.ReceivableWhereInput {
+  const search = filters.search?.trim()
+  return {
+    workspaceId: ctx.workspaceId,
+    company: clientVisibilityWhere(ctx),
+    ...(filters.companyId ? { companyId: filters.companyId } : {}),
+    // Los anulados (eliminados) solo aparecen al filtrarlos explícitamente.
+    status: filters.status ?? { not: 'VOID' },
+    ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
+    ...(search
+      ? {
+          OR: [
+            { description: { contains: search, mode: 'insensitive' } },
+            { reference: { contains: search, mode: 'insensitive' } },
+            { periodKey: { contains: search, mode: 'insensitive' } },
+            { company: { is: { name: { contains: search, mode: 'insensitive' } } } },
+            { company: { is: { ruc: { contains: search } } } },
+          ],
+        }
+      : {}),
+  }
+}
+
 export class CollectionService {
   constructor(private readonly eventBus?: EventBus) {}
 
   async listReceivables(
     ctx: WorkspaceContext,
-    filters: { companyId?: string; status?: ReceivableStatus; currency?: string; page: number; limit: number }
+    filters: { companyId?: string; status?: ReceivableStatus; currency?: string; search?: string; page: number; limit: number }
   ) {
     await this.refreshOverdue(ctx.workspaceId)
-    const where: Prisma.ReceivableWhereInput = {
-      workspaceId: ctx.workspaceId,
-      company: clientVisibilityWhere(ctx),
-      ...(filters.companyId ? { companyId: filters.companyId } : {}),
-      // Los anulados (eliminados) solo aparecen al filtrarlos explícitamente.
-      status: filters.status ?? { not: 'VOID' },
-      ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
-    }
+    const where = receivableListWhere(ctx, filters)
     const [items, total] = await Promise.all([
       db.receivable.findMany({
         where,
@@ -143,6 +165,81 @@ export class CollectionService {
       ...item,
       outstanding: item.amount.minus(item.paidAmount).toString(),
     })), total, filters.page, filters.limit)
+  }
+
+  /**
+   * Cuentas por cobrar agrupadas por cliente, paginadas por cliente. Cada grupo
+   * trae sus totales por moneda (nunca se suman monedas distintas) y el detalle
+   * se pide aparte con `listReceivables({ companyId })`.
+   */
+  async receivablesByClient(
+    ctx: WorkspaceContext,
+    filters: { status?: ReceivableStatus; currency?: string; search?: string; page: number; limit: number }
+  ) {
+    await this.refreshOverdue(ctx.workspaceId)
+    const groups = await db.receivable.groupBy({
+      by: ['companyId', 'currency', 'status'],
+      where: receivableListWhere(ctx, filters),
+      _sum: { amount: true, paidAmount: true },
+      _count: { _all: true },
+      _min: { dueDate: true },
+    })
+
+    type CurrencyTotal = { currency: string; amount: Prisma.Decimal; outstanding: Prisma.Decimal; overdue: Prisma.Decimal }
+    type ClientGroup = {
+      companyId: string
+      count: number
+      overdueCount: number
+      openCount: number
+      nextDueDate: Date | null
+      totals: Map<string, CurrencyTotal>
+    }
+    const byClient = new Map<string, ClientGroup>()
+    for (const group of groups) {
+      const entry: ClientGroup = byClient.get(group.companyId) ?? { companyId: group.companyId, count: 0, overdueCount: 0, openCount: 0, nextDueDate: null, totals: new Map() }
+      const amount = group._sum.amount ?? new Prisma.Decimal(0)
+      const outstanding = group.status === 'VOID' ? new Prisma.Decimal(0) : amount.minus(group._sum.paidAmount ?? 0)
+      entry.count += group._count._all
+      if (group.status === 'OVERDUE') entry.overdueCount += group._count._all
+      if (OPEN_RECEIVABLE_STATUSES.includes(group.status)) {
+        entry.openCount += group._count._all
+        const due = group._min.dueDate
+        if (due && (!entry.nextDueDate || due < entry.nextDueDate)) entry.nextDueDate = due
+      }
+      const total = entry.totals.get(group.currency) ?? { currency: group.currency, amount: new Prisma.Decimal(0), outstanding: new Prisma.Decimal(0), overdue: new Prisma.Decimal(0) }
+      if (group.status !== 'VOID') total.amount = total.amount.plus(amount)
+      total.outstanding = total.outstanding.plus(outstanding)
+      if (group.status === 'OVERDUE') total.overdue = total.overdue.plus(outstanding)
+      entry.totals.set(group.currency, total)
+      byClient.set(group.companyId, entry)
+    }
+
+    const companies = await db.company.findMany({
+      where: { workspaceId: ctx.workspaceId, id: { in: [...byClient.keys()] } },
+      select: { id: true, name: true, ruc: true, dv: true, ownerId: true, isArchived: true },
+    })
+    const companyById = new Map(companies.map((company) => [company.id, company]))
+    const items = [...byClient.values()]
+      .map((entry) => ({
+        companyId: entry.companyId,
+        company: companyById.get(entry.companyId) ?? null,
+        count: entry.count,
+        openCount: entry.openCount,
+        overdueCount: entry.overdueCount,
+        nextDueDate: entry.nextDueDate,
+        totals: [...entry.totals.values()]
+          .sort((a, b) => a.currency.localeCompare(b.currency))
+          .map((total) => ({ currency: total.currency, amount: total.amount.toString(), outstanding: total.outstanding.toString(), overdue: total.overdue.toString() })),
+      }))
+      // Primero quien tiene vencidos, después quien debe algo y al final los saldados.
+      .sort((a, b) =>
+        Number(b.overdueCount > 0) - Number(a.overdueCount > 0) ||
+        Number(b.openCount > 0) - Number(a.openCount > 0) ||
+        (a.company?.name ?? '').localeCompare(b.company?.name ?? '', 'es')
+      )
+
+    const start = filters.page * filters.limit
+    return paginate(items.slice(start, start + filters.limit), items.length, filters.page, filters.limit)
   }
 
   /** Deuda abierta agrupada por cliente y moneda; nunca suma monedas distintas. */

@@ -129,6 +129,7 @@ model Workspace {
   saleEvents            SaleEvent[]
   dailyReports          DailyReport[]
   dailyReportItems      DailyReportItem[]
+  quickReplies          QuickReply[]
 
   @@map("workspaces")
 }
@@ -173,6 +174,7 @@ model User {
   saleEvents               SaleEvent[]           @relation("SaleEventActor")
   dailyReports             DailyReport[]         @relation("DailyReportAuthor")
   reopenedDailyReports     DailyReport[]         @relation("DailyReportReopenedBy")
+  quickReplies             QuickReply[]          @relation("QuickReplyAuthor")
 
   @@map("users")
 }
@@ -1296,4 +1298,22 @@ model TicketEvent {
 
   @@index([workspaceId, ticketId, createdAt])
   @@map("ticket_events")
+}
+
+/// Respuestas rápidas compartidas por el equipo para el chat de tickets.
+model QuickReply {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  shortcut        String
+  title           String
+  body            String
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("QuickReplyAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, shortcut])
+  @@map("quick_replies")
 }

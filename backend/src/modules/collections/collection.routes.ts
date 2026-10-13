@@ -129,8 +129,19 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
       companyId: z.string().optional(),
       status: z.enum(['PENDING', 'PARTIAL', 'PAID', 'OVERDUE', 'VOID']).optional(),
       currency: z.string().length(3).optional(),
-    }).parse(req.query) as { companyId?: string; status?: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOID'; currency?: string; page: number; limit: number }
+      search: z.string().trim().max(120).optional(),
+    }).parse(req.query) as { companyId?: string; status?: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOID'; currency?: string; search?: string; page: number; limit: number }
     return reply.send(await service.listReceivables(ctx, query))
+  })
+
+  app.get('/receivables/by-client', async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
+    const query = paginationSchema.extend({
+      status: z.enum(['PENDING', 'PARTIAL', 'PAID', 'OVERDUE', 'VOID']).optional(),
+      currency: z.string().length(3).optional(),
+      search: z.string().trim().max(120).optional(),
+    }).parse(req.query) as { status?: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOID'; currency?: string; search?: string; page: number; limit: number }
+    return reply.send(await service.receivablesByClient(ctx, query))
   })
 
   app.get('/balances', async (req, reply) => {

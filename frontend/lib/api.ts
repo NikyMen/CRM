@@ -2,6 +2,10 @@ import axios from 'axios'
 import { auth } from './auth'
 import type { ModuleDefinition, ModuleKey, ModuleState } from './modules'
 import type {
+  ClientReceivableGroup,
+  OutboundFilePayload,
+  QuickReply,
+  QuickReplyInput,
   ChatwootConversation, ChatwootMessage, ChatwootStatus, Contact, Deal,
   Pipeline, Stage, InboxConnection, InboxConversation, InboxMessage, PaginatedResult,
   StockCashTransaction, StockCashTransactionType, StockCategory, StockDashboard,
@@ -328,9 +332,18 @@ export const collectionsApi = {
     status?: string
     companyId?: string
     currency?: string
+    search?: string
     page?: number
     limit?: number
   }) => api.get<PaginatedResult<Receivable>>('/collections/receivables', { params }),
+
+  listReceivablesByClient: (params?: {
+    status?: string
+    currency?: string
+    search?: string
+    page?: number
+    limit?: number
+  }) => api.get<PaginatedResult<ClientReceivableGroup>>('/collections/receivables/by-client', { params }),
 
   exportReceivables: (params?: { status?: string; companyId?: string; currency?: string }) =>
     api.get<Blob>('/collections/receivables/export', { params, responseType: 'blob' }),
@@ -412,11 +425,18 @@ export const ticketsApi = {
   updateStatus: (id: string, status: TicketStatus) =>
     api.patch<Ticket>(`/tickets/${id}/status`, { status }),
 
-  reply: (id: string, text: string) => api.post<Ticket>(`/tickets/${id}/reply`, { text }),
+  reply: (id: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<Ticket>(`/tickets/${id}/reply`, data),
 
   listComments: (id: string) => api.get<Array<{ id: string; body: string; createdAt: string }>>(`/tickets/${id}/comments`),
 
   addComment: (id: string, body: string) => api.post(`/tickets/${id}/comments`, { body }),
+}
+
+export const quickRepliesApi = {
+  list: () => api.get<QuickReply[]>('/quick-replies'),
+  create: (data: QuickReplyInput) => api.post<QuickReply>('/quick-replies', data),
+  update: (id: string, data: QuickReplyInput) => api.put<QuickReply>(`/quick-replies/${id}`, data),
+  remove: (id: string) => api.delete(`/quick-replies/${id}`),
 }
 
 export const customerServiceApi = {
