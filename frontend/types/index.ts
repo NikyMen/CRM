@@ -1065,6 +1065,49 @@ export interface Ticket {
   updatedAt: string
 }
 
+/** Lo mínimo que necesita el diálogo de vinculación por QR, común a los dos números. */
+export interface WhatsAppLinkSession {
+  status: WhatsAppConnectionStatus
+  phoneNumber?: string | null
+  pushName?: string | null
+  qrCode?: string | null
+  lastConnectedAt?: string | null
+  lastError?: string | null
+  authAvailable: boolean
+  hasActiveSocket: boolean
+  packageInstalled: boolean
+  runtimeCompatible: boolean
+}
+
+export interface CollectionWhatsAppChat {
+  id: string
+  jid: string
+  phoneNumber?: string | null
+  displayName?: string | null
+  companyId?: string | null
+  company?: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'isArchived'> | null
+  unreadCount: number
+  lastMessageAt?: string | null
+  lastMessagePreview?: string | null
+  lastMessageFromMe?: boolean | null
+}
+
+export interface CollectionWhatsAppMessage {
+  id: string
+  chatId: string
+  messageId: string
+  fromMe: boolean
+  pushName?: string | null
+  messageType: string
+  text?: string | null
+  status?: string | null
+  mediaMimeType?: string | null
+  mediaFileName?: string | null
+  mediaSizeBytes?: number | null
+  sentAt: string
+  sentBy?: { id: string; firstName: string; lastName?: string | null } | null
+}
+
 export interface OutboundFilePayload {
   fileName: string
   mimeType: string

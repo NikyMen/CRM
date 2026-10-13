@@ -90,6 +90,11 @@ data_paths=(.data/whatsapp-auth .data/whatsapp-media)
 if [[ -d "$repo_dir/backend/.data/client-documents" ]]; then
   data_paths+=(.data/client-documents)
 fi
+for optional_path in .data/whatsapp-collections-auth .data/whatsapp-collections-media; do
+  if [[ -d "$repo_dir/backend/$optional_path" ]]; then
+    data_paths+=("$optional_path")
+  fi
+done
 tar -C "$repo_dir/backend" -czf "$target/application-files.tar.gz" "${data_paths[@]}"
 gzip -t "$target/application-files.tar.gz"
 

@@ -3,6 +3,9 @@ import { auth } from './auth'
 import type { ModuleDefinition, ModuleKey, ModuleState } from './modules'
 import type {
   ClientReceivableGroup,
+  CollectionWhatsAppChat,
+  CollectionWhatsAppMessage,
+  WhatsAppLinkSession,
   OutboundFilePayload,
   QuickReply,
   QuickReplyInput,
@@ -430,6 +433,19 @@ export const ticketsApi = {
   listComments: (id: string) => api.get<Array<{ id: string; body: string; createdAt: string }>>(`/tickets/${id}/comments`),
 
   addComment: (id: string, body: string) => api.post(`/tickets/${id}/comments`, { body }),
+}
+
+/** Segundo número de WhatsApp, exclusivo de Cobranzas. */
+export const collectionsWhatsAppApi = {
+  getSession: () => api.get<WhatsAppLinkSession>('/collections-whatsapp/session'),
+  connect: () => api.post<WhatsAppLinkSession>('/collections-whatsapp/connect'),
+  disconnect: () => api.post<WhatsAppLinkSession>('/collections-whatsapp/disconnect'),
+  listChats: (search?: string) => api.get<CollectionWhatsAppChat[]>('/collections-whatsapp/chats', { params: { search: search || undefined } }),
+  listMessages: (chatId: string) => api.get<CollectionWhatsAppMessage[]>(`/collections-whatsapp/chats/${chatId}/messages`),
+  markRead: (chatId: string) => api.post(`/collections-whatsapp/chats/${chatId}/read`),
+  send: (chatId: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<CollectionWhatsAppMessage>(`/collections-whatsapp/chats/${chatId}/messages`, data),
+  startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>('/collections-whatsapp/start', { companyId }),
+  getMedia: (messageId: string) => api.get<Blob>(`/collections-whatsapp/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
 }
 
 export const quickRepliesApi = {
