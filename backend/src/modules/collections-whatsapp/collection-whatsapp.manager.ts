@@ -219,6 +219,21 @@ export class CollectionWhatsAppManager {
     await db.collectionWhatsAppChat.updateMany({ where: { id: chatId, workspaceId }, data: { unreadCount: 0 } })
   }
 
+  /**
+   * Borra el chat, sus mensajes y sus archivos sólo en el CRM: en el teléfono
+   * la conversación sigue. Si el cliente vuelve a escribir, el chat se crea de nuevo.
+   */
+  async deleteChat(workspaceId: string, chatId: string) {
+    await this.getChat(workspaceId, chatId)
+    const media = await db.collectionWhatsAppMessage.findMany({ where: { workspaceId, chatId, mediaPath: { not: null } }, select: { mediaPath: true } })
+    await db.collectionWhatsAppChat.delete({ where: { id: chatId } })
+    const root = path.resolve(MEDIA_ROOT)
+    for (const { mediaPath } of media) {
+      const absolutePath = path.resolve(root, mediaPath!)
+      if (absolutePath.startsWith(root + path.sep)) await fs.rm(absolutePath, { force: true }).catch(() => {})
+    }
+  }
+
   /** Abre (o crea) el chat con el teléfono del cliente para poder escribirle primero. */
   async startChatForClient(workspaceId: string, company: { id: string; name: string; phone?: string | null }) {
     const existing = await db.collectionWhatsAppChat.findFirst({ where: { workspaceId, companyId: company.id }, orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } }, select: chatSelect })

@@ -443,6 +443,7 @@ export const collectionsWhatsAppApi = {
   listChats: (search?: string) => api.get<CollectionWhatsAppChat[]>('/collections-whatsapp/chats', { params: { search: search || undefined } }),
   listMessages: (chatId: string) => api.get<CollectionWhatsAppMessage[]>(`/collections-whatsapp/chats/${chatId}/messages`),
   markRead: (chatId: string) => api.post(`/collections-whatsapp/chats/${chatId}/read`),
+  deleteChat: (chatId: string) => api.delete(`/collections-whatsapp/chats/${chatId}`),
   send: (chatId: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<CollectionWhatsAppMessage>(`/collections-whatsapp/chats/${chatId}/messages`, data),
   startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>('/collections-whatsapp/start', { companyId }),
   getMedia: (messageId: string) => api.get<Blob>(`/collections-whatsapp/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),

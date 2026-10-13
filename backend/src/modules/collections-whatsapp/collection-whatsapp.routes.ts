@@ -57,6 +57,12 @@ export async function collectionWhatsAppRoutes(app: FastifyInstance) {
     return reply.status(204).send()
   })
 
+  app.delete<{ Params: { id: string } }>('/chats/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
+    const ctx = req.user as WorkspaceContext
+    await collectionWhatsAppManager.deleteChat(ctx.workspaceId, req.params.id)
+    return reply.status(204).send()
+  })
+
   app.post<{ Params: { id: string } }>('/chats/:id/messages', {
     preHandler: requireRole('owner', 'admin', 'member'),
     bodyLimit: Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.5),
