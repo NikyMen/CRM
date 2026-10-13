@@ -1,15 +1,15 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useDeferredValue, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { UseQueryResult } from '@tanstack/react-query'
-import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronLeft, ChevronRight, Download, FileSpreadsheet, HandCoins, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, ArchiveRestore, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, FileSpreadsheet, HandCoins, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react'
 import clsx from 'clsx'
 import { auth } from '@/lib/auth'
 import { clientsApi, collectionsApi } from '@/lib/api'
-import type { CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
+import type { ClientReceivableGroup, CollectionInsights, CollectionPayment, PaginatedResult, Receivable, RecurringCharge } from '@/types'
 import { formatDate, formatMoney, getErrorMessage } from '@/lib/format'
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeader, SectionPanel, StatusPill } from '@/components/romez/OperationalUI'
 
@@ -52,6 +52,7 @@ export default function CollectionsPage() {
   const canWrite = Boolean(role && role !== 'viewer')
   const [view, setView] = useState<View>('receivables')
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search.trim())
   const [status, setStatus] = useState('')
   const [receivablesPage, setReceivablesPage] = useState(0)
   const [includeVoided, setIncludeVoided] = useState(false)
@@ -66,7 +67,7 @@ export default function CollectionsPage() {
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null)
 
   const insightsQuery = useQuery<CollectionInsights>({ queryKey: ['collections-insights'], queryFn: () => collectionsApi.insights().then((response) => response.data) })
-  const receivablesQuery = useQuery<PaginatedResult<Receivable>>({ queryKey: ['receivables', { status, page: receivablesPage }], queryFn: () => collectionsApi.listReceivables({ status: status || undefined, page: receivablesPage, limit: PAGE_SIZE }).then((response) => response.data) })
+  const receivablesQuery = useQuery<PaginatedResult<ClientReceivableGroup>>({ queryKey: ['receivables', 'by-client', { status, search: deferredSearch, page: receivablesPage }], queryFn: () => collectionsApi.listReceivablesByClient({ status: status || undefined, search: deferredSearch || undefined, page: receivablesPage, limit: PAGE_SIZE }).then((response) => response.data), placeholderData: (previous) => previous })
   const paymentsQuery = useQuery<PaginatedResult<CollectionPayment>>({ queryKey: ['payments', { page: paymentsPage, includeVoided }], queryFn: () => collectionsApi.listPayments({ page: paymentsPage, limit: PAGE_SIZE, includeVoided }).then((response) => response.data) })
   const plansQuery = useQuery<PaginatedResult<RecurringCharge>>({ queryKey: ['recurring-charges', { page: plansPage }], queryFn: () => collectionsApi.listRecurring({ page: plansPage, limit: PAGE_SIZE }).then((response) => response.data) })
 
@@ -75,6 +76,7 @@ export default function CollectionsPage() {
   const removePayment = useMutation({ mutationFn: (id: string) => collectionsApi.removePayment(id), onSuccess: refresh })
   const changePaymentStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'RECEIVED' | 'VOID' }) => collectionsApi.setPaymentStatus(id, status), onSuccess: refresh })
   const openPayment = (receivable?: Receivable) => setPaymentTarget(receivable ? { receivable, client: receivable.company, currency: receivable.currency } : {})
+  const openClientPayment = (group: ClientReceivableGroup, currency?: string) => setPaymentTarget({ client: group.company, currency })
   const removePlan = useMutation({ mutationFn: (id: string) => collectionsApi.removeRecurring(id), onSuccess: refresh })
   const createPlan = useMutation({ mutationFn: () => collectionsApi.createRecurring({ ...planForm, amount: planForm.amount, dayOfMonth: Number(planForm.dayOfMonth) }), onSuccess: () => { refresh(); setPlanForm(PLAN_FORM); setFormMode(null) } })
   const previewImport = useMutation({ mutationFn: (file: File) => collectionsApi.import(file, false), onSuccess: (response) => setPreview(response.data as ImportPreview) })
@@ -105,7 +107,7 @@ export default function CollectionsPage() {
     <PaymentDialog target={paymentTarget} onClose={() => setPaymentTarget(null)} />
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
 
-    {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} setSearch={setSearch} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={openPayment} page={receivablesPage} setPage={setReceivablesPage} /> : null}
+    {view === 'receivables' ? <ReceivablesView query={receivablesQuery} search={search} deferredSearch={deferredSearch} setSearch={(value) => { setSearch(value); setReceivablesPage(0) }} status={status} setStatus={(value) => { setStatus(value); setReceivablesPage(0) }} canWrite={canWrite} canManage={canManage} remove={(id) => removeReceivable.mutate(id)} removing={removeReceivable.isPending} removeError={removeReceivable.error} onPayment={openPayment} onClientPayment={openClientPayment} page={receivablesPage} setPage={setReceivablesPage} /> : null}
     {view === 'payments' ? <PaymentsView includeVoided={includeVoided} setIncludeVoided={(value) => { setIncludeVoided(value); setPaymentsPage(0) }} canManage={canManage} busy={removePayment.isPending || changePaymentStatus.isPending} error={removePayment.error || changePaymentStatus.error} remove={(id) => removePayment.mutate(id)} changeStatus={(id, status) => changePaymentStatus.mutate({ id, status })} query={paymentsQuery} canWrite={canWrite} onNew={() => openPayment()} page={paymentsPage} setPage={setPaymentsPage} /> : null}
     {view === 'plans' ? <PlansView query={plansQuery} onNew={() => setFormMode('plan')} canManage={canManage} generationPeriod={generationPeriod} setGenerationPeriod={setGenerationPeriod} generate={() => generateRecurring.mutate()} generating={generateRecurring.isPending} result={generationResult} error={generateRecurring.error || removePlan.error} page={plansPage} setPage={setPlansPage} remove={(id) => removePlan.mutate(id)} removing={removePlan.isPending} /> : null}
     {view === 'trash' && canManage ? <CollectionsTrash description="Todo lo eliminado en Cobranzas: cuentas por cobrar, pagos y planes, con quién lo eliminó y cuándo. Restaurar lo devuelve a su lugar." emptyDescription="Lo que elimines en Cobranzas aparecerá acá." /> : null}
@@ -133,19 +135,63 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ClientField({ children }: { children: React.ReactNode }) { return <div className="sm:col-span-2"><span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Cliente</span>{children}</div> }
 function EntryForm({ title, children, error, cancel, save, saving, disabled }: { title: string; children: React.ReactNode; error: unknown; cancel: () => void; save: () => void; saving: boolean; disabled: boolean }) { return <SectionPanel title={title}><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">{children}</div><div className="flex flex-col gap-3 border-t border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">{error ? <p className="text-xs font-semibold text-[var(--danger)]">{getErrorMessage(error, 'No pudimos guardar el movimiento.')}</p> : <span />}<div className="flex gap-2"><button type="button" className="btn-secondary" onClick={cancel}>Cancelar</button><button type="button" className="btn-primary" disabled={disabled || saving} onClick={save}>{saving ? 'Guardando…' : 'Guardar'}</button></div></div></SectionPanel> }
 
-function ReceivablesView({ query, search, setSearch, status, setStatus, canWrite, canManage, remove, removing, removeError, onPayment, page, setPage }: { query: UseQueryResult<PaginatedResult<Receivable>>; search: string; setSearch: (value: string) => void; status: string; setStatus: (value: string) => void; canWrite: boolean; canManage: boolean; remove: (id: string) => void; removing: boolean; removeError: unknown; onPayment: (target?: Receivable) => void; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {
-  const router = useRouter()
+const RECEIVABLE_STATUS_FILTERS = [['', 'Todos los estados'], ['OVERDUE', 'Vencidos'], ['PENDING', 'Pendientes'], ['PARTIAL', 'Parciales'], ['PAID', 'Pagados'], ['VOID', 'Anulados']] as const
+
+/** Cuentas por cobrar agrupadas por cliente: una fila por cliente y el mes a mes se despliega adentro. */
+function ReceivablesView({ query, search, deferredSearch, setSearch, status, setStatus, canWrite, canManage, remove, removing, removeError, onPayment, onClientPayment, page, setPage }: { query: UseQueryResult<PaginatedResult<ClientReceivableGroup>>; search: string; deferredSearch: string; setSearch: (value: string) => void; status: string; setStatus: (value: string) => void; canWrite: boolean; canManage: boolean; remove: (id: string) => void; removing: boolean; removeError: unknown; onPayment: (target?: Receivable) => void; onClientPayment: (group: ClientReceivableGroup, currency?: string) => void; page: number; setPage: React.Dispatch<React.SetStateAction<number>> }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const groups = query.data?.items ?? []
+  const toggle = (companyId: string) => setExpanded((current) => current === companyId ? null : companyId)
+  return <SectionPanel title="Cuentas por cobrar" description="Una fila por cliente; tocá un cliente para ver sus cargos mes a mes." action={canWrite ? <button type="button" className="btn-secondary" onClick={() => onPayment()}><HandCoins size={14} /> Cobrar</button> : undefined}>
+    <div className="grid gap-3 border-b border-[var(--line-soft)] p-3 sm:grid-cols-[minmax(0,1fr)_11rem]"><label className="relative block w-full min-w-0"><Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input className="ctrl-input !min-h-11 w-full pl-10 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por cliente, RUC, descripción o referencia…" /></label><select className="ctrl-input !min-h-11 w-full" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrar por estado">{RECEIVABLE_STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+    {removeError ? <p role="alert" className="border-b border-[var(--line-soft)] px-4 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeError, 'No pudimos eliminar el cargo.')}</p> : null}
+    {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState message={getErrorMessage(query.error)} retry={() => query.refetch()} /> : groups.length ? <div className="overflow-x-auto"><table className="data-table"><thead><tr><th className="w-10" /><th>Cliente</th><th>Cargos</th><th>Próximo vencimiento</th><th>Estado</th><th className="text-right">Importe</th><th className="text-right">Saldo</th>{canWrite ? <th /> : null}</tr></thead><tbody>{groups.map((group) => {
+      const open = expanded === group.companyId
+      const client = group.company
+      const owing = group.totals.filter((total) => Number(total.outstanding) > 0)
+      const payable = canWrite && group.openCount > 0 && Boolean(client) && !client?.isArchived
+      return <Fragment key={group.companyId}>
+        <tr className={clsx('cursor-pointer hover:bg-[var(--paper-soft)]', open && 'bg-[var(--paper-soft)]')} onClick={(event) => { if (!(event.target as HTMLElement).closest('a, button, input, select, label')) toggle(group.companyId) }}>
+          <td><button type="button" className="grid h-7 w-7 place-items-center rounded-md text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" onClick={() => toggle(group.companyId)} aria-expanded={open} aria-label={open ? `Ocultar cargos de ${client?.name ?? 'cliente'}` : `Ver cargos de ${client?.name ?? 'cliente'}`}><ChevronDown size={16} className={clsx('transition-transform', open && 'rotate-180')} /></button></td>
+          <td>{client ? client.isArchived ? <><p className="font-bold text-[var(--ink-primary)]">{client.name}</p><p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--danger)]">Cliente eliminado</p></> : <><Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${client.id}`}>{client.name}</Link>{client.ruc ? <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">RUC {client.ruc}{client.dv ? `-${client.dv}` : ''}</p> : null}</> : '—'}</td>
+          <td><p className="font-semibold text-[var(--ink-primary)]">{group.count} {group.count === 1 ? 'cargo' : 'cargos'}</p>{group.openCount && group.openCount !== group.count ? <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">{group.openCount} sin saldar</p> : null}</td>
+          <td className={group.overdueCount ? 'font-bold text-[var(--danger)]' : ''}>{group.nextDueDate ? formatDate(group.nextDueDate, NUMERIC_DATE) : '—'}</td>
+          <td>{group.overdueCount ? <StatusPill tone="danger">{group.overdueCount} {group.overdueCount === 1 ? 'vencido' : 'vencidos'}</StatusPill> : group.openCount ? <StatusPill tone="warning">{group.openCount} {group.openCount === 1 ? 'pendiente' : 'pendientes'}</StatusPill> : <StatusPill tone="success">Al día</StatusPill>}</td>
+          <td className="text-right font-mono tabular-nums">{group.totals.map((total) => <p key={total.currency}>{formatMoney(total.amount, total.currency)}</p>)}</td>
+          <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{group.totals.map((total) => <p key={total.currency}>{formatMoney(total.outstanding, total.currency)}</p>)}</td>
+          {canWrite ? <td className="text-right">{payable ? <button type="button" className="btn-primary whitespace-nowrap" onClick={() => onClientPayment(group, owing.length === 1 ? owing[0].currency : undefined)}><HandCoins size={14} /> Cobrar</button> : null}</td> : null}
+        </tr>
+        {open ? <tr><td colSpan={canWrite ? 8 : 7} className="!p-0"><ClientReceivables companyId={group.companyId} status={status} search={deferredSearch} canWrite={canWrite} canManage={canManage} remove={remove} removing={removing} onPayment={onPayment} /></td></tr> : null}
+      </Fragment>
+    })}</tbody></table></div> : <EmptyState title="Sin movimientos" description="No hay cargos que coincidan con los filtros." />}
+    <Pager data={query.data} page={page} setPage={setPage} label="clientes" />
+  </SectionPanel>
+}
+
+/** Detalle mes a mes de un cliente dentro de la tabla agrupada. */
+function ClientReceivables({ companyId, status, search, canWrite, canManage, remove, removing, onPayment }: { companyId: string; status: string; search: string; canWrite: boolean; canManage: boolean; remove: (id: string) => void; removing: boolean; onPayment: (target?: Receivable) => void }) {
   const confirmDelete = useConfirmDelete()
+  const query = useQuery<PaginatedResult<Receivable>>({ queryKey: ['receivables', { companyId, status, search }], queryFn: () => collectionsApi.listReceivables({ companyId, status: status || undefined, search: search || undefined, page: 0, limit: 100 }).then((response) => response.data) })
   const askRemove = async (item: Receivable) => {
     const paid = Number(item.paidAmount) > 0
     const message = `Se enviará a la papelera "${item.description}"${item.company ? ` de ${item.company.name}` : ''} por ${formatMoney(item.amount, item.currency)}.${paid ? ` Lo ya cobrado (${formatMoney(item.paidAmount, item.currency)}) queda como saldo a favor del cliente; si ese pago tampoco corresponde, eliminalo desde Pagos.` : ''}`
     if (await confirmDelete(message)) remove(item.id)
   }
-  const items = useMemo(() => { const term = search.trim().toLowerCase(); if (!term) return query.data?.items ?? []; return (query.data?.items ?? []).filter((item) => [item.company?.name, item.company?.ruc, item.description, item.reference].some((value) => value?.toLowerCase().includes(term))) }, [query.data?.items, search])
-  if (query.isLoading) return <LoadingState />
-  if (query.isError) return <ErrorState message={getErrorMessage(query.error)} retry={() => query.refetch()} />
   const payable = (item: Receivable) => canWrite && ['PENDING', 'PARTIAL', 'OVERDUE'].includes(item.status) && Boolean(item.company) && !item.company?.isArchived
-  return <SectionPanel title="Cuentas por cobrar" action={canWrite ? <button type="button" className="btn-secondary" onClick={() => onPayment()}><HandCoins size={14} /> Cobrar</button> : undefined}><div className="grid gap-3 border-b border-[var(--line-soft)] p-3 sm:grid-cols-[minmax(0,1fr)_9rem]"><label className="relative block w-full min-w-0"><Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input className="ctrl-input !min-h-11 w-full pl-10 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por cliente, RUC, descripción o referencia…" /></label><select className="ctrl-input !min-h-11 w-full" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todos los estados</option><option value="OVERDUE">Vencidos</option><option value="PENDING">Pendientes</option><option value="PARTIAL">Parciales</option><option value="PAID">Pagados</option><option value="VOID">Anulados</option></select></div>{removeError ? <p role="alert" className="border-b border-[var(--line-soft)] px-4 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeError, 'No pudimos eliminar el cargo.')}</p> : null}{items.length ? <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Cliente</th><th>Concepto</th><th>Vencimiento</th><th>Estado</th><th className="text-right">Importe</th><th className="text-right">Saldo</th>{canWrite ? <th /> : null}</tr></thead><tbody>{items.map((item) => <tr key={item.id} {...openClientRow(router, item.company)}><td>{item.company ? item.company.isArchived ? <><p className="font-bold text-[var(--ink-primary)]">{item.company.name}</p><p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--danger)]">Cliente eliminado</p></> : <Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${item.company.id}`}>{item.company.name}</Link> : '—'}</td><td><p className="font-semibold text-[var(--ink-primary)]">{item.description}</p><p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">{item.periodKey || item.reference || ''}</p></td><td className={item.status === 'OVERDUE' ? 'font-bold text-[var(--danger)]' : ''}>{formatDate(item.dueDate, NUMERIC_DATE)}</td><td><StatusPill tone={item.status === 'PAID' ? 'success' : item.status === 'OVERDUE' ? 'danger' : 'warning'}>{RECEIVABLE_LABELS[item.status] ?? item.status}</StatusPill></td><td className="text-right font-mono tabular-nums">{formatMoney(item.amount, item.currency)}</td><td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(item.outstanding, item.currency)}</td>{canWrite ? <td className="text-right"><div className="flex justify-end gap-2">{payable(item) ? <button type="button" className="btn-primary whitespace-nowrap" onClick={() => onPayment(item)}><HandCoins size={14} /> Cobrar</button> : null}{canManage && item.status !== 'VOID' ? <button type="button" className="btn-danger" disabled={removing} onClick={() => askRemove(item)} aria-label={`Eliminar ${item.description}`}><Trash2 size={14} /></button> : null}</div></td> : null}</tr>)}</tbody></table></div> : <EmptyState title="Sin movimientos" description="No hay cargos que coincidan con los filtros." />}<Pager data={query.data} page={page} setPage={setPage} label="cargos" /></SectionPanel>
+  if (query.isLoading) return <div className="border-y border-[var(--line-soft)] bg-[var(--paper-soft)] px-6 py-4 text-xs text-[var(--ink-tertiary)]">Cargando cargos…</div>
+  if (query.isError) return <div className="border-y border-[var(--line-soft)] bg-[var(--paper-soft)] p-3"><ErrorState message={getErrorMessage(query.error)} retry={() => query.refetch()} /></div>
+  const items = query.data?.items ?? []
+  return <div className="border-y border-[var(--line-soft)] bg-[var(--paper-soft)] py-2 pl-10 pr-3">
+    {items.length ? <table className="data-table"><thead><tr><th>Concepto</th><th>Vencimiento</th><th>Estado</th><th className="text-right">Importe</th><th className="text-right">Saldo</th>{canWrite ? <th /> : null}</tr></thead><tbody>{items.map((item) => <tr key={item.id}>
+      <td><p className="font-semibold text-[var(--ink-primary)]">{item.description}</p><p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">{item.periodKey || item.reference || ''}</p></td>
+      <td className={item.status === 'OVERDUE' ? 'font-bold text-[var(--danger)]' : ''}>{formatDate(item.dueDate, NUMERIC_DATE)}</td>
+      <td><StatusPill tone={item.status === 'PAID' ? 'success' : item.status === 'OVERDUE' ? 'danger' : 'warning'}>{RECEIVABLE_LABELS[item.status] ?? item.status}</StatusPill></td>
+      <td className="text-right font-mono tabular-nums">{formatMoney(item.amount, item.currency)}</td>
+      <td className="text-right font-mono font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(item.outstanding, item.currency)}</td>
+      {canWrite ? <td className="text-right"><div className="flex justify-end gap-2">{payable(item) ? <button type="button" className="btn-primary whitespace-nowrap" onClick={() => onPayment(item)}><HandCoins size={14} /> Cobrar</button> : null}{canManage && item.status !== 'VOID' ? <button type="button" className="btn-danger" disabled={removing} onClick={() => askRemove(item)} aria-label={`Eliminar ${item.description}`}><Trash2 size={14} /></button> : null}</div></td> : null}
+    </tr>)}</tbody></table> : <p className="px-3 py-4 text-xs text-[var(--ink-tertiary)]">Sin cargos con estos filtros.</p>}
+    {query.data && query.data.total > items.length ? <p className="px-3 pb-2 text-[10px] text-[var(--ink-muted)]">Se muestran los primeros {items.length} de {query.data.total} cargos; abrí el legajo del cliente para ver el resto.</p> : null}
+  </div>
 }
 
 function PaymentsView({ query, canWrite, onNew, page, setPage, canManage, includeVoided, setIncludeVoided, busy, error, remove, changeStatus }: {

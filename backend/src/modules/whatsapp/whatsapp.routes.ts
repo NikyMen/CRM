@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { config } from '../../core/config'
-import { ValidationError } from '../../types'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
+import { decodeOutboundFile, outboundFileSchema } from './whatsapp.outbound-file'
 import { whatsAppRealtime } from './whatsapp.events'
 import { sseCorsHeaders } from '../../core/cors'
 
@@ -22,12 +22,6 @@ const messagesQuerySchema = z.object({
 
 const historyQuerySchema = z.object({
   count: z.coerce.number().min(10).max(120).default(40),
-})
-
-const outboundFileSchema = z.object({
-  fileName: z.string().trim().min(1).max(255),
-  mimeType: z.string().trim().min(1).max(160),
-  dataBase64: z.string().min(1).max(Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.4)),
 })
 
 const sendMessageSchema = z.object({
@@ -79,32 +73,6 @@ function safeDownloadName(value: string) {
 function isLocalRequest(ip?: string | null) {
   if (!ip) return false
   return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)
-}
-
-function decodeOutboundFile(file: z.infer<typeof outboundFileSchema>) {
-  const normalizedBase64 = file.dataBase64
-    .replace(/^data:[^;]+;base64,/i, '')
-    .replace(/\s/g, '')
-
-  if (!/^[a-zA-Z0-9+/]+={0,2}$/.test(normalizedBase64)) {
-    throw new ValidationError('Archivo invalido: base64 no valido')
-  }
-
-  const buffer = Buffer.from(normalizedBase64, 'base64')
-  if (!buffer.length) {
-    throw new ValidationError('Archivo invalido: contenido vacio')
-  }
-
-  if (buffer.length > WHATSAPP_OUTBOUND_FILE_MAX_BYTES) {
-    throw new ValidationError('El archivo supera el limite de 8 MB')
-  }
-
-  return {
-    fileName: file.fileName,
-    mimeType: file.mimeType,
-    buffer,
-    sizeBytes: buffer.length,
-  }
 }
 
 export async function whatsappRoutes(app: FastifyInstance) {

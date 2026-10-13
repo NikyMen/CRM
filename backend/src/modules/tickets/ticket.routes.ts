@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { EventBus } from '../../core/event-bus'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
-import { whatsAppManager } from '../whatsapp/whatsapp.manager'
+import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from '../whatsapp/whatsapp.manager'
+import { decodeOutboundFile, outboundFileSchema } from '../whatsapp/whatsapp.outbound-file'
 import { configureTicketEvents } from './ticket.events'
 import { TicketService, type TicketActor } from './ticket.service'
 
@@ -34,7 +35,11 @@ const updateSchema = z.object({
 })
 
 const replySchema = z.object({
-  text: z.string().trim().min(1).max(4096),
+  text: z.string().trim().max(4096).optional(),
+  file: outboundFileSchema.optional(),
+}).refine((value) => Boolean(value.text) || Boolean(value.file), {
+  message: 'Escribí un mensaje o adjuntá un archivo.',
+  path: ['text'],
 })
 
 const commentSchema = z.object({
@@ -114,18 +119,23 @@ export async function ticketRoutes(
 
   app.post<{ Params: { id: string } }>(
     '/:id/reply',
-    { preHandler: requireRole('owner', 'admin', 'member') },
+    {
+      preHandler: requireRole('owner', 'admin', 'member'),
+      bodyLimit: Math.ceil(WHATSAPP_OUTBOUND_FILE_MAX_BYTES * 1.5),
+    },
     async (req, reply) => {
       const actor = req.user as TicketActor
       const body = replySchema.parse(req.body)
-      const { ticket, operationId } = await service.prepareReply(actor, req.params.id, body.text)
+      const text = body.text ?? ''
+      const file = body.file ? decodeOutboundFile(body.file) : undefined
+      const { ticket, operationId } = await service.prepareReply(actor, req.params.id, text)
       let message
       try {
         message = await whatsAppManager.sendChatMessage(
           actor.workspaceId,
           ticket.whatsappChat!.jid,
           actor,
-          { text: body.text, ticketId: ticket.id }
+          { text, file, ticketId: ticket.id }
         )
       } catch (error) {
         await service.markReplyFailed(

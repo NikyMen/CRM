@@ -44,6 +44,7 @@ import { internalChatRoutes } from './modules/internal-chat/internal-chat.routes
 import { saleRoutes } from './modules/sales/sale.routes'
 import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
+import { quickReplyRoutes } from './modules/quick-replies/quick-reply.routes'
 
 export async function buildApp() {
   initSentry()
@@ -192,6 +193,7 @@ export async function buildApp() {
     await app.register(chatwootRoutes, { prefix: `${API}/chatwoot` })
   }
   await app.register(ticketRoutes, { prefix: `${API}/tickets`, eventBus })
+  await app.register(quickReplyRoutes, { prefix: `${API}/quick-replies` })
   await app.register(customerServiceRoutes, { prefix: `${API}/customer-service` })
   await app.register(clientRoutes, { prefix: `${API}/clients`, eventBus })
   await app.register(collectionRoutes, { prefix: `${API}/collections`, eventBus })

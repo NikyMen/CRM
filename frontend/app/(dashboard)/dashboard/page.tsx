@@ -37,7 +37,7 @@ export default function DashboardPage() {
             <PriorityLink href="/tickets" icon={Ticket} label="Tickets sin responsable" value={service?.unassigned ?? 0} action={(service?.unassigned ?? 0) > 0 ? 'Asignar ahora' : 'Bandeja despejada'} urgent={(service?.unassigned ?? 0) > 0} />
             <PriorityLink href="/collections" icon={BadgeDollarSign} label="Cuentas vencidas" value={collections?.overdueCount ?? 0} action="Revisar cobranzas" urgent={(collections?.overdueCount ?? 0) > 0} />
             <PriorityLink href="/clients" icon={CalendarCheck2} label="Checklist pendientes" value={checklistPending} action="Revisar legajos" urgent={checklistPending > 0} />
-            <PriorityLink href="/customer-service" icon={Headphones} label="Esperando cliente" value={service?.waitingCustomer ?? 0} action="Ver seguimiento" />
+            <PriorityLink href="/tickets" icon={Headphones} label="Esperando cliente" value={service?.waitingCustomer ?? 0} action="Ver seguimiento" />
           </div>
         </section>
       )}

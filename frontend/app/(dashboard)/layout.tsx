@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Headphones, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -14,6 +14,7 @@ import { ConfirmDeleteProvider } from '@/components/romez/ConfirmDelete'
 import { UserAvatar } from '@/components/UserAvatar'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
+import { TopbarSlot } from '@/components/romez/Topbar'
 
 type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
@@ -25,8 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
   { href: '/balances', label: 'Saldos', icon: Scale, module: 'collections' },
   { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign, module: 'collections' },
-  { href: '/customer-service', label: 'Atención al cliente', icon: Headphones, module: 'customer-service' },
-  { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets' },
+  { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets', aliases: ['/customer-service'] },
   { href: '/internal-chat', label: 'Chat interno', icon: MessageCircleMore, module: 'internal-chat' },
   { href: '/stock', label: 'Stock', icon: Boxes, roles: ['owner', 'admin', 'member'], module: 'stock' },
   { href: '/team', label: 'Equipo', icon: UsersRound, roles: ['owner', 'admin'], module: 'team' },
@@ -189,7 +189,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3 md:hidden">
             <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           </div>
-          <div className="ml-auto"><UserMenu user={user} onLogout={logout} /></div>
+          <TopbarSlot />
+          <div className="shrink-0"><UserMenu user={user} onLogout={logout} /></div>
         </header>
         <div className="min-w-0 md:flex-1 md:overflow-y-auto">
           {checking || !modulesReady ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}

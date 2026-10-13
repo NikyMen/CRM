@@ -915,6 +915,17 @@ export interface ClientBalance {
   oldestDueDate: string | null
 }
 
+/** Cuentas por cobrar de un cliente resumidas; los totales van por moneda. */
+export interface ClientReceivableGroup {
+  companyId: string
+  company: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'ownerId' | 'isArchived'> | null
+  count: number
+  openCount: number
+  overdueCount: number
+  nextDueDate: string | null
+  totals: Array<{ currency: string; amount: string; outstanding: string; overdue: string }>
+}
+
 export interface ClientBalances {
   items: ClientBalance[]
   totals: Array<{ currency: string; outstanding: string; overdue: string; clients: number }>
@@ -1053,6 +1064,25 @@ export interface Ticket {
   createdAt: string
   updatedAt: string
 }
+
+export interface OutboundFilePayload {
+  fileName: string
+  mimeType: string
+  dataBase64: string
+}
+
+export interface QuickReply {
+  id: string
+  shortcut: string
+  title: string
+  body: string
+  createdByUserId?: string | null
+  createdBy?: { id: string; firstName: string; lastName?: string | null } | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type QuickReplyInput = Pick<QuickReply, 'shortcut' | 'title' | 'body'>
 
 export interface CustomerServiceSummary {
   openTotal: number
