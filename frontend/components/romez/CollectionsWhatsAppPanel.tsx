@@ -4,13 +4,14 @@ import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CheckCheck, Download, Loader2, MessageCircle, Paperclip, Play, Search, Settings, X } from 'lucide-react'
+import { ArrowLeft, CheckCheck, Download, Loader2, MessageCircle, Paperclip, Play, Search, Settings, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { collectionsWhatsAppApi } from '@/lib/api'
 import { formatDateTime, fullName, getErrorMessage } from '@/lib/format'
 import type { CollectionWhatsAppChat, CollectionWhatsAppMessage, WhatsAppLinkSession } from '@/types'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 import { EmptyState } from '@/components/romez/OperationalUI'
+import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 
@@ -42,6 +43,23 @@ export function CollectionsWhatsAppPanel({ initialChatId, canWrite, canManage, c
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search.trim())
   const [linkOpen, setLinkOpen] = useState(false)
+  const confirmDelete = useConfirmDelete()
+  const removeChat = useMutation({
+    mutationFn: (chatId: string) => collectionsWhatsAppApi.deleteChat(chatId),
+    onSuccess: (_, chatId) => {
+      setSelectedId((current) => current === chatId ? null : current)
+      queryClient.removeQueries({ queryKey: ['collections-whatsapp-messages', chatId] })
+      queryClient.invalidateQueries({ queryKey: ['collections-whatsapp-chats'] })
+    },
+  })
+  const askRemove = async (chat: CollectionWhatsAppChat) => {
+    const confirmed = await confirmDelete({
+      title: 'Eliminar chat',
+      message: `Se eliminará el chat con ${chatTitle(chat)} y todos sus mensajes y archivos del CRM. En el teléfono la conversación no se borra, y si el cliente vuelve a escribir el chat aparece de nuevo.`,
+      confirmLabel: 'Eliminar chat',
+    })
+    if (confirmed) removeChat.mutate(chat.id)
+  }
 
   useEffect(() => { if (initialChatId) setSelectedId(initialChatId) }, [initialChatId])
   useEffect(() => {
@@ -67,10 +85,11 @@ export function CollectionsWhatsAppPanel({ initialChatId, canWrite, canManage, c
         </header>
         <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(280px,340px)_1fr]">
           <section className={clsx('min-h-0 flex-col border-r border-[var(--line)]', selectedId ? 'hidden md:flex' : 'flex')}>
-            <div className="border-b border-[var(--line-soft)] p-3"><label className="relative block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input pl-9" placeholder="Cliente, RUC o teléfono…" /></label></div>
+            <div className="border-b border-[var(--line-soft)] p-3"><label className="relative block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input pl-9" placeholder="Cliente, RUC o teléfono…" /></label>{removeChat.isError ? <p role="alert" className="mt-2 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeChat.error, 'No se pudo eliminar el chat.')}</p> : null}</div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {chatsQuery.isLoading ? <p className="p-6 text-center text-xs text-[var(--ink-tertiary)]">Cargando chats…</p> : chatsQuery.isError ? <p className="p-6 text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(chatsQuery.error)}</p> : chats.length ? chats.map((chat) => (
-                <button type="button" key={chat.id} onClick={() => setSelectedId(chat.id)} className={clsx('block w-full border-b border-[var(--line-soft)] px-4 py-3 text-left', selectedId === chat.id ? 'bg-[var(--brand-paper)]' : 'hover:bg-[var(--paper-soft)]')}>
+                <div key={chat.id} className={clsx('group relative border-b border-[var(--line-soft)]', selectedId === chat.id ? 'bg-[var(--brand-paper)]' : 'hover:bg-[var(--paper-soft)]')}>
+                <button type="button" onClick={() => setSelectedId(chat.id)} className={clsx('block w-full px-4 py-3 text-left', canManage && 'pr-12')}>
                   <div className="flex items-start gap-3">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#1f8f4e] text-xs font-extrabold text-white">{chatTitle(chat).replace('+', '').slice(0, 2).toUpperCase()}</span>
                     <div className="min-w-0 flex-1">
@@ -80,11 +99,13 @@ export function CollectionsWhatsAppPanel({ initialChatId, canWrite, canManage, c
                     </div>
                   </div>
                 </button>
+                {canManage ? <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-[var(--danger)] opacity-60 hover:bg-[var(--danger-paper)] hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40 group-hover:opacity-100" disabled={removeChat.isPending && removeChat.variables === chat.id} onClick={() => askRemove(chat)} aria-label={`Eliminar chat con ${chatTitle(chat)}`} title="Eliminar chat"><Trash2 size={15} /></button> : null}
+                </div>
               )) : <EmptyState icon={MessageCircle} title="Sin chats" description={deferredSearch ? 'No hay chats que coincidan con la búsqueda.' : 'Cuando un cliente escriba al número de Cobranzas, o le escribas desde la tabla, va a aparecer acá.'} />}
             </div>
           </section>
           <section className={clsx('min-h-0 flex-col', selectedId ? 'flex' : 'hidden md:flex')}>
-            {selectedId ? <ChatView key={selectedId} chatId={selectedId} chat={selected} connected={connected} canWrite={canWrite} canManage={canManage} currentUserId={currentUserId} back={() => setSelectedId(null)} onSent={() => queryClient.invalidateQueries({ queryKey: ['collections-whatsapp-chats'] })} /> : <EmptyState icon={MessageCircle} title="Elegí un chat" description="Abrí una conversación para leerla y responder desde el número de Cobranzas." />}
+            {selectedId ? <ChatView key={selectedId} chatId={selectedId} chat={selected} connected={connected} canWrite={canWrite} canManage={canManage} currentUserId={currentUserId} back={() => setSelectedId(null)} onDelete={selected && canManage ? () => askRemove(selected) : undefined} deleting={removeChat.isPending} onSent={() => queryClient.invalidateQueries({ queryKey: ['collections-whatsapp-chats'] })} /> : <EmptyState icon={MessageCircle} title="Elegí un chat" description="Abrí una conversación para leerla y responder desde el número de Cobranzas." />}
           </section>
         </div>
       </div>
@@ -93,7 +114,7 @@ export function CollectionsWhatsAppPanel({ initialChatId, canWrite, canManage, c
   )
 }
 
-function ChatView({ chatId, chat, connected, canWrite, canManage, currentUserId, back, onSent }: { chatId: string; chat?: CollectionWhatsAppChat; connected: boolean; canWrite: boolean; canManage: boolean; currentUserId?: string; back: () => void; onSent: () => void }) {
+function ChatView({ chatId, chat, connected, canWrite, canManage, currentUserId, back, onSent, onDelete, deleting }: { chatId: string; chat?: CollectionWhatsAppChat; connected: boolean; canWrite: boolean; canManage: boolean; currentUserId?: string; back: () => void; onSent: () => void; onDelete?: () => void; deleting: boolean }) {
   const queryClient = useQueryClient()
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const messagesQuery = useQuery<CollectionWhatsAppMessage[]>({ queryKey: ['collections-whatsapp-messages', chatId], queryFn: () => collectionsWhatsAppApi.listMessages(chatId).then((response) => response.data), refetchInterval: 4_000 })
@@ -118,6 +139,7 @@ function ChatView({ chatId, chat, connected, canWrite, canManage, currentUserId,
       <button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={16} /></button>
       <div className="min-w-0 flex-1"><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat ? chatTitle(chat) : 'Chat'}</p><p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
       {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}
+      {onDelete ? <button type="button" className="btn-danger" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={15} /></button> : null}
     </header>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[var(--chat-surface)] p-4 sm:p-6">
       {messagesQuery.isLoading ? <p className="text-center text-xs text-[var(--ink-tertiary)]">Cargando mensajes…</p> : messagesQuery.isError ? <p className="text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(messagesQuery.error)}</p> : messages.length ? messages.map((message) => <Bubble key={message.id} message={message} />) : <EmptyState icon={MessageCircle} title="Conversación nueva" description="Todavía no hay mensajes con este contacto en el número de Cobranzas." />}
