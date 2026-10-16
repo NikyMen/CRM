@@ -21,6 +21,7 @@ import {
   WHATSAPP_OUTBOUND_FILE_MAX_BYTES,
 } from '../whatsapp/whatsapp.manager'
 import { ME_SENDER, mergeReaction, readReactionMessage } from '../whatsapp/whatsapp.reactions'
+import { ensureCommercialLead } from '../deals/commercial-lead'
 import { normalizeCollectionPhone, phoneMatchKey } from './collection-whatsapp.phone'
 
 /**
@@ -109,6 +110,7 @@ export class CollectionWhatsAppManager {
   private watchdogTimer: NodeJS.Timeout | null = null
   private baileysModule: any | null = null
   private baileysVersion: number[] | null = null
+  private leadLocks = new Map<string, Promise<unknown>>()
 
   constructor(readonly line: WhatsAppLine) {
     const settings = LINE_SETTINGS[line]
@@ -628,6 +630,26 @@ export class CollectionWhatsAppManager {
         ...(!fromMe && isNew ? { unreadCount: { increment: 1 } } : {}),
       },
     })
+
+    // El número comercial alimenta el tablero de Gestión comercial.
+    if (this.line === 'commercial' && !fromMe && isNew) await this.ensureLead(workspaceId, chat.id, message?.pushName)
+  }
+
+  /** Un lead por chat; el candado evita duplicarlo si entran dos mensajes a la vez. */
+  private async ensureLead(workspaceId: string, chatId: string, pushName?: string | null) {
+    const previous = this.leadLocks.get(chatId) ?? Promise.resolve()
+    const run = previous.catch(() => {}).then(async () => {
+      const chat = await db.collectionWhatsAppChat.findUnique({ where: { id: chatId }, select: { id: true, jid: true, phoneNumber: true, displayName: true, companyId: true } })
+      if (chat) await ensureCommercialLead(workspaceId, chat, pushName)
+    })
+    this.leadLocks.set(chatId, run)
+    try {
+      await run
+    } catch (error) {
+      console.error(`[${this.logTag}] no se pudo crear el lead:`, error)
+    } finally {
+      if (this.leadLocks.get(chatId) === run) this.leadLocks.delete(chatId)
+    }
   }
 
   private async applyIncomingReaction(workspaceId: string, jid: string, message: any, sentAt: Date) {

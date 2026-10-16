@@ -136,6 +136,8 @@ export interface KanbanCard {
     lastMessagePreview?: string | null
     lastMessageFromMe?: boolean | null
     contactName?: string | null
+    /** `commercial`: el lead vino del WhatsApp comercial; si no, del de Tickets. */
+    source?: 'tickets' | 'commercial'
   }
   createdAt: string
   updatedAt: string

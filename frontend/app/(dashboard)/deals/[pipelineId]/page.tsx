@@ -440,7 +440,7 @@ export default function KanbanPage() {
   const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState(false)
   // WhatsApp propio de Gestión comercial: panel de chats y popup de vinculación por QR.
-  const [whatsAppOpen, setWhatsAppOpen] = useState(false)
+  const [whatsAppPanel, setWhatsAppPanel] = useState<{ chatId?: string } | null>(null)
   const [whatsAppLinkOpen, setWhatsAppLinkOpen] = useState(false)
   const commercialSession = useLineWhatsAppSession(COMMERCIAL_WHATSAPP)
   const commercialConnected = commercialSession.data?.status === 'CONNECTED'
@@ -458,6 +458,8 @@ export default function KanbanPage() {
   const { data: board, isLoading } = useQuery<KanbanBoard>({
     queryKey: ['kanban', pipelineId],
     queryFn: () => dealsApi.getKanban(pipelineId).then((response) => response.data),
+    // Los leads nuevos del WhatsApp comercial aparecen solos; no refresca mientras se arrastra.
+    refetchInterval: activeId || editingBoard ? false : 15_000,
   })
 
   const { data: pipelines = [], isLoading: isLoadingPipelines } = useQuery<Pipeline[]>({
@@ -479,6 +481,11 @@ export default function KanbanPage() {
   const activeDeal = board?.columns.flatMap((column) => column.deals).find((deal) => deal.id === activeId)
 
   function handleOpenDeal(deal: KanbanCard) {
+    // Los leads del WhatsApp comercial abren su chat en el panel del número comercial.
+    if (deal.chat?.source === 'commercial') {
+      setWhatsAppPanel({ chatId: deal.chat.id })
+      return
+    }
     startTransition(() => setOpenDeal(deal))
   }
 
@@ -557,7 +564,7 @@ export default function KanbanPage() {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <button type="button" className="btn-primary !border-[#1f8f4e] !bg-[#1f8f4e] hover:!bg-[#187a42]" onClick={() => setWhatsAppOpen(true)} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
+            <button type="button" className="btn-primary !border-[#1f8f4e] !bg-[#1f8f4e] hover:!bg-[#187a42]" onClick={() => setWhatsAppPanel({})} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
               <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
               <WhatsAppLogo size={16} /> WhatsApp
             </button>
@@ -602,7 +609,7 @@ export default function KanbanPage() {
         </DndContext>
       </div>}
 
-      {whatsAppOpen ? <LineWhatsAppPanel line={COMMERCIAL_WHATSAPP} canWrite={storedAuth?.role !== 'viewer'} canManage={canEditBoard} currentUserId={storedAuth?.userId} onClose={() => setWhatsAppOpen(false)} /> : null}
+      {whatsAppPanel ? <LineWhatsAppPanel line={COMMERCIAL_WHATSAPP} initialChatId={whatsAppPanel.chatId} canWrite={storedAuth?.role !== 'viewer'} canManage={canEditBoard} currentUserId={storedAuth?.userId} onClose={() => { setWhatsAppPanel(null); queryClient.invalidateQueries({ queryKey: ['kanban', pipelineId] }) }} /> : null}
       {whatsAppLinkOpen ? <LineWhatsAppLinkDialog line={COMMERCIAL_WHATSAPP} canManage={canEditBoard} onClose={() => setWhatsAppLinkOpen(false)} /> : null}
       <LeadChatModal
         deal={openDeal}
