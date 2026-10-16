@@ -4,7 +4,6 @@ import path from 'node:path'
 import { db } from '../../core/database'
 import { config } from '../../core/config'
 import { ActivityType, AppError, ValidationError } from '../../types'
-import { generateUniqueLeadNumber } from '../deals/lead-number'
 import {
   assignChatAndRelatedRecords,
   assertAssignmentAllowed,
@@ -15,6 +14,7 @@ import { attachOutboundMessageToActiveTicket, ensureTicketForInboundMessage } fr
 import { emitTicketEvent } from '../tickets/ticket.events'
 import { reconcilePendingTicketState } from '../tickets/ticket.reconcile'
 import { whatsAppRealtime } from './whatsapp.events'
+import { COMMERCIAL_LEAD_SOURCE } from '../deals/commercial-lead'
 import { ME_SENDER, mergeReaction, readReactionMessage } from './whatsapp.reactions'
 
 const prisma = db as any
@@ -2286,9 +2286,10 @@ export class WhatsAppManager {
     })
 
     const whatsappDeals = deals.filter((deal) =>
+      readJsonString(deal.customData, 'sourceChannel') !== COMMERCIAL_LEAD_SOURCE && (
       readJsonString(deal.customData, 'sourceChannel') === 'whatsapp' ||
       readJsonBoolean(deal.customData, 'autoCreated') === true ||
-      Boolean(readJsonString(deal.customData, 'whatsAppChatJid'))
+      Boolean(readJsonString(deal.customData, 'whatsAppChatJid')))
     )
 
     const byKey = new Map<string, typeof whatsappDeals>()
@@ -2677,7 +2678,7 @@ export class WhatsAppManager {
     })
 
     if (!fromMe && !chat.isGroup) {
-      await this.ensureLeadForIncomingMessage(workspaceId, {
+      await this.ensureContactForIncomingMessage(workspaceId, {
         id: chat.id,
         contactId: chat.contactId,
         displayName: chatDisplayName ?? chat.displayName,
@@ -3305,7 +3306,11 @@ export class WhatsAppManager {
     )
   }
 
-  private async ensureLeadForIncomingMessage(
+  /**
+   * Crea o actualiza el contacto de quien escribe al número de Tickets. Ya no
+   * crea leads: los leads del tablero salen del WhatsApp de Gestión comercial.
+   */
+  private async ensureContactForIncomingMessage(
     workspaceId: string,
     chat: {
       id: string
@@ -3339,119 +3344,6 @@ export class WhatsAppManager {
         ],
       },
       data: { lastContactedAt: sentAt },
-    })
-
-    const defaultPipeline =
-      await db.pipeline.findFirst({
-        where: { workspaceId, isDefault: true },
-        include: { stages: { orderBy: { position: 'asc' } } },
-      }) ??
-      await db.pipeline.findFirst({
-        where: { workspaceId },
-        include: { stages: { orderBy: { position: 'asc' } } },
-        orderBy: { createdAt: 'asc' },
-      })
-
-    if (!defaultPipeline) return
-
-    const newLeadStage =
-      defaultPipeline.stages.find((stage) => stage.name.trim().toLowerCase() === 'nuevo lead') ??
-      defaultPipeline.stages.find((stage) => !stage.isWon && !stage.isLost) ??
-      defaultPipeline.stages[0]
-
-    if (!newLeadStage) return
-
-    const existingLead = await this.findOpenLeadForContactOrPhone(
-      workspaceId,
-      defaultPipeline.id,
-      contact.id,
-      contact.phone ?? phoneNumber
-    )
-
-    if (existingLead) return
-
-    const lastDeal = await db.deal.findFirst({
-      where: {
-        workspaceId,
-        stageId: newLeadStage.id,
-        status: 'OPEN',
-        isArchived: false,
-      },
-      orderBy: { position: 'desc' },
-      select: { position: true },
-    })
-
-    const leadTitle =
-      buildContactName(contact) ??
-      selectChatDisplayName(pushName, chat.displayName, phoneNumber, remoteJid) ??
-      phoneNumber
-    const leadNumber = await generateUniqueLeadNumber(workspaceId)
-
-    const createdLead = await db.$transaction(async (tx) => {
-      const lead = await tx.deal.create({
-        data: {
-          workspaceId,
-          leadNumber,
-          title: leadTitle,
-          pipelineId: defaultPipeline.id,
-          stageId: newLeadStage.id,
-          position: (lastDeal?.position ?? -1) + 1,
-          probability: newLeadStage.probability,
-          status: 'OPEN',
-          customData: {
-            leadNumber,
-            sourceChannel: 'whatsapp',
-            autoCreated: true,
-            whatsAppChatJid: remoteJid,
-          } as any,
-        },
-      })
-
-      await tx.dealContact.create({
-        data: {
-          dealId: lead.id,
-          contactId: contact.id,
-        },
-      })
-
-      await tx.activity.create({
-        data: {
-          workspaceId,
-          type: ActivityType.DEAL_CREATED,
-          entityType: 'deal',
-          entityId: lead.id,
-          dealId: lead.id,
-          contactId: contact.id,
-          source: 'whatsapp',
-          title: 'Lead creado desde WhatsApp',
-          metadata: {
-            remoteJid,
-            stageId: newLeadStage.id,
-            pipelineId: defaultPipeline.id,
-            leadNumber,
-          } as any,
-        },
-      })
-
-      return lead
-    })
-
-    await db.activity.create({
-      data: {
-        workspaceId,
-        type: ActivityType.WHATSAPP_RECEIVED,
-        entityType: 'contact',
-        entityId: contact.id,
-        contactId: contact.id,
-        dealId: createdLead.id,
-        source: 'whatsapp',
-        title: 'Mensaje entrante de WhatsApp',
-        metadata: {
-          remoteJid,
-          leadId: createdLead.id,
-          leadNumber,
-        } as any,
-      },
     })
   }
 
@@ -3523,48 +3415,6 @@ export class WhatsAppManager {
     await this.mergeDuplicateContactChats(workspaceId, created.id)
 
     return created
-  }
-
-  private async findOpenLeadForContactOrPhone(
-    workspaceId: string,
-    pipelineId: string,
-    contactId: string,
-    phoneNumber?: string | null
-  ) {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber)
-
-    const openDeals = await db.deal.findMany({
-      where: {
-        workspaceId,
-        pipelineId,
-        status: 'OPEN',
-        isArchived: false,
-        contacts: {
-          some: {},
-        },
-      },
-      select: {
-        id: true,
-        contacts: {
-          select: {
-            contactId: true,
-            contact: {
-              select: {
-                phone: true,
-              },
-            },
-          },
-        },
-      },
-    })
-
-    return openDeals.find((deal) =>
-      deal.contacts.some((link) => {
-        if (link.contactId === contactId) return true
-        if (!normalizedPhone) return false
-        return normalizePhoneNumber(link.contact.phone) === normalizedPhone
-      })
-    ) ?? null
   }
 
   private async ensureSessionRecord(workspaceId: string) {

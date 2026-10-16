@@ -25,6 +25,7 @@ import {
 import { clientVisibilityWhere } from '../clients/client-visibility'
 import { contactAssignmentVisibilityWhere } from '../../core/auth/portfolio-visibility'
 import { convertWonDealToClient } from './deal-conversion'
+import { readCommercialChatId } from './commercial-lead'
 
 type Deal = Prisma.DealGetPayload<object>
 
@@ -122,6 +123,8 @@ export interface KanbanCard {
     lastMessagePreview: string | null
     lastMessageFromMe: boolean | null
     contactName: string | null
+    /** `commercial`: chat del WhatsApp comercial; si no, el de Tickets. */
+    source: 'tickets' | 'commercial'
   } | null
   createdAt: Date
   updatedAt: Date
@@ -291,6 +294,12 @@ export class DealService {
       orderBy: { position: 'asc' },
     })
 
+    const commercialChatIds = [...new Set(deals.map((deal) => readCommercialChatId(deal.customData)).filter((id): id is string => Boolean(id)))]
+    const commercialChats = new Map((commercialChatIds.length ? await db.collectionWhatsAppChat.findMany({
+      where: { workspaceId, line: 'commercial', id: { in: commercialChatIds } },
+      select: { id: true, jid: true, displayName: true, phoneNumber: true, unreadCount: true, lastMessageAt: true, lastMessagePreview: true, lastMessageFromMe: true, company: { select: { name: true } } },
+    }) : []).map((chat) => [chat.id, chat]))
+
     const now = new Date()
 
     // Agrupar deals por stage
@@ -298,6 +307,8 @@ export class DealService {
       const stageDeals = deals.filter((d) => d.stageId === stage.id)
 
       const cards = await Promise.all(stageDeals.map(async (d) => {
+        const commercialChatId = readCommercialChatId(d.customData)
+        const commercialChat = commercialChatId ? commercialChats.get(commercialChatId) : undefined
         const linkedChatJid = this.readWhatsAppChatJid(d.customData)
         const linkedContact =
           d.contacts.find((link) => link.contact.whatsappChats.some((chat) => chat.jid === linkedChatJid)) ??
@@ -334,7 +345,22 @@ export class DealService {
           expectedCloseDate: d.expectedCloseDate,
           daysInStage,
           isRotten,
-          chat: chat ? {
+          chat: commercialChat ? {
+            id: commercialChat.id,
+            jid: commercialChat.jid,
+            lidJid: null,
+            displayName: commercialChat.company?.name ?? commercialChat.displayName,
+            phoneNumber: commercialChat.phoneNumber ?? extractPhoneNumberFromJid(commercialChat.jid),
+            assignedToUserId: null,
+            assignee: null,
+            profileImageUrl: null,
+            unreadCount: commercialChat.unreadCount,
+            lastMessageAt: commercialChat.lastMessageAt,
+            lastMessagePreview: commercialChat.lastMessagePreview,
+            lastMessageFromMe: commercialChat.lastMessageFromMe,
+            contactName,
+            source: 'commercial',
+          } : chat ? {
             id: chat.id,
             jid: chat.jid,
             lidJid: chat.lidJid,
@@ -348,6 +374,7 @@ export class DealService {
             lastMessagePreview: chat.lastMessagePreview,
             lastMessageFromMe: chat.lastMessageFromMe,
             contactName,
+            source: 'tickets',
           } : null,
           createdAt: d.createdAt,
           updatedAt: d.updatedAt,
