@@ -2,9 +2,8 @@
 
 import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowLeft, BarChart3, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Download, Headphones, Loader2, MessageCircle, MessageSquareText, Paperclip, Play, Radio, Search, Settings, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, BarChart3, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Headphones, Loader2, MessageCircle, MessageSquareText, Radio, Search, Settings, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
 import clsx from 'clsx'
 import { customerServiceApi, teamApi, ticketsApi, whatsappApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
@@ -14,6 +13,7 @@ import { EmptyState, ErrorState, LoadingState, PageFrame, StatusPill } from '@/c
 import { TopbarContent } from '@/components/romez/Topbar'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
+import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 
 type Inbox = 'free' | 'mine' | 'all'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
@@ -139,68 +139,36 @@ function Conversation({ ticket, canOperate, canManage, currentUserId, send }: { 
     ...closedEvents.map((event) => ({ kind: 'closed' as const, at: event.createdAt, event })),
   ].sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime())
   const canReply = canOperate && ticket.status !== 'CLOSED'
+  const queryClient = useQueryClient()
+  const react = async (messageId: string, emoji: string) => {
+    await ticketsApi.react(ticket.id, messageId, emoji)
+    await queryClient.invalidateQueries({ queryKey: ['ticket', ticket.id] })
+  }
 
-  return <><div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[var(--chat-surface)] p-4 sm:p-6">{timeline.length ? timeline.map((item) => item.kind === 'message' ? <MessageBubble key={`message-${item.message.id}`} message={item.message} canAccessMedia={canOperate} /> : <TicketClosedNote key={`event-${item.event.id}`} actor={item.event.actor} />) : <EmptyState icon={MessageCircle} title="Sin mensajes disponibles" description="El historial aparecerá cuando se sincronice la conversación de WhatsApp." />}</div><TicketComposer canReply={canReply} canManage={canManage} currentUserId={currentUserId} send={send} placeholder={canReply ? 'Responder por WhatsApp…' : ticket.status === 'CLOSED' ? 'El ticket está cerrado; se reabrirá si el cliente vuelve a escribir' : 'Tomá el ticket para poder responder'} hint={canOperate ? 'Enter para enviar · Shift + Enter para nueva línea · 📎 adjuntar · ⚡ respuestas rápidas' : 'Solo el responsable asignado puede responder.'} /></>
+  return <><div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[var(--chat-surface)] p-4 sm:p-6">{timeline.length ? timeline.map((item) => item.kind === 'message' ? <MessageBubble key={`message-${item.message.id}`} ticketId={ticket.id} message={item.message} onReact={canOperate ? (emoji) => react(item.message.id, emoji) : undefined} /> : <TicketClosedNote key={`event-${item.event.id}`} actor={item.event.actor} />) : <EmptyState icon={MessageCircle} title="Sin mensajes disponibles" description="El historial aparecerá cuando se sincronice la conversación de WhatsApp." />}</div><TicketComposer canReply={canReply} canManage={canManage} currentUserId={currentUserId} send={send} placeholder={canReply ? 'Responder por WhatsApp…' : ticket.status === 'CLOSED' ? 'El ticket está cerrado; se reabrirá si el cliente vuelve a escribir' : 'Tomá el ticket para poder responder'} hint={canOperate ? 'Enter para enviar · Shift + Enter para nueva línea · 📎 adjuntar · ⚡ respuestas rápidas · 😊 reaccionar' : 'Solo el responsable asignado puede responder o reaccionar.'} /></>
 }
 
 function TicketClosedNote({ actor }: { actor?: AssigneeSummary | null }) {
   return <div className="flex justify-center"><div className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--paper-soft)] px-3 py-1.5 text-[10px] font-bold text-[var(--ink-tertiary)]"><CircleCheckBig size={13} />Ticket cerrado por {actor ? fullName(actor) : 'el sistema'}</div></div>
 }
 
-function MessageBubble({ message, canAccessMedia }: { message: TicketMessage; canAccessMedia: boolean }) { const fromMe = message.fromMe ?? message.direction === 'OUTBOUND'; const hasMedia = Boolean(message.mediaMimeType || message.mediaFileName || ['image', 'audio', 'video', 'document'].includes(message.messageType ?? '')); return <div className={clsx('flex', fromMe ? 'justify-end' : 'justify-start')}><div className={clsx('max-w-[82%] rounded-lg border px-3 py-2.5', fromMe ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--chat-outgoing-text)]' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}><div className="flex items-center gap-2"><p className={clsx('text-[10px] font-bold', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}>{fromMe ? 'Equipo ROMEZ' : message.pushName || message.senderName || 'Cliente'}</p></div>{message.text ? <p className="mt-1 whitespace-pre-wrap text-sm leading-5">{message.text}</p> : null}{hasMedia ? <TicketMedia message={message} canAccess={canAccessMedia} outgoing={fromMe} /> : !message.text ? <p className="mt-1 text-sm">Mensaje multimedia</p> : null}{fromMe ? <p className="mt-1.5 flex justify-end text-[var(--chat-outgoing-muted)]"><CheckCheck size={11} /></p> : null}</div></div> }
-
-function TicketMedia({ message, canAccess, outgoing }: { message: TicketMessage; canAccess: boolean; outgoing: boolean }) {
-  const [loading, setLoading] = useState<'preview' | 'download' | null>(null)
-  const [error, setError] = useState('')
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
-  const [mediaType, setMediaType] = useState(message.mediaMimeType ?? '')
-  const label = message.mediaFileName || (message.messageType === 'image' ? 'Imagen' : message.messageType === 'audio' ? 'Audio' : message.messageType === 'video' ? 'Video' : 'Documento')
-  const playable = ['image', 'audio', 'video'].includes(message.messageType ?? '') || /^(image|audio|video)\//.test(message.mediaMimeType ?? '')
-
-  useEffect(() => () => {
-    if (mediaUrl) URL.revokeObjectURL(mediaUrl)
-  }, [mediaUrl])
-
-  async function fetchMedia() {
-    if (mediaUrl) return mediaUrl
-    const response = await whatsappApi.getMessageMedia(message.id)
-    const url = URL.createObjectURL(response.data)
-    setMediaType(response.data.type || message.mediaMimeType || '')
-    setMediaUrl(url)
-    return url
-  }
-
-  async function previewMedia() {
-    setLoading('preview')
-    setError('')
-    try {
-      await fetchMedia()
-    } catch (candidate) {
-      setError(getErrorMessage(candidate, 'No se pudo cargar el archivo.'))
-    } finally {
-      setLoading(null)
-    }
-  }
-
-  async function downloadMedia() {
-    setLoading('download')
-    setError('')
-    try {
-      const url = await fetchMedia()
-      const anchor = window.document.createElement('a')
-      anchor.href = url
-      anchor.download = label
-      anchor.click()
-    } catch (candidate) {
-      setError(getErrorMessage(candidate, 'No se pudo descargar el archivo.'))
-    } finally {
-      setLoading(null)
-    }
-  }
-
-  const controlClass = clsx('inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-bold', outgoing ? 'border-white/20 bg-white/10 text-white' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--brand-navy)]', !canAccess && 'cursor-not-allowed opacity-55')
-
-  return <div className="mt-2 max-w-lg">{mediaUrl && playable ? <div className="mb-2 overflow-hidden rounded-md">{mediaType.startsWith('image/') || message.messageType === 'image' ? <Image src={mediaUrl} alt={label} width={640} height={480} unoptimized className="max-h-80 h-auto w-auto max-w-full object-contain" /> : mediaType.startsWith('audio/') || message.messageType === 'audio' ? <audio controls preload="metadata" src={mediaUrl} className="h-10 w-full min-w-64" /> : <video controls preload="metadata" src={mediaUrl} className="max-h-80 max-w-full" />}</div> : null}<div className="flex flex-wrap gap-2">{playable && !mediaUrl ? <button type="button" disabled={!canAccess || loading !== null} onClick={previewMedia} className={controlClass}>{loading === 'preview' ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <Play size={14} className="shrink-0" />}<span className="truncate">{canAccess ? message.messageType === 'image' ? 'Ver imagen' : `Reproducir ${label}` : `${label} · disponible para el responsable`}</span></button> : null}<button type="button" disabled={!canAccess || loading !== null} onClick={downloadMedia} className={controlClass}>{loading === 'download' ? <Loader2 size={14} className="shrink-0 animate-spin" /> : playable ? <Download size={14} className="shrink-0" /> : <Paperclip size={14} className="shrink-0" />}<span className="truncate">{canAccess ? `Descargar ${label}` : `${label} · disponible para el responsable`}</span></button></div>{error ? <p className={clsx('mt-1 text-[10px] font-semibold', outgoing ? 'text-white/75' : 'text-[var(--danger)]')}>{error}</p> : null}</div>
+function MessageBubble({ ticketId, message, onReact }: { ticketId: string; message: TicketMessage; onReact?: (emoji: string) => Promise<unknown> }) {
+  const fromMe = message.fromMe ?? message.direction === 'OUTBOUND'
+  const hasMedia = Boolean(message.mediaMimeType || message.mediaFileName || isMediaType(message.messageType))
+  const text = visibleMessageText(message.text, message.messageType, message.mediaFileName)
+  const canReact = Boolean(onReact) && Boolean(message.messageId) && !message.messageId?.startsWith('local-')
+  return <div className={clsx('group flex items-end gap-1', fromMe ? 'flex-row-reverse' : 'flex-row')}>
+    <div className={clsx('flex max-w-[82%] flex-col', fromMe ? 'items-end' : 'items-start')}>
+      <div className={clsx('rounded-lg border px-3 py-2.5', fromMe ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--chat-outgoing-text)]' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}>
+        <p className={clsx('text-[10px] font-bold', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}>{fromMe ? 'Equipo ROMEZ' : message.pushName || message.senderName || 'Cliente'}</p>
+        {hasMedia ? <ChatMedia messageType={message.messageType} mimeType={message.mediaMimeType} fileName={message.mediaFileName} sizeBytes={message.mediaSizeBytes} durationSeconds={message.mediaDurationSeconds} outgoing={fromMe} load={() => ticketsApi.getMessageMedia(ticketId, message.id).then((response) => response.data)} /> : null}
+        {text ? <p className="mt-1 whitespace-pre-wrap text-sm leading-5">{text}</p> : !hasMedia ? <p className="mt-1 text-sm">Mensaje multimedia</p> : null}
+        <p className={clsx('mt-1.5 flex items-center justify-end gap-1 text-[10px]', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-muted)]')}>{formatDateTime(message.sentAt)}{fromMe ? <CheckCheck size={11} /> : null}</p>
+      </div>
+      <MessageReactions reactions={message.reactions} outgoing={fromMe} />
+    </div>
+    {canReact ? <ReactionButton current={myReaction(message.reactions)} onReact={onReact!} outgoing={fromMe} /> : null}
+  </div>
 }
 
 function InternalNotes({ ticket, canOperate, note, setNote, add, adding, error }: { ticket: Ticket; canOperate: boolean; note: string; setNote: (value: string) => void; add: () => void; adding: boolean; error: unknown }) { return <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><div className="mx-auto max-w-3xl">{canOperate ? <div className="paper-panel p-4"><label className="block text-xs font-bold text-[var(--ink-secondary)]">Nueva nota interna</label><textarea value={note} onChange={(event) => setNote(event.target.value)} className="ctrl-input mt-2 min-h-24 resize-y" placeholder="Contexto para el equipo; el cliente no verá esta nota." /><div className="mt-3 flex items-center justify-between">{error ? <p className="text-xs text-[var(--danger)]">{getErrorMessage(error)}</p> : <span />}<button type="button" className="btn-primary" disabled={!note.trim() || adding} onClick={add}>{adding ? 'Guardando…' : 'Guardar nota'}</button></div></div> : <p className="rounded-lg border border-[var(--line)] bg-[var(--paper-soft)] p-3 text-xs font-semibold text-[var(--ink-tertiary)]">Solo el responsable asignado puede agregar notas internas.</p>}<div className="mt-5 space-y-3">{ticket.comments?.length ? ticket.comments.map((comment) => <article key={comment.id} className="paper-panel p-4"><p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-secondary)]">{comment.body}</p><p className="mt-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]"><Clock3 size={12} />{fullName(comment.author)} · {formatDateTime(comment.createdAt)}</p></article>) : <EmptyState title="Sin notas internas" description="Usá este espacio para dejar contexto que no debe enviarse por WhatsApp." />}</div></div></div> }

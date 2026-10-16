@@ -78,8 +78,11 @@ const ticketDetailInclude = {
       quotedMessageId: true,
       quotedText: true,
       quotedMessageType: true,
+      reactions: true,
       sentAt: true,
     },
+    // Las reacciones viejas guardadas como mensaje "[Reaccion]" no se muestran: ahora van pegadas al mensaje.
+    where: { messageType: { not: 'reaction' } },
     orderBy: { sentAt: 'desc' as const },
     take: 200,
   },
@@ -492,6 +495,16 @@ export class TicketService {
       if (!(error instanceof NotFoundError)) throw error
       return { ...ticket, ...finalState }
     }
+  }
+
+  /** Quien puede ver el ticket puede ver sus archivos (imágenes, audios, videos). */
+  async ensureVisible(actor: TicketActor, id: string) {
+    await this.findVisibleRecord(actor, id)
+  }
+
+  /** Reaccionar es responder: sólo el responsable u owner/admin. */
+  async ensureOperable(actor: TicketActor, id: string) {
+    await this.findOperableRecord(actor, id)
   }
 
   private async findVisibleRecord(actor: TicketActor, id: string) {

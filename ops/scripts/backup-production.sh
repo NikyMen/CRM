@@ -90,7 +90,7 @@ data_paths=(.data/whatsapp-auth .data/whatsapp-media)
 if [[ -d "$repo_dir/backend/.data/client-documents" ]]; then
   data_paths+=(.data/client-documents)
 fi
-for optional_path in .data/whatsapp-collections-auth .data/whatsapp-collections-media; do
+for optional_path in .data/whatsapp-collections-auth .data/whatsapp-collections-media .data/whatsapp-commercial-auth .data/whatsapp-commercial-media; do
   if [[ -d "$repo_dir/backend/$optional_path" ]]; then
     data_paths+=("$optional_path")
   fi

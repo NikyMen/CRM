@@ -520,6 +520,8 @@ model WhatsAppMessage {
   quotedMessageId      String?
   quotedText           String?
   quotedMessageType    String?
+  /// Reacciones por emisor: [{ emoji, fromMe, sender, at }].
+  reactions            Json?
   ticketId             String?
   sentAt               DateTime
   createdAt            DateTime @default(now())
@@ -1323,10 +1325,14 @@ model QuickReply {
   @@map("quick_replies")
 }
 
-/// Segundo número de WhatsApp, exclusivo de Cobranzas: chat compartido sin tickets.
+/// Números de WhatsApp aparte del de Tickets (Cobranzas y Gestión comercial):
+/// chat compartido sin tickets. `line` separa cada número; el nombre del modelo
+/// se conserva por compatibilidad.
 model CollectionWhatsAppSession {
   id                 String                   @id @default(cuid())
-  workspaceId        String                   @unique
+  workspaceId        String
+  /// `collections` (Cobranzas) o `commercial` (Gestión comercial).
+  line               String                   @default("collections")
   status             WhatsAppConnectionStatus @default(DISCONNECTED)
   phoneJid           String?
   pushName           String?
@@ -1340,12 +1346,14 @@ model CollectionWhatsAppSession {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, line])
   @@map("collection_whatsapp_sessions")
 }
 
 model CollectionWhatsAppChat {
   id                 String    @id @default(cuid())
   workspaceId        String
+  line               String    @default("collections")
   jid                String
   lidJid             String?
   phoneNumber        String?
@@ -1362,8 +1370,8 @@ model CollectionWhatsAppChat {
   company   Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   messages  CollectionWhatsAppMessage[]
 
-  @@unique([workspaceId, jid])
-  @@index([workspaceId, lastMessageAt])
+  @@unique([workspaceId, line, jid])
+  @@index([workspaceId, line, lastMessageAt])
   @@index([workspaceId, companyId])
   @@map("collection_whatsapp_chats")
 }
@@ -1382,6 +1390,8 @@ model CollectionWhatsAppMessage {
   mediaMimeType  String?
   mediaFileName  String?
   mediaSizeBytes Int?
+  /// Reacciones por emisor: [{ emoji, fromMe, sender, at }].
+  reactions      Json?
   sentByUserId   String?
   sentAt         DateTime
   createdAt      DateTime @default(now())

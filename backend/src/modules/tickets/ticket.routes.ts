@@ -4,7 +4,9 @@ import type { EventBus } from '../../core/event-bus'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from '../whatsapp/whatsapp.manager'
+import { sendWhatsAppMedia } from '../whatsapp/whatsapp.media-reply'
 import { decodeOutboundFile, outboundFileSchema } from '../whatsapp/whatsapp.outbound-file'
+import { reactionSchema } from '../whatsapp/whatsapp.reactions'
 import { configureTicketEvents } from './ticket.events'
 import { TicketService, type TicketActor } from './ticket.service'
 
@@ -147,6 +149,25 @@ export async function ticketRoutes(
         throw error
       }
       return reply.status(201).send(await service.recordReply(actor, ticket, message, operationId))
+    }
+  )
+
+  app.get<{ Params: { id: string; messageId: string } }>('/:id/messages/:messageId/media', async (req, reply) => {
+    const actor = req.user as TicketActor
+    await service.ensureVisible(actor, req.params.id)
+    const media = await whatsAppManager.getMessageMedia(actor.workspaceId, req.params.messageId, actor, { ticketId: req.params.id })
+    return sendWhatsAppMedia(reply, media)
+  })
+
+  app.put<{ Params: { id: string; messageId: string } }>(
+    '/:id/messages/:messageId/reaction',
+    { preHandler: requireRole('owner', 'admin', 'member') },
+    async (req, reply) => {
+      const actor = req.user as TicketActor
+      const { emoji } = reactionSchema.parse(req.body)
+      await service.ensureOperable(actor, req.params.id)
+      await whatsAppManager.sendTicketReaction(actor.workspaceId, req.params.id, req.params.messageId, emoji)
+      return reply.status(204).send()
     }
   )
 
