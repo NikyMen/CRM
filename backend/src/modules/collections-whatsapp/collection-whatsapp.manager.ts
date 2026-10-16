@@ -20,13 +20,17 @@ import {
   toDate,
   WHATSAPP_OUTBOUND_FILE_MAX_BYTES,
 } from '../whatsapp/whatsapp.manager'
+import { ME_SENDER, mergeReaction, readReactionMessage } from '../whatsapp/whatsapp.reactions'
 import { normalizeCollectionPhone, phoneMatchKey } from './collection-whatsapp.phone'
 
 /**
- * Segundo número de WhatsApp, sólo para Cobranzas. Es un chat compartido: no
- * crea tickets, leads ni contactos, y vive en tablas, credenciales y medios
- * propios para no tocar la sesión de la bandeja de Tickets.
+ * Números de WhatsApp aparte del de Tickets: uno para Cobranzas y otro para
+ * Gestión comercial. Cada línea es un chat compartido: no crea tickets, leads ni
+ * contactos, y vive en filas (`line`), credenciales y medios propios para no
+ * tocar la sesión de la bandeja de Tickets ni la de la otra línea.
  */
+
+export type WhatsAppLine = 'collections' | 'commercial'
 
 type SocketEntry = { sock: any; saveCreds: () => Promise<void>; state: any }
 type SessionPatch = Partial<{
@@ -47,8 +51,11 @@ const BASE_AUTH_ROOT = config.WHATSAPP_AUTH_DIR
 const BASE_MEDIA_ROOT = config.WHATSAPP_MEDIA_DIR
   ? path.resolve(config.WHATSAPP_MEDIA_DIR)
   : path.resolve(process.cwd(), '.data', 'whatsapp-media')
-const AUTH_ROOT = path.join(path.dirname(BASE_AUTH_ROOT), 'whatsapp-collections-auth')
-const MEDIA_ROOT = path.join(path.dirname(BASE_MEDIA_ROOT), 'whatsapp-collections-media')
+
+const LINE_SETTINGS: Record<WhatsAppLine, { label: string; logTag: string; dirName: string }> = {
+  collections: { label: 'Cobranzas', logTag: 'whatsapp-cobranzas', dirName: 'whatsapp-collections' },
+  commercial: { label: 'Gestión comercial', logTag: 'whatsapp-comercial', dirName: 'whatsapp-commercial' },
+}
 
 const chatSelect = {
   id: true,
@@ -75,6 +82,7 @@ const messageSelect = {
   mediaMimeType: true,
   mediaFileName: true,
   mediaSizeBytes: true,
+  reactions: true,
   sentAt: true,
   sentBy: { select: { id: true, firstName: true, lastName: true } },
 } as const
@@ -88,6 +96,10 @@ function isSupportedChatJid(jid?: string | null) {
 }
 
 export class CollectionWhatsAppManager {
+  private readonly label: string
+  private readonly logTag: string
+  private readonly authRoot: string
+  private readonly mediaRoot: string
   private sockets = new Map<string, SocketEntry>()
   private booting = new Map<string, Promise<SocketEntry>>()
   private reconnectTimers = new Map<string, NodeJS.Timeout>()
@@ -97,6 +109,14 @@ export class CollectionWhatsAppManager {
   private watchdogTimer: NodeJS.Timeout | null = null
   private baileysModule: any | null = null
   private baileysVersion: number[] | null = null
+
+  constructor(readonly line: WhatsAppLine) {
+    const settings = LINE_SETTINGS[line]
+    this.label = settings.label
+    this.logTag = settings.logTag
+    this.authRoot = path.join(path.dirname(BASE_AUTH_ROOT), `${settings.dirName}-auth`)
+    this.mediaRoot = path.join(path.dirname(BASE_MEDIA_ROOT), `${settings.dirName}-media`)
+  }
 
   // ── Sesión ────────────────────────────────────────────────────────────────
 
@@ -131,7 +151,7 @@ export class CollectionWhatsAppManager {
       const message = error instanceof Error ? error.message : 'No se pudo iniciar WhatsApp.'
       await this.updateSession(workspaceId, { status: 'ERROR', qrCode: null, lastError: message }).catch(() => {})
       if (error instanceof AppError) throw error
-      throw new AppError(502, message, 'COLLECTION_WHATSAPP_INIT_FAILED')
+      throw new AppError(502, message, 'LINE_WHATSAPP_INIT_FAILED')
     }
 
     if (!entry.state?.creds?.registered) {
@@ -183,6 +203,7 @@ export class CollectionWhatsAppManager {
     return db.collectionWhatsAppChat.findMany({
       where: {
         workspaceId,
+        line: this.line,
         ...(term ? {
           OR: [
             { displayName: { contains: term, mode: 'insensitive' } },
@@ -199,7 +220,7 @@ export class CollectionWhatsAppManager {
   }
 
   async getChat(workspaceId: string, chatId: string) {
-    const chat = await db.collectionWhatsAppChat.findFirst({ where: { id: chatId, workspaceId }, select: chatSelect })
+    const chat = await db.collectionWhatsAppChat.findFirst({ where: { id: chatId, workspaceId, line: this.line }, select: chatSelect })
     if (!chat) throw new NotFoundError('Chat', chatId)
     return chat
   }
@@ -216,7 +237,7 @@ export class CollectionWhatsAppManager {
   }
 
   async markRead(workspaceId: string, chatId: string) {
-    await db.collectionWhatsAppChat.updateMany({ where: { id: chatId, workspaceId }, data: { unreadCount: 0 } })
+    await db.collectionWhatsAppChat.updateMany({ where: { id: chatId, workspaceId, line: this.line }, data: { unreadCount: 0 } })
   }
 
   /**
@@ -227,7 +248,7 @@ export class CollectionWhatsAppManager {
     await this.getChat(workspaceId, chatId)
     const media = await db.collectionWhatsAppMessage.findMany({ where: { workspaceId, chatId, mediaPath: { not: null } }, select: { mediaPath: true } })
     await db.collectionWhatsAppChat.delete({ where: { id: chatId } })
-    const root = path.resolve(MEDIA_ROOT)
+    const root = path.resolve(this.mediaRoot)
     for (const { mediaPath } of media) {
       const absolutePath = path.resolve(root, mediaPath!)
       if (absolutePath.startsWith(root + path.sep)) await fs.rm(absolutePath, { force: true }).catch(() => {})
@@ -236,7 +257,7 @@ export class CollectionWhatsAppManager {
 
   /** Abre (o crea) el chat con el teléfono del cliente para poder escribirle primero. */
   async startChatForClient(workspaceId: string, company: { id: string; name: string; phone?: string | null }) {
-    const existing = await db.collectionWhatsAppChat.findFirst({ where: { workspaceId, companyId: company.id }, orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } }, select: chatSelect })
+    const existing = await db.collectionWhatsAppChat.findFirst({ where: { workspaceId, line: this.line, companyId: company.id }, orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } }, select: chatSelect })
     if (existing) return existing
 
     const contacts = await db.contact.findMany({ where: { workspaceId, companyId: company.id, phone: { not: null } }, select: { phone: true }, orderBy: { createdAt: 'asc' } })
@@ -256,8 +277,8 @@ export class CollectionWhatsAppManager {
     if (!jid) throw new AppError(422, 'Ningún teléfono del cliente tiene WhatsApp.', 'CLIENT_PHONE_WITHOUT_WHATSAPP')
 
     const chat = await db.collectionWhatsAppChat.upsert({
-      where: { workspaceId_jid: { workspaceId, jid } },
-      create: { workspaceId, jid, phoneNumber: extractPhoneNumberFromJid(jid), displayName: company.name, companyId: company.id },
+      where: { workspaceId_line_jid: { workspaceId, line: this.line, jid } },
+      create: { workspaceId, line: this.line, jid, phoneNumber: extractPhoneNumberFromJid(jid), displayName: company.name, companyId: company.id },
       update: { companyId: company.id },
       select: chatSelect,
     })
@@ -272,7 +293,7 @@ export class CollectionWhatsAppManager {
     const messageType = file ? inferOutboundMessageType(file.mimeType) : 'text'
     if (messageType === 'audio' && text) throw new ValidationError('WhatsApp no admite texto junto a un audio. Enviá el audio solo.')
 
-    const chat = await db.collectionWhatsAppChat.findFirst({ where: { id: chatId, workspaceId } })
+    const chat = await db.collectionWhatsAppChat.findFirst({ where: { id: chatId, workspaceId, line: this.line } })
     if (!chat) throw new NotFoundError('Chat', chatId)
     const entry = await this.requireConnectedSocket(workspaceId)
     const sent = await entry.sock.sendMessage(chat.jid, this.buildOutboundContent(text, file))
@@ -291,14 +312,29 @@ export class CollectionWhatsAppManager {
     return db.collectionWhatsAppMessage.findUniqueOrThrow({ where: { id: record.id }, select: messageSelect })
   }
 
+  /** Reacciona (o quita la reacción con un emoji vacío) a un mensaje del chat, como en el teléfono. */
+  async sendReaction(workspaceId: string, chatId: string, messageDbId: string, emoji: string) {
+    const chat = await this.getChat(workspaceId, chatId)
+    const message = await db.collectionWhatsAppMessage.findFirst({ where: { id: messageDbId, workspaceId, chatId }, select: { id: true, messageId: true, fromMe: true, reactions: true } })
+    if (!message) throw new NotFoundError('Mensaje', messageDbId)
+    if (message.messageId.startsWith('local-')) throw new ValidationError('Ese mensaje no llegó a WhatsApp; no se puede reaccionar.')
+    const entry = await this.requireConnectedSocket(workspaceId)
+    await entry.sock.sendMessage(chat.jid, { react: { text: emoji, key: { remoteJid: chat.jid, id: message.messageId, fromMe: message.fromMe } } })
+    await db.collectionWhatsAppMessage.update({
+      where: { id: message.id },
+      data: { reactions: mergeReaction(message.reactions, { emoji, fromMe: true, sender: ME_SENDER, at: new Date() }) },
+    })
+    return db.collectionWhatsAppMessage.findUniqueOrThrow({ where: { id: message.id }, select: messageSelect })
+  }
+
   async getMessageMedia(workspaceId: string, messageId: string) {
-    const message = await db.collectionWhatsAppMessage.findFirst({ where: { id: messageId, workspaceId }, select: { mediaPath: true, mediaMimeType: true, mediaFileName: true } })
-    if (!message?.mediaPath) throw new AppError(404, 'Ese mensaje no tiene un archivo descargado.', 'COLLECTION_WHATSAPP_MEDIA_NOT_FOUND')
-    const root = path.resolve(MEDIA_ROOT)
+    const message = await db.collectionWhatsAppMessage.findFirst({ where: { id: messageId, workspaceId, chat: { line: this.line } }, select: { mediaPath: true, mediaMimeType: true, mediaFileName: true } })
+    if (!message?.mediaPath) throw new AppError(404, 'Ese mensaje no tiene un archivo descargado.', 'LINE_WHATSAPP_MEDIA_NOT_FOUND')
+    const root = path.resolve(this.mediaRoot)
     const absolutePath = path.resolve(root, message.mediaPath)
     const relative = path.relative(root, absolutePath)
     if (relative.startsWith('..') || path.isAbsolute(relative) || !existsSync(absolutePath)) {
-      throw new AppError(404, 'No encontramos el archivo en el servidor.', 'COLLECTION_WHATSAPP_MEDIA_MISSING')
+      throw new AppError(404, 'No encontramos el archivo en el servidor.', 'LINE_WHATSAPP_MEDIA_MISSING')
     }
     return { buffer: await fs.readFile(absolutePath), mimeType: message.mediaMimeType || 'application/octet-stream', fileName: message.mediaFileName || path.basename(absolutePath) }
   }
@@ -317,7 +353,7 @@ export class CollectionWhatsAppManager {
   private async requireConnectedSocket(workspaceId: string) {
     let entry = this.sockets.get(workspaceId)
     if (!entry) {
-      if (!await this.hasAuthState(workspaceId)) throw new AppError(409, 'El WhatsApp de Cobranzas no está vinculado. Vinculalo desde el botón de configuración.', 'COLLECTION_WHATSAPP_NOT_LINKED')
+      if (!await this.hasAuthState(workspaceId)) throw new AppError(409, `El WhatsApp de ${this.label} no está vinculado. Vinculalo desde el botón de configuración.`, 'LINE_WHATSAPP_NOT_LINKED')
       await this.connect(workspaceId)
     }
     const deadline = Date.now() + 12_000
@@ -328,7 +364,7 @@ export class CollectionWhatsAppManager {
       if (session.status === 'DISCONNECTED') break
       await sleep(300)
     }
-    throw new AppError(409, 'El WhatsApp de Cobranzas todavía no está conectado. Esperá unos segundos y reintentá.', 'COLLECTION_WHATSAPP_NOT_CONNECTED')
+    throw new AppError(409, `El WhatsApp de ${this.label} todavía no está conectado. Esperá unos segundos y reintentá.`, 'LINE_WHATSAPP_NOT_CONNECTED')
   }
 
   private async ensureSocket(workspaceId: string) {
@@ -390,7 +426,7 @@ export class CollectionWhatsAppManager {
           try {
             await this.persistIncoming(workspaceId, message, payload?.type === 'notify')
           } catch (error) {
-            console.error('[whatsapp-cobranzas] no se pudo guardar un mensaje:', error)
+            console.error(`[${this.logTag}] no se pudo guardar un mensaje:`, error)
           }
         }
       })()
@@ -453,7 +489,7 @@ export class CollectionWhatsAppManager {
   }
 
   private async restorePersistedSessions() {
-    const sessions = await db.collectionWhatsAppSession.findMany({ where: { status: { in: ['CONNECTED', 'CONNECTING', 'ERROR'] } }, select: { workspaceId: true } })
+    const sessions = await db.collectionWhatsAppSession.findMany({ where: { line: this.line, status: { in: ['CONNECTED', 'CONNECTING', 'ERROR'] } }, select: { workspaceId: true } })
     for (const { workspaceId } of sessions) {
       if (!this.sockets.has(workspaceId) && !this.booting.has(workspaceId) && !this.reconnectTimers.has(workspaceId) && await this.hasAuthState(workspaceId)) {
         this.scheduleReconnect(workspaceId, true)
@@ -469,13 +505,17 @@ export class CollectionWhatsAppManager {
     return map
   }
 
+  private chatKey(workspaceId: string, jid: string) {
+    return { workspaceId_line_jid: { workspaceId, line: this.line, jid } }
+  }
+
   /** Une el chat abierto con el identificador LID de WhatsApp con el chat del número de teléfono. */
   private async rememberLid(workspaceId: string, lid?: string | null, phone?: string | null) {
     if (!isLidJid(lid) || !isPhoneUserJid(phone)) return
     this.aliases(workspaceId).set(lid!, phone!)
     const [lidChat, phoneChat] = await Promise.all([
-      db.collectionWhatsAppChat.findUnique({ where: { workspaceId_jid: { workspaceId, jid: lid! } } }),
-      db.collectionWhatsAppChat.findUnique({ where: { workspaceId_jid: { workspaceId, jid: phone! } } }),
+      db.collectionWhatsAppChat.findUnique({ where: this.chatKey(workspaceId, lid!) }),
+      db.collectionWhatsAppChat.findUnique({ where: this.chatKey(workspaceId, phone!) }),
     ])
     if (lidChat && !phoneChat) {
       await db.collectionWhatsAppChat.update({ where: { id: lidChat.id }, data: { jid: phone!, lidJid: lid, phoneNumber: extractPhoneNumberFromJid(phone) } })
@@ -500,7 +540,7 @@ export class CollectionWhatsAppManager {
       await this.rememberLid(workspaceId, raw, phone)
       return phone
     }
-    const known = await db.collectionWhatsAppChat.findFirst({ where: { workspaceId, lidJid: raw }, select: { jid: true } })
+    const known = await db.collectionWhatsAppChat.findFirst({ where: { workspaceId, line: this.line, lidJid: raw }, select: { jid: true } })
     return known?.jid ?? raw
   }
 
@@ -522,17 +562,23 @@ export class CollectionWhatsAppManager {
     const jid = await this.resolveRemoteJid(workspaceId, message)
     if (!jid) return
     const details: any = extractMessageDetails(message)
-    if (!isPersistableMessage(details, message) || details.messageType === 'reaction') return
     const fromMe = Boolean(message?.key?.fromMe)
     const sentAt = toDate(message?.messageTimestamp) ?? new Date()
+    // Una reacción no es un mensaje nuevo: se pega al mensaje al que apunta.
+    if (details.messageType === 'reaction') {
+      await this.applyIncomingReaction(workspaceId, jid, message, sentAt)
+      return
+    }
+    if (!isPersistableMessage(details, message)) return
 
-    let chat = await db.collectionWhatsAppChat.findUnique({ where: { workspaceId_jid: { workspaceId, jid } } })
+    let chat = await db.collectionWhatsAppChat.findUnique({ where: this.chatKey(workspaceId, jid) })
     if (!chat) {
       if (fromMe && isLidJid(jid)) return
       const phoneNumber = extractPhoneNumberFromJid(jid)
       chat = await db.collectionWhatsAppChat.create({
         data: {
           workspaceId,
+          line: this.line,
           jid,
           phoneNumber,
           displayName: fromMe ? null : selectChatDisplayName(message?.pushName),
@@ -568,7 +614,7 @@ export class CollectionWhatsAppManager {
         const buffer = await baileys.downloadMediaMessage(message, 'buffer', {}, entry?.sock?.updateMediaMessage ? { reuploadRequest: entry.sock.updateMediaMessage.bind(entry.sock) } : undefined)
         if (buffer?.length) await this.storeMedia(workspaceId, record.id, buffer, { messageType: details.messageType, mimeType: details.mediaMimeType, fileName: details.mediaFileName })
       } catch (error) {
-        console.error('[whatsapp-cobranzas] no se pudo descargar un archivo:', error)
+        console.error(`[${this.logTag}] no se pudo descargar un archivo:`, error)
       }
     }
 
@@ -584,12 +630,26 @@ export class CollectionWhatsAppManager {
     })
   }
 
+  private async applyIncomingReaction(workspaceId: string, jid: string, message: any, sentAt: Date) {
+    const reaction = readReactionMessage(message)
+    if (!reaction) return
+    const target = await db.collectionWhatsAppMessage.findFirst({
+      where: { workspaceId, messageId: reaction.targetId, chat: { line: this.line, OR: [{ jid }, { lidJid: jid }] } },
+      select: { id: true, reactions: true },
+    })
+    if (!target) return
+    await db.collectionWhatsAppMessage.update({
+      where: { id: target.id },
+      data: { reactions: mergeReaction(target.reactions, { emoji: reaction.emoji, fromMe: reaction.fromMe, sender: reaction.sender, at: sentAt }) },
+    })
+  }
+
   private async applyStatusUpdates(workspaceId: string, updates: any[]) {
     for (const item of updates) {
       const messageId = item?.key?.id
       if (!messageId || item?.update?.status === undefined) continue
       await db.collectionWhatsAppMessage.updateMany({
-        where: { workspaceId, messageId, fromMe: true },
+        where: { workspaceId, messageId, fromMe: true, chat: { line: this.line } },
         data: { status: normalizeMessageStatus(item.update.status, true) },
       }).catch(() => {})
     }
@@ -606,7 +666,7 @@ export class CollectionWhatsAppManager {
 
   private async storeMedia(workspaceId: string, recordId: string, buffer: Buffer, meta: { messageType: string; mimeType?: string | null; fileName?: string | null }) {
     const relativePath = path.join(workspaceId, `${recordId}${mediaExtension(meta.messageType, meta.mimeType, meta.fileName)}`)
-    const root = path.resolve(MEDIA_ROOT)
+    const root = path.resolve(this.mediaRoot)
     const absolutePath = path.resolve(root, relativePath)
     if (!absolutePath.startsWith(root + path.sep)) return
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
@@ -618,15 +678,15 @@ export class CollectionWhatsAppManager {
   }
 
   private async ensureSessionRecord(workspaceId: string) {
-    return db.collectionWhatsAppSession.upsert({ where: { workspaceId }, create: { workspaceId }, update: {} })
+    return db.collectionWhatsAppSession.upsert({ where: { workspaceId_line: { workspaceId, line: this.line } }, create: { workspaceId, line: this.line }, update: {} })
   }
 
   private async updateSession(workspaceId: string, patch: SessionPatch) {
-    await db.collectionWhatsAppSession.upsert({ where: { workspaceId }, create: { workspaceId, ...patch }, update: patch })
+    await db.collectionWhatsAppSession.upsert({ where: { workspaceId_line: { workspaceId, line: this.line } }, create: { workspaceId, line: this.line, ...patch }, update: patch })
   }
 
   private getAuthDir(workspaceId: string) {
-    return path.join(AUTH_ROOT, workspaceId)
+    return path.join(this.authRoot, workspaceId)
   }
 
   private async hasAuthState(workspaceId: string) {
@@ -638,4 +698,5 @@ export class CollectionWhatsAppManager {
   }
 }
 
-export const collectionWhatsAppManager = new CollectionWhatsAppManager()
+export const collectionWhatsAppManager = new CollectionWhatsAppManager('collections')
+export const commercialWhatsAppManager = new CollectionWhatsAppManager('commercial')

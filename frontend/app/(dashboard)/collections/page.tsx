@@ -22,7 +22,7 @@ import { CollectionsDashboard } from '@/components/romez/CollectionsDashboard'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { PaymentDialog, invalidateCollections, type PaymentTarget } from '@/components/romez/PaymentDialog'
 import { CollectionsTrash } from '@/components/romez/CollectionsTrash'
-import { CollectionsWhatsAppLinkDialog, CollectionsWhatsAppPanel } from '@/components/romez/CollectionsWhatsAppPanel'
+import { COLLECTIONS_WHATSAPP, LineWhatsAppLinkDialog, LineWhatsAppPanel } from '@/components/romez/LineWhatsAppPanel'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 
 type View = 'receivables' | 'payments' | 'plans' | 'import' | 'trash'
@@ -113,8 +113,8 @@ export default function CollectionsPage() {
     <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)]" aria-label="Vistas de cobranzas">{([['receivables', 'Cuentas por cobrar'], ['payments', 'Pagos'], ['plans', 'Planes mensuales'], ['import', 'Importar']] as const).filter(([id]) => id !== 'import' || canManage).map(([id, label]) => <button type="button" key={id} onClick={() => setView(id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-bold', view === id ? 'border-[var(--brand-blue)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]' : 'border-transparent text-[var(--ink-tertiary)]')}>{label}</button>)}</nav>
 
     <PaymentDialog target={paymentTarget} onClose={() => setPaymentTarget(null)} />
-    {whatsAppPanel ? <CollectionsWhatsAppPanel initialChatId={whatsAppPanel.chatId} canWrite={canWrite} canManage={canManage} currentUserId={currentUser?.userId} onClose={() => setWhatsAppPanel(null)} /> : null}
-    {whatsAppLinkOpen ? <CollectionsWhatsAppLinkDialog canManage={canManage} onClose={() => setWhatsAppLinkOpen(false)} /> : null}
+    {whatsAppPanel ? <LineWhatsAppPanel line={COLLECTIONS_WHATSAPP} initialChatId={whatsAppPanel.chatId} canWrite={canWrite} canManage={canManage} currentUserId={currentUser?.userId} onClose={() => setWhatsAppPanel(null)} /> : null}
+    {whatsAppLinkOpen ? <LineWhatsAppLinkDialog line={COLLECTIONS_WHATSAPP} canManage={canManage} onClose={() => setWhatsAppLinkOpen(false)} /> : null}
     {startWhatsApp.isError ? <p role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] px-4 py-3 text-xs font-semibold text-[var(--danger)]"><span>{getErrorMessage(startWhatsApp.error, 'No se pudo abrir el chat de WhatsApp.')}</span><button type="button" className="font-bold underline" onClick={() => startWhatsApp.reset()}>Cerrar</button></p> : null}
     {formMode === 'plan' ? <EntryForm title="Nuevo plan recurrente" error={createPlan.error} cancel={() => setFormMode(null)} save={() => createPlan.mutate()} saving={createPlan.isPending} disabled={!planForm.companyId || !planForm.name || !planForm.amount || !planForm.startDate}><ClientField><ClientPicker value={planForm.companyId} invalidHint="Elegí un cliente de la lista para poder guardar el plan." onChange={(companyId) => setPlanForm((current) => ({ ...current, companyId }))} /></ClientField><Field label="Nombre"><input className="ctrl-input" value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} /></Field><Field label="Importe"><MoneyInput value={planForm.amount} decimals={planForm.currency !== 'PYG'} onChange={(amount) => setPlanForm((current) => ({ ...current, amount }))} /></Field><Field label="Día de vencimiento"><input type="number" min="1" max="28" className="ctrl-input" value={planForm.dayOfMonth} onChange={(event) => setPlanForm((current) => ({ ...current, dayOfMonth: event.target.value }))} /></Field><Field label="Inicio (día / mes / año)"><DateField value={planForm.startDate} onChange={(startDate) => setPlanForm((current) => ({ ...current, startDate }))} /></Field></EntryForm> : null}
 

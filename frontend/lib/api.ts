@@ -428,6 +428,14 @@ export const ticketsApi = {
   updateStatus: (id: string, status: TicketStatus) =>
     api.patch<Ticket>(`/tickets/${id}/status`, { status }),
 
+  /** Archivo de un mensaje del ticket: lo ve cualquiera que pueda ver el ticket. */
+  getMessageMedia: (id: string, messageId: string) =>
+    api.get<Blob>(`/tickets/${id}/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
+
+  /** Reacciona a un mensaje; un emoji vacío quita la reacción. */
+  react: (id: string, messageId: string, emoji: string) =>
+    api.put(`/tickets/${id}/messages/${encodeURIComponent(messageId)}/reaction`, { emoji }),
+
   reply: (id: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<Ticket>(`/tickets/${id}/reply`, data),
 
   listComments: (id: string) => api.get<Array<{ id: string; body: string; createdAt: string }>>(`/tickets/${id}/comments`),
@@ -436,18 +444,26 @@ export const ticketsApi = {
 }
 
 /** Segundo número de WhatsApp, exclusivo de Cobranzas. */
-export const collectionsWhatsAppApi = {
-  getSession: () => api.get<WhatsAppLinkSession>('/collections-whatsapp/session'),
-  connect: () => api.post<WhatsAppLinkSession>('/collections-whatsapp/connect'),
-  disconnect: () => api.post<WhatsAppLinkSession>('/collections-whatsapp/disconnect'),
-  listChats: (search?: string) => api.get<CollectionWhatsAppChat[]>('/collections-whatsapp/chats', { params: { search: search || undefined } }),
-  listMessages: (chatId: string) => api.get<CollectionWhatsAppMessage[]>(`/collections-whatsapp/chats/${chatId}/messages`),
-  markRead: (chatId: string) => api.post(`/collections-whatsapp/chats/${chatId}/read`),
-  deleteChat: (chatId: string) => api.delete(`/collections-whatsapp/chats/${chatId}`),
-  send: (chatId: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<CollectionWhatsAppMessage>(`/collections-whatsapp/chats/${chatId}/messages`, data),
-  startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>('/collections-whatsapp/start', { companyId }),
-  getMedia: (messageId: string) => api.get<Blob>(`/collections-whatsapp/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
+/** API de un número de WhatsApp propio de un módulo (Cobranzas o Gestión comercial). */
+function lineWhatsAppApi(prefix: string) {
+  return {
+    getSession: () => api.get<WhatsAppLinkSession>(`${prefix}/session`),
+    connect: () => api.post<WhatsAppLinkSession>(`${prefix}/connect`),
+    disconnect: () => api.post<WhatsAppLinkSession>(`${prefix}/disconnect`),
+    listChats: (search?: string) => api.get<CollectionWhatsAppChat[]>(`${prefix}/chats`, { params: { search: search || undefined } }),
+    listMessages: (chatId: string) => api.get<CollectionWhatsAppMessage[]>(`${prefix}/chats/${chatId}/messages`),
+    markRead: (chatId: string) => api.post(`${prefix}/chats/${chatId}/read`),
+    deleteChat: (chatId: string) => api.delete(`${prefix}/chats/${chatId}`),
+    send: (chatId: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<CollectionWhatsAppMessage>(`${prefix}/chats/${chatId}/messages`, data),
+    react: (chatId: string, messageId: string, emoji: string) => api.put<CollectionWhatsAppMessage>(`${prefix}/chats/${chatId}/messages/${encodeURIComponent(messageId)}/reaction`, { emoji }),
+    startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>(`${prefix}/start`, { companyId }),
+    getMedia: (messageId: string) => api.get<Blob>(`${prefix}/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
+  }
 }
+
+export type LineWhatsAppApi = ReturnType<typeof lineWhatsAppApi>
+export const collectionsWhatsAppApi = lineWhatsAppApi('/collections-whatsapp')
+export const commercialWhatsAppApi = lineWhatsAppApi('/commercial-whatsapp')
 
 export const quickRepliesApi = {
   list: () => api.get<QuickReply[]>('/quick-replies'),

@@ -16,7 +16,7 @@ Monorepo para un estudio contable paraguayo:
 - `frontend`: Next.js 16 + React 19 + Tailwind 4 + TanStack Query + Axios.
 - Producto: Inicio, Clientes, Gestión comercial, Cobranzas, Atención al cliente, Tickets, Equipo y Configuración.
 - Configuración funcional: PYG, `es-PY`, `America/Asuncion`, RUC/DV y DNIT. No hay integración con DNIT, Marangatu ni SIFEN y no se almacenan sus credenciales.
-- Un único WhatsApp compartido por QR/Baileys. Inbox/Meta/Chatwoot están deshabilitados por defecto con `ENABLE_LEGACY_CHANNELS=false`.
+- WhatsApp por QR/Baileys: el número de Tickets (genera tickets) y dos números aparte, sin tickets, en `collection_whatsapp_*` separados por `line`: Cobranzas (`/collections-whatsapp`) y Gestión comercial (`/commercial-whatsapp`). Las reacciones se guardan en `reactions` del mensaje, no como mensajes. Inbox/Meta/Chatwoot están deshabilitados por defecto con `ENABLE_LEGACY_CHANNELS=false`.
 - Registro público y Stock no forman parte del runtime expuesto.
 
 ## Estructura clave

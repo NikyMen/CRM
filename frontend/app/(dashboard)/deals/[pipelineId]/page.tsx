@@ -24,10 +24,12 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Building2, Check, GripVertical, Loader2, MessageCircle, Pencil, Send, X } from 'lucide-react'
+import { Building2, Check, GripVertical, Loader2, MessageCircle, Pencil, Send, Settings, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '../../pipelines/page'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
+import { COMMERCIAL_WHATSAPP, LineWhatsAppLinkDialog, LineWhatsAppPanel, useLineWhatsAppSession } from '@/components/romez/LineWhatsAppPanel'
 
 function chatTitle(deal: KanbanCard) {
   const chat = deal.chat
@@ -437,6 +439,11 @@ export default function KanbanPage() {
   const [openDeal, setOpenDeal] = useState<KanbanCard | null>(null)
   const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState(false)
+  // WhatsApp propio de Gestión comercial: panel de chats y popup de vinculación por QR.
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false)
+  const [whatsAppLinkOpen, setWhatsAppLinkOpen] = useState(false)
+  const commercialSession = useLineWhatsAppSession(COMMERCIAL_WHATSAPP)
+  const commercialConnected = commercialSession.data?.status === 'CONNECTED'
 
   useEffect(() => {
     if (pathname.startsWith('/deals/')) {
@@ -549,7 +556,14 @@ export default function KanbanPage() {
               {closedDeals > 0 ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{closedDeals} cerradas</span> : null}
             </p>
           </div>
-          {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary shrink-0"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <button type="button" className="btn-primary !border-[#1f8f4e] !bg-[#1f8f4e] hover:!bg-[#187a42]" onClick={() => setWhatsAppOpen(true)} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
+              <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
+              <WhatsAppLogo size={16} /> WhatsApp
+            </button>
+            {canEditBoard ? <button type="button" className="btn-secondary" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Gestión comercial" title="Vincular, reconectar o desvincular el WhatsApp comercial (QR)"><Settings size={15} /></button> : null}
+            {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
+          </div>
         </div>
       </header>
 
@@ -588,6 +602,8 @@ export default function KanbanPage() {
         </DndContext>
       </div>}
 
+      {whatsAppOpen ? <LineWhatsAppPanel line={COMMERCIAL_WHATSAPP} canWrite={storedAuth?.role !== 'viewer'} canManage={canEditBoard} currentUserId={storedAuth?.userId} onClose={() => setWhatsAppOpen(false)} /> : null}
+      {whatsAppLinkOpen ? <LineWhatsAppLinkDialog line={COMMERCIAL_WHATSAPP} canManage={canEditBoard} onClose={() => setWhatsAppLinkOpen(false)} /> : null}
       <LeadChatModal
         deal={openDeal}
         onClose={() => setOpenDeal(null)}

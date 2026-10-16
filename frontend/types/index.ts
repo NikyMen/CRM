@@ -1027,6 +1027,15 @@ export interface TicketMessage {
   quotedMessageId?: string | null
   quotedText?: string | null
   quotedMessageType?: string | null
+  reactions?: MessageReaction[] | null
+}
+
+/** Reacción de WhatsApp: una por emisor; `fromMe` es la del número del estudio. */
+export interface MessageReaction {
+  emoji: string
+  fromMe: boolean
+  sender: string
+  at: string
 }
 
 export interface Ticket {
@@ -1104,6 +1113,7 @@ export interface CollectionWhatsAppMessage {
   mediaMimeType?: string | null
   mediaFileName?: string | null
   mediaSizeBytes?: number | null
+  reactions?: MessageReaction[] | null
   sentAt: string
   sentBy?: { id: string; firstName: string; lastName?: string | null } | null
 }

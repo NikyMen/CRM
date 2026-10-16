@@ -45,8 +45,8 @@ import { saleRoutes } from './modules/sales/sale.routes'
 import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { quickReplyRoutes } from './modules/quick-replies/quick-reply.routes'
-import { collectionWhatsAppRoutes } from './modules/collections-whatsapp/collection-whatsapp.routes'
-import { collectionWhatsAppManager } from './modules/collections-whatsapp/collection-whatsapp.manager'
+import { collectionWhatsAppRoutes, commercialWhatsAppRoutes } from './modules/collections-whatsapp/collection-whatsapp.routes'
+import { collectionWhatsAppManager, commercialWhatsAppManager } from './modules/collections-whatsapp/collection-whatsapp.manager'
 
 export async function buildApp() {
   initSentry()
@@ -200,6 +200,7 @@ export async function buildApp() {
   await app.register(clientRoutes, { prefix: `${API}/clients`, eventBus })
   await app.register(collectionRoutes, { prefix: `${API}/collections`, eventBus })
   await app.register(collectionWhatsAppRoutes, { prefix: `${API}/collections-whatsapp` })
+  await app.register(commercialWhatsAppRoutes, { prefix: `${API}/commercial-whatsapp` })
   await app.register(checklistRoutes, { prefix: API, eventBus })
   await app.register(internalChatRoutes, { prefix: `${API}/internal-chat` })
   await app.register(saleRoutes, { prefix: `${API}/sales`, eventBus })
@@ -209,11 +210,13 @@ export async function buildApp() {
   app.addHook('onReady', async () => {
     await whatsAppManager.startBackgroundRuntime()
     await collectionWhatsAppManager.startBackgroundRuntime().catch((error) => console.error('[whatsapp-cobranzas] no se pudo restaurar la sesión:', error))
+    await commercialWhatsAppManager.startBackgroundRuntime().catch((error) => console.error('[whatsapp-comercial] no se pudo restaurar la sesión:', error))
   })
 
   app.addHook('onClose', async () => {
     whatsAppManager.stopBackgroundRuntime()
     collectionWhatsAppManager.stopBackgroundRuntime()
+    commercialWhatsAppManager.stopBackgroundRuntime()
   })
 
   // Health check — para verificar que el servidor está vivo

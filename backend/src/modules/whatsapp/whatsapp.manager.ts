@@ -15,6 +15,7 @@ import { attachOutboundMessageToActiveTicket, ensureTicketForInboundMessage } fr
 import { emitTicketEvent } from '../tickets/ticket.events'
 import { reconcilePendingTicketState } from '../tickets/ticket.reconcile'
 import { whatsAppRealtime } from './whatsapp.events'
+import { ME_SENDER, mergeReaction, readReactionMessage } from './whatsapp.reactions'
 
 const prisma = db as any
 
@@ -1267,7 +1268,21 @@ export class WhatsAppManager {
       throw new AppError(409, 'El ticket ya no está activo o no está asignado a tu usuario.', 'WHATSAPP_TICKET_INACTIVE')
     }
     const sendJid = visibleChat.jid
+    const entry = await this.requireConnectedSocket(workspaceId)
 
+    const sent = await entry.sock.sendMessage(sendJid, this.buildOutboundMessageContent({ text, file }))
+    let persisted =
+      (sent ? await this.persistMessage(workspaceId, sent) : null) ??
+      await this.persistOutgoingFallback(workspaceId, sendJid, text, sent, file)
+
+    if (persisted && file && !persisted.mediaPath) {
+      persisted = await this.storeUploadedMedia(workspaceId, persisted, file, messageType)
+    }
+
+    return persisted ? this.serializeMessageRecord(persisted) : null
+  }
+
+  private async requireConnectedSocket(workspaceId: string) {
     let entry = this.sockets.get(workspaceId)
     if (!entry) {
       const authAvailable = await this.hasAuthState(workspaceId)
@@ -1285,17 +1300,61 @@ export class WhatsAppManager {
     if (session.status !== 'CONNECTED' || !entry?.sock) {
       throw new AppError(409, 'WhatsApp todavia no esta conectado. Espera unos segundos y reintenta.', 'WHATSAPP_NOT_CONNECTED')
     }
+    return entry
+  }
 
-    const sent = await entry.sock.sendMessage(sendJid, this.buildOutboundMessageContent({ text, file }))
-    let persisted =
-      (sent ? await this.persistMessage(workspaceId, sent) : null) ??
-      await this.persistOutgoingFallback(workspaceId, sendJid, text, sent, file)
+  /**
+   * Reacciona (o quita la reacción con un emoji vacío) a un mensaje de un
+   * ticket. Quien llama ya validó que el usuario puede operar ese ticket.
+   */
+  async sendTicketReaction(workspaceId: string, ticketId: string, messageDbId: string, emoji: string) {
+    this.assertRuntimeReady()
+    const message = await prisma.whatsAppMessage.findFirst({
+      where: { id: messageDbId, workspaceId, ticketId },
+      select: { id: true, messageId: true, fromMe: true, remoteJid: true, participant: true, reactions: true, chat: { select: { jid: true } } },
+    })
+    if (!message) throw new AppError(404, 'No encontramos ese mensaje en el ticket.', 'WHATSAPP_MESSAGE_NOT_FOUND')
+    if (message.messageId.startsWith('local-')) throw new ValidationError('Ese mensaje no llegó a WhatsApp; no se puede reaccionar.')
 
-    if (persisted && file && !persisted.mediaPath) {
-      persisted = await this.storeUploadedMedia(workspaceId, persisted, file, messageType)
-    }
+    const entry = await this.requireConnectedSocket(workspaceId)
+    await entry.sock.sendMessage(message.chat.jid, {
+      react: {
+        text: emoji,
+        key: { remoteJid: message.remoteJid, id: message.messageId, fromMe: message.fromMe, ...(message.participant ? { participant: message.participant } : {}) },
+      },
+    })
+    await prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { reactions: mergeReaction(message.reactions, { emoji, fromMe: true, sender: ME_SENDER, at: new Date() }) },
+    })
+    whatsAppRealtime.publish(workspaceId, { type: 'message.updated', jid: message.chat.jid })
+  }
 
-    return persisted ? this.serializeMessageRecord(persisted) : null
+  /** Pega una reacción recibida (del cliente o desde el teléfono) al mensaje al que apunta. */
+  private async applyIncomingReaction(workspaceId: string, remoteJid: string, message: any) {
+    const reaction = readReactionMessage(message)
+    if (!reaction) return
+    const target = await prisma.whatsAppMessage.findFirst({
+      where: {
+        workspaceId,
+        messageId: reaction.targetId,
+        OR: [{ remoteJid }, { chat: { jid: remoteJid } }, { chat: { lidJid: remoteJid } }],
+      },
+      select: { id: true, reactions: true, chat: { select: { jid: true } } },
+    })
+    if (!target) return
+    await prisma.whatsAppMessage.update({
+      where: { id: target.id },
+      data: {
+        reactions: mergeReaction(target.reactions, {
+          emoji: reaction.emoji,
+          fromMe: reaction.fromMe,
+          sender: reaction.sender,
+          at: toDate(message?.messageTimestamp) ?? new Date(),
+        }),
+      },
+    })
+    whatsAppRealtime.publish(workspaceId, { type: 'message.updated', jid: target.chat.jid })
   }
 
   private async waitForConnected(workspaceId: string, timeoutMs: number) {
@@ -1311,7 +1370,8 @@ export class WhatsAppManager {
   async getMessageMedia(
     workspaceId: string,
     messageDbId: string,
-    actor: { userId: string; role: string }
+    actor: { userId: string; role: string },
+    scope?: { ticketId: string }
   ) {
     await this.ensureDevMaintenanceAppliedOnce()
     let message: any
@@ -1320,7 +1380,8 @@ export class WhatsAppManager {
         where: {
           id: messageDbId,
           workspaceId,
-          ...(isManagerRole(actor.role) ? {} : {
+          // Desde un ticket, quien ya puede verlo (validado por TicketService) ve también sus archivos.
+          ...(scope ? { ticketId: scope.ticketId } : isManagerRole(actor.role) ? {} : {
             chat: {
               OR: [{ assignedToUserId: null }, { assignedToUserId: actor.userId }],
             },
@@ -2492,6 +2553,12 @@ export class WhatsAppManager {
     if (!supportsChat(rawRemoteJid) || !messageId) return null
     const fromMe = Boolean(message?.key?.fromMe)
     const remoteJid = await this.resolveMessageRemoteJid(workspaceId, rawRemoteJid, message)
+
+    // Una reacción no es un mensaje nuevo: no abre tickets ni leads, se pega al mensaje al que apunta.
+    if (readReactionMessage(message)) {
+      await this.applyIncomingReaction(workspaceId, remoteJid, message)
+      return null
+    }
 
     let chat = await prisma.whatsAppChat.findUnique({
       where: { workspaceId_jid: { workspaceId, jid: remoteJid } },

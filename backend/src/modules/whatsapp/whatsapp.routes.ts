@@ -4,6 +4,7 @@ import { authenticate } from '../../core/auth/auth.service'
 import { requireRole } from '../../core/auth/require-role'
 import { config } from '../../core/config'
 import { WHATSAPP_OUTBOUND_FILE_MAX_BYTES, whatsAppManager } from './whatsapp.manager'
+import { sendWhatsAppMedia } from './whatsapp.media-reply'
 import { decodeOutboundFile, outboundFileSchema } from './whatsapp.outbound-file'
 import { whatsAppRealtime } from './whatsapp.events'
 import { sseCorsHeaders } from '../../core/cors'
@@ -52,23 +53,6 @@ const updateIdentitySchema = z.object({
 const maintenanceQuerySchema = z.object({
   days: z.coerce.number().min(1).max(30).default(2),
 })
-
-const INLINE_MEDIA_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'audio/mp4',
-  'video/mp4',
-  'video/webm',
-])
-
-function safeDownloadName(value: string) {
-  return value.replace(/[\\\r\n"]/g, '').trim() || 'archivo'
-}
 
 function isLocalRequest(ip?: string | null) {
   if (!ip) return false
@@ -193,15 +177,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     preHandler: requireRole('owner', 'admin', 'member'),
   }, async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string; role: string }
-    const media = await whatsAppManager.getMessageMedia(ctx.workspaceId, req.params.messageId, ctx)
-    const mediaType = media.mimeType.toLowerCase().split(';', 1)[0].trim()
-    const inline = INLINE_MEDIA_TYPES.has(mediaType)
-    const fileName = safeDownloadName(media.fileName)
-    reply.header('Cache-Control', 'private, max-age=300')
-    reply.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`)
-    reply.header('X-Content-Type-Options', 'nosniff')
-    reply.header('Content-Security-Policy', "sandbox; default-src 'none'")
-    return reply.type(inline ? mediaType : 'application/octet-stream').send(media.buffer)
+    return sendWhatsAppMedia(reply, await whatsAppManager.getMessageMedia(ctx.workspaceId, req.params.messageId, ctx))
   })
 
   app.post<{ Params: { jid: string } }>('/chats/:jid/history', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
