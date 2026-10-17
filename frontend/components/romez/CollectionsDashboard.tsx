@@ -61,8 +61,8 @@ export function CollectionsDashboard({ data }: { data: CollectionInsights }) {
         {change === null ? <span className="text-[var(--ink-tertiary)]">Sin cobros el mes anterior</span> : <span className={clsx('inline-flex items-center gap-1 font-bold', change > 0 ? 'text-[var(--success)]' : change < 0 ? 'text-[var(--danger)]' : 'text-[var(--ink-tertiary)]')}>{change > 0 ? <ArrowUpRight size={14} /> : change < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}{Math.abs(change).toFixed(0)}% <span className="font-medium text-[var(--ink-tertiary)]">vs. mes anterior</span></span>}
       </StatTile>
       <RateTile rate={data.collectionRate} applied={data.applied} billed={data.billed} currency={currency} />
-      <StatTile label="Saldo pendiente" value={data.outstanding} currency={currency}>
-        <span className="text-[var(--ink-tertiary)]"><strong className={clsx('font-bold', data.overdueOutstanding > 0 ? 'text-[var(--danger)]' : 'text-[var(--ink-secondary)]')}>{money(data.overdueOutstanding, currency)}</strong> ya vencido</span>
+      <StatTile label="Saldo vencido" value={data.overdueOutstanding} currency={currency} danger={data.overdueOutstanding > 0}>
+        <span className="text-[var(--ink-tertiary)]"><strong className="font-bold text-[var(--ink-secondary)]">{money(data.outstanding, currency)}</strong> pendiente anual</span>
       </StatTile>
       <StatTile label="Clientes con deuda" value={data.clientsWithDebt} plain>
         <span className="text-[var(--ink-tertiary)]">Saldo a favor de clientes: <strong className="font-bold text-[var(--ink-secondary)]">{money(data.creditBalance, currency)}</strong></span>
@@ -110,9 +110,9 @@ function Card({ title, subtitle, children, className }: { title: string; subtitl
   return <div className={clsx('paper-panel p-5', className)}><h3 className="font-display text-sm font-extrabold text-[var(--ink-primary)]">{title}</h3>{subtitle ? <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{subtitle}</p> : null}<div className="mt-4">{children}</div></div>
 }
 
-function StatTile({ label, value, currency = 'PYG', plain, children }: { label: string; value: number; currency?: string; plain?: boolean; children?: React.ReactNode }) {
+function StatTile({ label, value, currency = 'PYG', plain, danger, children }: { label: string; value: number; currency?: string; plain?: boolean; danger?: boolean; children?: React.ReactNode }) {
   const animated = useCountUp(value)
-  return <div className="paper-panel p-5"><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p><p className="mt-2 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]">{plain ? Math.round(animated) : money(animated, currency)}</p><p className="mt-2 text-xs">{children}</p></div>
+  return <div className="paper-panel p-5"><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p><p className={clsx('mt-2 font-mono text-2xl font-bold tabular-nums', danger ? 'text-[var(--danger)]' : 'text-[var(--ink-primary)]')}>{plain ? Math.round(animated) : money(animated, currency)}</p><p className="mt-2 text-xs">{children}</p></div>
 }
 
 function RateTile({ rate, applied, billed, currency }: { rate: number; applied: number; billed: number; currency: string }) {
