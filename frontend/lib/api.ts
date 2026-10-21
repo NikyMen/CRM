@@ -458,6 +458,8 @@ function lineWhatsAppApi(prefix: string) {
     listMessages: (chatId: string) => api.get<CollectionWhatsAppMessage[]>(`${prefix}/chats/${chatId}/messages`),
     markRead: (chatId: string) => api.post(`${prefix}/chats/${chatId}/read`),
     deleteChat: (chatId: string) => api.delete(`${prefix}/chats/${chatId}`),
+    /** Renombra el contacto del chat para todos los usuarios. */
+    renameChat: (chatId: string, displayName: string) => api.patch<CollectionWhatsAppChat>(`${prefix}/chats/${chatId}`, { displayName }),
     send: (chatId: string, data: { text?: string; file?: OutboundFilePayload }) => api.post<CollectionWhatsAppMessage>(`${prefix}/chats/${chatId}/messages`, data),
     react: (chatId: string, messageId: string, emoji: string) => api.put<CollectionWhatsAppMessage>(`${prefix}/chats/${chatId}/messages/${encodeURIComponent(messageId)}/reaction`, { emoji }),
     startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>(`${prefix}/start`, { companyId }),

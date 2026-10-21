@@ -62,6 +62,12 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
       return reply.status(204).send()
     })
 
+    app.patch<{ Params: { id: string } }>('/chats/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+      const ctx = req.user as WorkspaceContext
+      const { displayName } = z.object({ displayName: z.string().trim().min(1).max(120) }).parse(req.body)
+      return reply.send(await manager.renameChat(ctx.workspaceId, req.params.id, displayName))
+    })
+
     app.delete<{ Params: { id: string } }>('/chats/:id', { preHandler: requireRole('owner', 'admin') }, async (req, reply) => {
       const ctx = req.user as WorkspaceContext
       await manager.deleteChat(ctx.workspaceId, req.params.id)
