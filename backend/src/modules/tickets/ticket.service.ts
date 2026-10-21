@@ -289,6 +289,46 @@ export class TicketService {
     return this.findById(actor, id)
   }
 
+  /**
+   * Renombra el contacto del ticket. Queda en el contacto (lo ven todos los
+   * usuarios) y, si el ticket viene de WhatsApp, también en el chat, para que
+   * el nombre que informa WhatsApp en los próximos mensajes no lo pise.
+   */
+  async renameContact(
+    actor: TicketActor,
+    id: string,
+    name: string,
+    renameChat?: (jid: string, name: string) => Promise<unknown>
+  ) {
+    const ticket = await this.findVisibleRecord(actor, id)
+    const displayName = name.replace(/\s+/g, ' ').trim()
+    if (ticket.whatsappChat?.jid && renameChat) await renameChat(ticket.whatsappChat.jid, displayName)
+    const chat = ticket.whatsappChat?.id
+      ? await db.whatsAppChat.findFirst({ where: { id: ticket.whatsappChat.id, workspaceId: actor.workspaceId }, select: { contactId: true } })
+      : null
+    const contactId = ticket.contactId ?? chat?.contactId ?? null
+    if (!contactId) throw new AppError(422, 'El ticket no tiene un contacto para renombrar.', 'TICKET_WITHOUT_CONTACT')
+    const [firstName, ...rest] = displayName.split(' ')
+    await db.$transaction([
+      db.contact.updateMany({
+        where: { id: contactId, workspaceId: actor.workspaceId },
+        data: { firstName, lastName: rest.join(' ') || null },
+      }),
+      ...(ticket.contactId ? [] : [db.ticket.update({ where: { id: ticket.id }, data: { contactId } })]),
+      db.ticketEvent.create({
+        data: {
+          workspaceId: actor.workspaceId,
+          ticketId: ticket.id,
+          actorUserId: actor.userId,
+          type: 'UPDATED',
+          metadata: { fields: ['contactName'] },
+        },
+      }),
+    ])
+    await this.publishUpdated(actor.workspaceId, ticket.id, ticket.whatsappChat?.jid)
+    return this.findById(actor, id)
+  }
+
   async addComment(actor: TicketActor, id: string, body: string) {
     const ticket = await this.findOperableRecord(actor, id)
     const comment = await db.$transaction(async (tx) => {

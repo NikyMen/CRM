@@ -101,7 +101,9 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const range = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query)
     if (range.from && range.to && range.from > range.to) throw new ValidationError('El inicio del período debe ser anterior al final')
     const toStart = (value: string) => startOfParaguayDay(normalizeParaguayDateInput(value) as Date)
-    const dateFilter = (field: 'paidAt' | 'createdAt') => {
+    // Los cargos entran por vencimiento (no por fecha de carga): así el saldo
+    // del período no arrastra cuotas que vencen después del "hasta".
+    const dateFilter = (field: 'paidAt' | 'dueDate') => {
       if (!range.from && !range.to) return {}
       const filter: { gte?: Date; lt?: Date } = {}
       if (range.from) filter.gte = toStart(range.from)
@@ -111,7 +113,7 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const client = await ensureClientAccess(ctx, id)
     const [payments, charges] = await db.$transaction([
       db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, ...dateFilter('paidAt') }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
-      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('createdAt') } }),
+      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('dueDate') } }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
     const displayDate = (value: string) => value.split('-').reverse().join('/')
     const periodLabel = range.from || range.to ? `${range.from ? displayDate(range.from) : 'Inicio'} al ${range.to ? displayDate(range.to) : 'hoy'}` : 'Historial completo'
