@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowLeft, BarChart3, Check, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Headphones, Loader2, MessageCircle, MessageSquareText, Pencil, Radio, Search, Settings, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, BarChart3, CheckCheck, CheckCircle2, CircleCheckBig, CircleUserRound, Clock3, Headphones, Loader2, MessageCircle, MessageSquareText, Radio, Search, Settings, UserCheck, UserRoundCheck, UsersRound, Wifi, X } from 'lucide-react'
 import clsx from 'clsx'
 import { customerServiceApi, teamApi, ticketsApi, whatsappApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingState, PageFrame, StatusPill } from '@/c
 import { TopbarContent } from '@/components/romez/Topbar'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
+import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 
 type Inbox = 'free' | 'mine' | 'all'
@@ -132,24 +133,6 @@ function TicketHeader({ ticket, back, canManage, canOperate, canTake, members, c
   const company = ticket.company ?? ticket.client
   const assignedTo = ticket.assignedTo ?? ticket.assignee
   return <header className="border-b border-[var(--line-soft)] p-4"><div className="flex items-start gap-3"><button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a tickets"><ArrowLeft size={16} /></button><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{company ? <h2 className="font-display text-base font-extrabold text-[var(--ink-primary)]">{company.name}</h2> : <ContactName key={ticket.id} name={contactName} canEdit={canRename} save={renameContact} className="font-display text-base font-extrabold text-[var(--ink-primary)]" />}<StatusPill tone={ticket.status === 'RESOLVED' || ticket.status === 'CLOSED' ? 'success' : 'brand'}>{STATUS_LABELS[ticket.status]}</StatusPill></div>{company && (contactName || canRename) ? <div className="mt-1 flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={ticket.id} name={contactName} canEdit={canRename} save={renameContact} className="font-semibold text-[var(--ink-secondary)]" /></div> : null}<p className="mt-1 text-xs text-[var(--ink-tertiary)]">{company?.ruc ? `RUC ${company.ruc}${company.dv ? `-${company.dv}` : ''} · ` : ''}{ticket.contact?.phone || ticket.whatsappChat?.phoneNumber || 'Sin teléfono'} · Ticket #{ticket.number || ticket.id.slice(-6)}</p></div>{company ? <Link href={`/clients/${company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}</div><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[180px_130px_150px_150px_minmax(180px,1fr)]"><select disabled={!canOperate || updating} value={ticket.status} onChange={(event) => updateStatus(event.target.value as TicketStatus)} className="ctrl-input" aria-label="Estado del ticket">{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><select disabled={!canOperate || updating} value={ticket.priority} onChange={(event) => updatePriority(event.target.value as TicketPriority)} className="ctrl-input" aria-label="Prioridad">{Object.entries(PRIORITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><select disabled={!canOperate || updating} value={ticket.category ?? ''} onChange={(event) => updateCategory(event.target.value || null)} className="ctrl-input" aria-label="Categoría"><option value="">Sin categoría</option><option value="CONTABILIDAD">Contabilidad</option><option value="IMPUESTOS">Impuestos</option><option value="DOCUMENTOS">Documentos</option><option value="COBRANZAS">Cobranzas</option><option value="LABORAL">Laboral</option><option value="OTRO">Otro</option></select><button type="button" disabled={!canOperate || updating || ticket.status === 'CLOSED'} onClick={() => updateStatus('CLOSED')} className="btn-secondary"><CircleCheckBig size={15} />{ticket.status === 'CLOSED' ? 'Ticket cerrado' : closing ? 'Cerrando…' : 'Cerrar ticket'}</button>{canManage ? <select disabled={assigning} value={ticket.assignedToUserId ?? ''} onChange={(event) => assign(event.target.value || null)} className="ctrl-input" aria-label="Responsable"><option value="">Sin responsable</option>{members.map((member) => <option key={member.user.id} value={member.user.id}>{fullName(member.user)}</option>)}</select> : canTake && ticket.assignedToUserId === currentUserId ? <button type="button" disabled={assigning} onClick={() => assign(null)} className="btn-secondary"><UsersRound size={15} /> Liberar ticket</button> : canTake && !ticket.assignedToUserId ? <button type="button" disabled={assigning || !currentUserId} onClick={() => assign(currentUserId ?? null)} className="btn-primary"><UserCheck size={15} /> Tomar ticket</button> : <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] px-3 text-xs font-bold text-[var(--ink-secondary)]"><CircleUserRound size={15} />{assignedTo ? fullName(assignedTo) : 'Sin responsable'}</div>}</div></header>
-}
-
-/** Nombre del contacto con lápiz: el cambio se guarda en el backend y lo ven todos. */
-function ContactName({ name, canEdit, save, className }: { name: string; canEdit: boolean; save: (name: string) => Promise<unknown>; className: string }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const cancel = () => { setDraft(null); setError(null) }
-  const submit = async () => {
-    const value = (draft ?? '').replace(/\s+/g, ' ').trim()
-    if (!value) { setError('Escribí un nombre.'); return }
-    if (value === name) { cancel(); return }
-    setSaving(true)
-    setError(null)
-    try { await save(value); setDraft(null) } catch (err) { setError(getErrorMessage(err, 'No se pudo guardar el nombre.')) } finally { setSaving(false) }
-  }
-  if (draft !== null) return <form onSubmit={(event) => { event.preventDefault(); void submit() }} className="flex flex-wrap items-center gap-1.5"><input autoFocus value={draft} maxLength={120} disabled={saving} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') cancel() }} className="ctrl-input h-8 w-56 py-1 text-sm" aria-label="Nombre del contacto" placeholder="Nombre del contacto" /><button type="submit" disabled={saving} className="rounded-md p-1.5 text-[var(--success)] hover:bg-[var(--paper-soft)]" aria-label="Guardar nombre" title="Guardar">{saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}</button><button type="button" disabled={saving} onClick={cancel} className="rounded-md p-1.5 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cancelar edición" title="Cancelar"><X size={15} /></button>{error ? <span role="alert" className="text-xs font-semibold text-[var(--danger)]">{error}</span> : null}</form>
-  return <span className="inline-flex min-w-0 items-center gap-1"><span className={clsx('truncate', className)}>{name || 'Contacto sin identificar'}</span>{canEdit ? <button type="button" onClick={() => setDraft(name)} className="rounded-md p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)] hover:text-[var(--brand-blue)]" aria-label="Editar nombre del contacto" title="Editar nombre"><Pencil size={14} /></button> : null}</span>
 }
 
 function Conversation({ ticket, canOperate, canManage, currentUserId, send }: { ticket: Ticket; canOperate: boolean; canManage: boolean; currentUserId?: string; send: (payload: ComposerPayload) => Promise<unknown> }) {

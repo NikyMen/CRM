@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/romez/OperationalUI'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
+import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
@@ -174,11 +175,15 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     queryClient.setQueryData<CollectionWhatsAppMessage[]>(messagesKey, (current) => current?.map((item) => item.id === messageId ? response.data : item))
   }
   const canReply = canWrite && connected
+  const rename = async (name: string) => {
+    await line.api.renameChat(chatId, name)
+    onSent()
+  }
 
   return <>
     <header className="flex items-center gap-3 border-b border-[var(--line-soft)] px-4 py-3">
       <button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={16} /></button>
-      <div className="min-w-0 flex-1"><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat ? chatTitle(chat) : 'Chat'}</p><p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
+      <div className="min-w-0 flex-1">{!chat ? <p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">Chat</p> : chat.company ? <><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat.company.name}</p><div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-semibold text-[var(--ink-secondary)]" /></div></> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-base font-extrabold text-[var(--ink-primary)]" />}<p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
       {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}
       {onDelete ? <button type="button" className="btn-danger" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={15} /></button> : null}
     </header>

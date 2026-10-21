@@ -243,6 +243,26 @@ export class CollectionWhatsAppManager {
   }
 
   /**
+   * Nombre del contacto editado a mano. Lo ven todos los usuarios y los
+   * mensajes entrantes no lo pisan (sólo completan el nombre si está vacío).
+   * En Gestión comercial, el lead automático del chat se renombra con él si
+   * todavía conserva el nombre con que se creó.
+   */
+  async renameChat(workspaceId: string, chatId: string, name: string) {
+    const chat = await this.getChat(workspaceId, chatId)
+    const displayName = name.replace(/\s+/g, ' ').trim()
+    const autoTitles = [chat.displayName, chat.phoneNumber ? `+${chat.phoneNumber}` : null].filter((value): value is string => Boolean(value))
+    await db.$transaction([
+      db.collectionWhatsAppChat.update({ where: { id: chat.id }, data: { displayName } }),
+      ...(this.line === 'commercial' && autoTitles.length ? [db.deal.updateMany({
+        where: { workspaceId, status: 'OPEN', isArchived: false, title: { in: autoTitles }, customData: { path: ['commercialChatId'], equals: chat.id } },
+        data: { title: displayName },
+      })] : []),
+    ])
+    return this.getChat(workspaceId, chatId)
+  }
+
+  /**
    * Borra el chat, sus mensajes y sus archivos sólo en el CRM: en el teléfono
    * la conversación sigue. Si el cliente vuelve a escribir, el chat se crea de nuevo.
    */
