@@ -2474,13 +2474,15 @@ export class WhatsAppManager {
     const historyContactName = historyContacts?.get(jid) ?? historyContacts?.get(rawJid) ?? null
     const isGroup = jid.endsWith('@g.us')
     const groupName = isGroup ? await this.resolveGroupDisplayName(workspaceId, jid) : null
+    // El nombre del contacto del CRM (que se puede editar a mano) manda sobre el
+    // que informa WhatsApp: así un renombrado no se pierde al resincronizar.
     const displayName = selectChatDisplayName(
       chat?.subject,
       groupName,
+      contactName,
       historyContactName,
       chat?.name,
       chat?.notify,
-      contactName,
       phoneNumber,
       jid
     )

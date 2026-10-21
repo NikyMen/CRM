@@ -36,6 +36,10 @@ const updateSchema = z.object({
   message: 'Debes indicar al menos un campo para actualizar.',
 })
 
+const contactNameSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+})
+
 const replySchema = z.object({
   text: z.string().trim().max(4096).optional(),
   file: outboundFileSchema.optional(),
@@ -116,6 +120,20 @@ export async function ticketRoutes(
       const actor = req.user as TicketActor
       const body = updateSchema.parse(req.body)
       return reply.send(await service.updateDetails(actor, req.params.id, body))
+    }
+  )
+
+  app.patch<{ Params: { id: string } }>(
+    '/:id/contact',
+    { preHandler: requireRole('owner', 'admin', 'member') },
+    async (req, reply) => {
+      const actor = req.user as TicketActor
+      const body = contactNameSchema.parse(req.body)
+      // La visibilidad ya la valida el ticket; el chat se renombra sin volver a
+      // filtrar por responsable del chat.
+      return reply.send(await service.renameContact(actor, req.params.id, body.name, (jid, name) =>
+        whatsAppManager.updateChat(actor.workspaceId, jid, { userId: actor.userId, role: 'owner' }, { displayName: name })
+      ))
     }
   )
 

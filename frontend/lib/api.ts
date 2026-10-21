@@ -425,6 +425,10 @@ export const ticketsApi = {
   assign: (id: string, assignedToUserId: string | null) =>
     api.patch<Ticket>(`/tickets/${id}/assign`, { assignedToUserId }),
 
+  /** Renombra el contacto (y su chat de WhatsApp) para todos los usuarios. */
+  renameContact: (id: string, name: string) =>
+    api.patch<Ticket>(`/tickets/${id}/contact`, { name }),
+
   updateStatus: (id: string, status: TicketStatus) =>
     api.patch<Ticket>(`/tickets/${id}/status`, { status }),
 
