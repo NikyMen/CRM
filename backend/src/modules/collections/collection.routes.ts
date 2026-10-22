@@ -9,7 +9,7 @@ import { config } from '../../core/config'
 import { ValidationError, type WorkspaceContext } from '../../types'
 import { parseCollectionSpreadsheet } from './collection-import'
 import { normalizeParaguayDateInput, startOfParaguayDay } from './collection-calculations'
-import { paymentSummaryFileName, renderPaymentSummary } from './payment-summary'
+import { paymentSummaryFileName, renderPaymentSummary, unappliedCreditByCurrency } from './payment-summary'
 import { ensureClientAccess } from '../clients/client-access'
 import { db } from '../../core/database'
 import { Prisma } from '@prisma/client'
@@ -135,9 +135,11 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
       return { [field]: filter }
     }
     const client = await ensureClientAccess(ctx, id)
-    const [payments, charges] = await db.$transaction([
+    const [payments, charges, creditSources] = await db.$transaction([
       db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, ...dateFilter('paidAt') }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
       db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('dueDate') } }),
+      // El saldo a favor es de todo el historial: un pago del período puede cancelar cargos de otro.
+      db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, voidedAt: null }, select: { amount: true, currency: true, voidedAt: true, allocations: { select: { amount: true } } } }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
     const displayDate = (value: string) => value.split('-').reverse().join('/')
     const periodLabel = range.from || range.to ? `${range.from ? displayDate(range.from) : 'Inicio'} al ${range.to ? displayDate(range.to) : 'hoy'}` : 'Historial completo'
@@ -146,7 +148,7 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const asciiName = fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '')
     return reply.header('Cache-Control', 'no-store')
       .header('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`)
-      .type('application/pdf').send(renderPaymentSummary(client, payments, charges, now, periodLabel))
+      .type('application/pdf').send(renderPaymentSummary(client, payments, charges, now, periodLabel, unappliedCreditByCurrency(creditSources)))
   })
 
   app.get('/receivables', async (req, reply) => {
