@@ -5,6 +5,22 @@ import { Prisma } from '@prisma/client'
 type PaymentRow = { paidAt: Date; amount: Prisma.Decimal; currency: string; method: string | null; reference: string | null; voidedAt: Date | null }
 type ChargeRow = { amount: Prisma.Decimal; paidAmount: Prisma.Decimal; currency: string; description?: string; dueDate?: Date; status?: string }
 type Client = { name: string; ruc: string | null; dv: string | null }
+type CreditSource = { amount: Prisma.Decimal; currency: string; voidedAt: Date | null; allocations: Array<{ amount: Prisma.Decimal }> }
+
+/**
+ * Saldo a favor real por moneda: lo cobrado (sin anular) que no quedó aplicado a
+ * ningún cargo, en todo el historial del cliente. No depende del período del
+ * resumen, porque un pago del período puede haber cancelado cargos de otro.
+ */
+export function unappliedCreditByCurrency(payments: CreditSource[]) {
+  const credit = new Map<string, Prisma.Decimal>()
+  for (const payment of payments) {
+    if (payment.voidedAt) continue
+    const applied = payment.allocations.reduce((sum, allocation) => sum.plus(allocation.amount), new Prisma.Decimal(0))
+    credit.set(payment.currency, (credit.get(payment.currency) ?? new Prisma.Decimal(0)).plus(payment.amount.minus(applied)))
+  }
+  return credit
+}
 export type Rgb = [number, number, number]
 
 // Informe A4 dibujado a mano: fuentes PDF estándar (Helvetica, WinAnsi) y el logo ROMEZ
@@ -143,7 +159,7 @@ export class Page {
 type Column = { title: string; width: number; align?: 'left' | 'right' }
 type Cell = { text: string; rgb?: Rgb; bold?: boolean }
 
-export function renderPaymentSummary(client: Client, payments: PaymentRow[], charges: ChargeRow[], now = new Date(), periodLabel = 'Historial completo') {
+export function renderPaymentSummary(client: Client, payments: PaymentRow[], charges: ChargeRow[], now = new Date(), periodLabel = 'Historial completo', credits?: Map<string, Prisma.Decimal>) {
   const logo = loadLogo()
   const pages: Page[] = []
   let page!: Page
@@ -242,7 +258,8 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   y -= boxHeight + 22
 
   // Resumen por moneda: nunca se suman monedas distintas.
-  const currencies = [...new Set([...payments.map((p) => p.currency), ...charges.map((c) => c.currency)])].sort((a, b) => (a === 'PYG' ? -1 : b === 'PYG' ? 1 : a.localeCompare(b)))
+  const creditCurrencies = [...(credits?.entries() ?? [])].filter(([, value]) => value.gt(0)).map(([currency]) => currency)
+  const currencies = [...new Set([...payments.map((p) => p.currency), ...charges.map((c) => c.currency), ...creditCurrencies])].sort((a, b) => (a === 'PYG' ? -1 : b === 'PYG' ? 1 : a.localeCompare(b)))
   sectionTitle('Resumen de la cuenta', currencies.length > 1 ? 'Cada moneda se informa por separado' : undefined)
   if (!currencies.length) {
     page.rect(LEFT, y - 28, CONTENT_W, 28, SOFT)
@@ -255,7 +272,8 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
     const applied = ofCurrency.reduce((sum, c) => sum.plus(c.paidAmount), new Prisma.Decimal(0))
     const received = payments.filter((p) => p.currency === currency && !p.voidedAt).reduce((sum, p) => sum.plus(p.amount), new Prisma.Decimal(0))
     const pending = billed.minus(applied)
-    const credit = Prisma.Decimal.max(received.minus(applied), 0)
+    // Si no llega el saldo real, se estima con los movimientos listados (exacto sólo sin período).
+    const credit = Prisma.Decimal.max(credits ? credits.get(currency) ?? 0 : received.minus(applied), 0)
     ensure((currencies.length > 1 ? 16 : 0) + 62)
     if (currencies.length > 1) {
       page.text(CURRENCY_NAME[currency] ?? currency, LEFT, y - 9, { size: 8.5, bold: true, rgb: MUTED })
@@ -328,6 +346,7 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   // Notas finales.
   const notes = [
     'Los pagos anulados se muestran como referencia y no integran los totales.',
+    'El saldo a favor es lo cobrado que todavía no se aplicó a ningún cargo, sin importar el período.',
     'Cada moneda se informa por separado; no se realizan conversiones.',
     'Resumen informativo de cuenta corriente. No constituye comprobante fiscal.',
   ]

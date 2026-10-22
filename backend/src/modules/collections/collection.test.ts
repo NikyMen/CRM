@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { type TestContext } from 'node:test'
 import { Prisma } from '@prisma/client'
-import { paymentSummaryFileName, renderPaymentSummary } from './payment-summary'
+import { paymentSummaryFileName, renderPaymentSummary, unappliedCreditByCurrency } from './payment-summary'
 import type { WorkspaceContext } from '../../types'
 import {
   parseCollectionSpreadsheet,
@@ -76,6 +76,25 @@ test('el PDF incluye historial completo, acentos, páginas y totales por moneda 
   const mixed = renderPaymentSummary({ name: 'Prueba', ruc: null, dv: null }, [{ ...payments[1], currency: 'USD', amount: new Prisma.Decimal('12.50') }, payments[1]], [])
   assert.match(mixed.toString('latin1'), /\(US\$ 12,50\) Tj/)
   assert.match(mixed.toString('latin1'), /\(Gs\. 1\.000\) Tj/)
+})
+
+test('el saldo a favor del resumen es lo cobrado sin aplicar, no la diferencia del período', () => {
+  const d = (value: string) => new Prisma.Decimal(value)
+  // Cobró 600.000 en el período, pero 450.000 cancelaron cargos que vencieron antes.
+  const credits = unappliedCreditByCurrency([
+    { amount: d('600000'), currency: 'PYG', voidedAt: null, allocations: [{ amount: d('450000') }, { amount: d('150000') }] },
+    { amount: d('80000'), currency: 'PYG', voidedAt: new Date(), allocations: [] },
+    { amount: d('20.50'), currency: 'USD', voidedAt: null, allocations: [{ amount: d('5') }] },
+  ])
+  assert.equal(credits.get('PYG')?.toString(), '0')
+  assert.equal(credits.get('USD')?.toString(), '15.5')
+  const payment = { paidAt: new Date('2026-03-01T12:00:00Z'), amount: d('600000'), currency: 'PYG', method: null, reference: null, voidedAt: null }
+  const charge = { amount: d('1320000'), paidAmount: d('150000'), currency: 'PYG' }
+  const text = renderPaymentSummary({ name: 'Prueba', ruc: null, dv: null }, [payment], [charge], new Date(), '01/01/2026 al 31/12/2026', credits).toString('latin1')
+  assert.doesNotMatch(text, /\(Gs\. 450\.000\) Tj/)
+  assert.match(text, /\(Gs\. 1\.170\.000\) Tj/)
+  // El saldo en otra moneda se informa aunque no tenga movimientos en el período.
+  assert.match(text, /\(US\$ 15,50\) Tj/)
 })
 
 test('el resumen se descarga con el nombre del cliente y la fecha de Paraguay', () => {
