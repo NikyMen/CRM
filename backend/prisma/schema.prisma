@@ -50,6 +50,13 @@ enum ReceivableStatus {
   VOID
 }
 
+enum PaymentPromiseStatus {
+  PENDING
+  FULFILLED
+  BROKEN
+  CANCELLED
+}
+
 enum RecurringChargeFrequency {
   MONTHLY
   QUARTERLY
@@ -133,6 +140,7 @@ model Workspace {
   collectionWhatsAppSessions CollectionWhatsAppSession[]
   collectionWhatsAppChats    CollectionWhatsAppChat[]
   collectionWhatsAppMessages CollectionWhatsAppMessage[]
+  paymentPromises            PaymentPromise[]
 
   @@map("workspaces")
 }
@@ -179,6 +187,9 @@ model User {
   reopenedDailyReports     DailyReport[]         @relation("DailyReportReopenedBy")
   quickReplies             QuickReply[]          @relation("QuickReplyAuthor")
   collectionWhatsAppMessages CollectionWhatsAppMessage[] @relation("CollectionWhatsAppSender")
+  assignedPaymentPromises  PaymentPromise[]      @relation("PaymentPromiseAssignee")
+  createdPaymentPromises   PaymentPromise[]      @relation("PaymentPromiseCreatedBy")
+  closedPaymentPromises    PaymentPromise[]      @relation("PaymentPromiseClosedBy")
 
   @@map("users")
 }
@@ -860,6 +871,7 @@ model Company {
   sales            Sale[]
   dailyReportItems DailyReportItem[]
   collectionWhatsAppChats CollectionWhatsAppChat[]
+  paymentPromises  PaymentPromise[]
 
   @@unique([workspaceId, ruc])
   @@index([workspaceId])
@@ -1369,6 +1381,7 @@ model CollectionWhatsAppChat {
   workspace Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company   Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   messages  CollectionWhatsAppMessage[]
+  paymentPromises PaymentPromise[]
 
   @@unique([workspaceId, line, jid])
   @@index([workspaceId, line, lastMessageAt])
@@ -1404,4 +1417,37 @@ model CollectionWhatsAppMessage {
   @@unique([chatId, messageId])
   @@index([workspaceId, chatId, sentAt])
   @@map("collection_whatsapp_messages")
+}
+
+/// Compromiso de pago que da el cliente (por ejemplo por el WhatsApp de Cobranzas):
+/// "te pago el 28". Es un recordatorio para quien cobra, no un movimiento contable.
+model PaymentPromise {
+  id              String               @id @default(cuid())
+  workspaceId     String
+  companyId       String
+  chatId          String?
+  /// Día calendario de Paraguay, sin hora.
+  promisedDate    DateTime             @db.Date
+  amount          Decimal?             @db.Decimal(18, 2)
+  currency        String               @default("PYG")
+  note            String?
+  status          PaymentPromiseStatus @default(PENDING)
+  assignedUserId  String?
+  createdByUserId String?
+  closedAt        DateTime?
+  closedByUserId  String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  chat         CollectionWhatsAppChat? @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  assignedUser User?                   @relation("PaymentPromiseAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy    User?                   @relation("PaymentPromiseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  closedBy     User?                   @relation("PaymentPromiseClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, promisedDate])
+  @@index([workspaceId, assignedUserId, status, promisedDate])
+  @@index([workspaceId, companyId, status])
+  @@map("payment_promises")
 }

@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CheckCheck, MessageCircle, Search, Settings, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CheckCheck, MessageCircle, Search, Settings, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { collectionsWhatsAppApi, commercialWhatsAppApi, type LineWhatsAppApi } from '@/lib/api'
 import { formatDateTime, fullName, getErrorMessage } from '@/lib/format'
@@ -15,6 +15,7 @@ import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketC
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
+import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
 export type WhatsAppLineConfig = {
@@ -24,6 +25,8 @@ export type WhatsAppLineConfig = {
   teamLabel: string
   emptyDescription: string
   api: LineWhatsAppApi
+  /** Permite agendar promesas de pago desde el chat (sólo Cobranzas). */
+  promises?: boolean
 }
 
 export const COLLECTIONS_WHATSAPP: WhatsAppLineConfig = {
@@ -33,6 +36,7 @@ export const COLLECTIONS_WHATSAPP: WhatsAppLineConfig = {
   teamLabel: 'Cobranzas ROMEZ',
   emptyDescription: 'Cuando un cliente escriba al número de Cobranzas, o le escribas desde la tabla, va a aparecer acá.',
   api: collectionsWhatsAppApi,
+  promises: true,
 }
 
 export const COMMERCIAL_WHATSAPP: WhatsAppLineConfig = {
@@ -175,6 +179,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     queryClient.setQueryData<CollectionWhatsAppMessage[]>(messagesKey, (current) => current?.map((item) => item.id === messageId ? response.data : item))
   }
   const canReply = canWrite && connected
+  const [promiseTarget, setPromiseTarget] = useState<PromiseTarget | null>(null)
   const rename = async (name: string) => {
     await line.api.renameChat(chatId, name)
     onSent()
@@ -184,6 +189,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     <header className="flex items-center gap-3 border-b border-[var(--line-soft)] px-4 py-3">
       <button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={16} /></button>
       <div className="min-w-0 flex-1">{!chat ? <p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">Chat</p> : chat.company ? <><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat.company.name}</p><div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-semibold text-[var(--ink-secondary)]" /></div></> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-base font-extrabold text-[var(--ink-primary)]" />}<p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
+      {line.promises && canWrite && chat ? <button type="button" className="btn-secondary" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
       {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}
       {onDelete ? <button type="button" className="btn-danger" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={15} /></button> : null}
     </header>
@@ -199,6 +205,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
       placeholder={canReply ? `Escribir por el ${line.title}…` : !connected ? `El ${line.title} no está conectado` : 'Tu rol solo puede leer los chats'}
       hint={canReply ? 'Enter para enviar · Shift + Enter para nueva línea · 📎 adjuntar · ⚡ respuestas rápidas · 😊 reaccionar' : !connected ? 'Vinculá el número desde Configuración para poder enviar.' : 'Solo lectura.'}
     />
+    <PaymentPromiseDialog target={promiseTarget} onClose={() => setPromiseTarget(null)} />
   </>
 }
 
