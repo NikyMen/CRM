@@ -62,7 +62,7 @@ export interface RecurringChargeInput {
   isActive?: boolean
 }
 
-const money = (value: string | number | Prisma.Decimal, currency?: string) => {
+export const money = (value: string | number | Prisma.Decimal, currency?: string) => {
   let decimal: Prisma.Decimal
   try {
     const normalized = typeof value === 'string' ? value.replace(',', '.') : value
@@ -77,7 +77,7 @@ const money = (value: string | number | Prisma.Decimal, currency?: string) => {
   return decimal
 }
 
-const currencyCode = (value = 'PYG') => {
+export const currencyCode = (value = 'PYG') => {
   const currency = value.trim().toUpperCase()
   if (!/^[A-Z]{3}$/.test(currency)) throw new ValidationError('La moneda debe ser un código ISO de tres letras')
   return currency

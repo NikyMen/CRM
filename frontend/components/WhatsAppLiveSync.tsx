@@ -52,6 +52,8 @@ export function WhatsAppLiveSync() {
         queryClient.invalidateQueries({ queryKey: ['receivables'] })
         queryClient.invalidateQueries({ queryKey: ['payments'] })
         queryClient.invalidateQueries({ queryKey: ['recurring-charges'] })
+        queryClient.invalidateQueries({ queryKey: ['payment-promises'] })
+        queryClient.invalidateQueries({ queryKey: ['payment-promise-counts'] })
         queryClient.invalidateQueries({ queryKey: ['clients'] })
         queryClient.invalidateQueries({ queryKey: ['client-summary'] })
       }

@@ -19,6 +19,7 @@ import {
   type ReceivableInput,
   type RecurringChargeInput,
 } from './collection.service'
+import { PaymentPromiseService, type PaymentPromiseInput, type PaymentPromiseUpdate } from './payment-promise.service'
 
 const amountSchema = z.union([
   z.number().positive(),
@@ -67,6 +68,28 @@ const paymentSchema = z.object({
   path: ['documentId'],
 })
 
+const promiseDateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+const nullableAmountSchema = z.preprocess((value) => value === '' ? null : value, amountSchema.nullable().optional())
+
+const promiseSchema = z.object({
+  companyId: z.string().min(1),
+  promisedDate: promiseDateSchema,
+  amount: nullableAmountSchema,
+  currency: z.string().trim().length(3).default('PYG'),
+  note: nullableText(1000),
+  chatId: nullableText(64),
+  assignedUserId: nullableText(64),
+})
+
+const promiseUpdateSchema = z.object({
+  promisedDate: promiseDateSchema.optional(),
+  amount: nullableAmountSchema,
+  currency: z.string().trim().length(3).optional(),
+  note: nullableText(1000),
+  status: z.enum(['PENDING', 'FULFILLED', 'BROKEN', 'CANCELLED']).optional(),
+  assignedUserId: nullableText(64),
+})
+
 const recurringSchema = z.object({
   companyId: z.string().min(1),
   name: z.string().trim().min(1).max(180),
@@ -82,6 +105,7 @@ const recurringSchema = z.object({
 
 export async function collectionRoutes(app: FastifyInstance, options: { eventBus?: EventBus }) {
   const service = new CollectionService(options.eventBus)
+  const promises = new PaymentPromiseService(options.eventBus)
   await app.register(multipart, { limits: { files: 1, fileSize: config.UPLOAD_MAX_BYTES, fields: 5 } })
   app.addHook('onRequest', async (req) => authenticate(req))
   app.addHook('preHandler', requireModule('collections'))
@@ -228,6 +252,29 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const { status } = z.object({ status: z.enum(['RECEIVED', 'VOID']) }).parse(req.body)
     await service.setPaymentStatus(req.user as WorkspaceContext, (req.params as { id: string }).id, status)
     return reply.status(204).send()
+  })
+
+  app.get('/promises', async (req, reply) => {
+    const filters = z.object({
+      scope: z.enum(['mine', 'all']).default('mine'),
+      companyId: z.string().min(1).optional(),
+    }).parse(req.query) as { scope: 'mine' | 'all'; companyId?: string }
+    return reply.send(await promises.list(req.user as WorkspaceContext, filters))
+  })
+
+  app.get('/promises/counts', async (req, reply) => {
+    return reply.send(await promises.counts(req.user as WorkspaceContext))
+  })
+
+  app.post('/promises', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const input = promiseSchema.parse(req.body) as PaymentPromiseInput
+    return reply.status(201).send(await promises.create(req.user as WorkspaceContext, input))
+  })
+
+  app.patch('/promises/:id', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const input = promiseUpdateSchema.parse(req.body) as PaymentPromiseUpdate
+    return reply.send(await promises.update(req.user as WorkspaceContext, id, input))
   })
 
   app.get('/recurring-charges', async (req, reply) => {

@@ -950,6 +950,46 @@ export interface CollectionPayment {
   createdAt: string
 }
 
+export type PaymentPromiseStatus = 'PENDING' | 'FULFILLED' | 'BROKEN' | 'CANCELLED'
+
+type PromisePerson = { id: string; firstName: string; lastName?: string | null; email: string }
+
+/** Compromiso de pago del cliente ("te pago el 28"); `promisedDate` es un día `YYYY-MM-DD`. */
+export interface PaymentPromise {
+  id: string
+  companyId: string
+  company: Pick<Client, 'id' | 'name' | 'ruc' | 'dv' | 'isArchived'> | null
+  chatId?: string | null
+  chat?: { id: string; displayName?: string | null; phoneNumber?: string | null } | null
+  promisedDate: string
+  amount: string | null
+  currency: string
+  note?: string | null
+  status: PaymentPromiseStatus
+  assignedUserId?: string | null
+  assignedUser?: PromisePerson | null
+  createdBy?: PromisePerson | null
+  closedBy?: PromisePerson | null
+  closedAt?: string | null
+  /** Lo pagado por el cliente en la moneda de la promesa desde que se agendó (sólo pendientes). */
+  paidSince: string | null
+  createdAt: string
+}
+
+export interface PaymentPromiseBoard {
+  date: string
+  today: PaymentPromise[]
+  overdue: PaymentPromise[]
+  upcoming: PaymentPromise[]
+  closed: PaymentPromise[]
+}
+
+export interface PaymentPromiseCounts {
+  today: number
+  overdue: number
+  upcoming: number
+}
+
 export interface CollectionTrashItem {
   type: 'RECEIVABLE' | 'PAYMENT' | 'PLAN'
   id: string

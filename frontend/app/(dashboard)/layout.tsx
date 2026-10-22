@@ -15,6 +15,7 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
 import { TopbarSlot } from '@/components/romez/Topbar'
+import { PaymentPromiseBell, usePromiseCounts } from '@/components/romez/PaymentPromiseBell'
 
 type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
@@ -64,17 +65,19 @@ function Brand({ collapsed = false }: { collapsed?: boolean }) {
   )
 }
 
-function Navigation({ items, pathname, onNavigate, collapsed = false }: { items: NavItem[]; pathname: string; onNavigate?: () => void; collapsed?: boolean }) {
+function Navigation({ items, pathname, onNavigate, collapsed = false, badges }: { items: NavItem[]; pathname: string; onNavigate?: () => void; collapsed?: boolean; badges?: Record<string, number> }) {
   return (
     <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Navegación principal">
       {items.map((item) => {
         const Icon = item.icon
         const paths = [item.href, ...(item.aliases ?? [])]
         const active = item.exact ? pathname === item.href : paths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+        const badge = badges?.[item.href] ?? 0
         return (
           <Link key={item.href} href={item.href} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} className={clsx('group relative flex min-h-11 items-center rounded-lg border text-[13px] font-bold', collapsed ? 'justify-center px-0' : 'gap-3 px-3', active ? 'border-white/18 bg-white text-[var(--brand-navy)]' : 'border-transparent text-white/66 hover:border-white/10 hover:bg-white/[0.055] hover:text-white')}>
             <Icon size={17} strokeWidth={active ? 2.5 : 2} />
             {!collapsed ? <span className="truncate">{item.label}</span> : null}
+            {badge ? <span className={clsx('grid min-w-[18px] place-items-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-extrabold leading-4 text-white', collapsed ? 'absolute right-1.5 top-1.5' : 'ml-auto')} aria-label={`${badge} promesas de pago para hoy o vencidas`}>{badge > 99 ? '99+' : badge}</span> : null}
             {item.href === '/tickets' ? <span className={clsx('absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-[var(--sidebar-background)]', active ? 'bg-[var(--brand-blue)]' : 'bg-[#82a4e2]')} aria-label="Tickets con notificaciones" /> : null}
           </Link>
         )
@@ -83,12 +86,12 @@ function Navigation({ items, pathname, onNavigate, collapsed = false }: { items:
   )
 }
 
-function Sidebar({ items, pathname, onClose, collapsed = false, onToggle }: { items: NavItem[]; pathname: string; onClose?: () => void; collapsed?: boolean; onToggle?: () => void }) {
+function Sidebar({ items, pathname, onClose, collapsed = false, onToggle, badges }: { items: NavItem[]; pathname: string; onClose?: () => void; collapsed?: boolean; onToggle?: () => void; badges?: Record<string, number> }) {
   return (
     <div className="flex h-full flex-col border-r border-white/10 bg-[var(--sidebar-background)]">
       <div className={clsx('relative flex min-h-[82px] items-center border-b border-white/10', collapsed ? 'justify-center px-2' : 'justify-between px-4')}><Brand collapsed={collapsed} />{onClose ? <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-white/8 hover:text-white md:hidden" aria-label="Cerrar menú"><X size={19} /></button> : null}{onToggle ? <button type="button" onClick={onToggle} className="absolute -right-3.5 z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-[var(--sidebar-background)] text-white/75 shadow-sm hover:bg-[var(--brand-navy)] hover:text-white md:flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>{collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}</button> : null}</div>
 
-      <Navigation items={items} pathname={pathname} onNavigate={onClose} collapsed={collapsed} />
+      <Navigation items={items} pathname={pathname} onNavigate={onClose} collapsed={collapsed} badges={badges} />
       {!collapsed ? <div className="flex flex-col items-center justify-center gap-1 border-t border-white/10 p-4"><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-white/48">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={600} height={400} className="h-12 w-full max-w-[208px] object-cover" /></div> : null}
     </div>
   )
@@ -166,6 +169,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = (user?.role ?? 'viewer') as Role
   const { modules, ready: modulesReady } = useWorkspaceModules(Boolean(user))
   const visibleItems = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && (!item.module || (modulesReady && modules[item.module])))
+  // Recordatorios de promesas de pago: sólo para quien puede tenerlas asignadas.
+  const promisesEnabled = Boolean(user) && role !== 'viewer' && modulesReady && Boolean(modules.collections)
+  const { due: duePromises } = usePromiseCounts(promisesEnabled)
+  const navBadges = promisesEnabled && duePromises ? { '/collections': duePromises } : undefined
   const logout = () => { auth.clear(); router.replace('/login') }
   const blockedModule = modulesReady && moduleForPath(pathname) && !isPathEnabled(pathname, modules)
 
@@ -181,16 +188,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ConfirmDeleteProvider>
     <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)] md:flex md:h-screen md:overflow-hidden">
       {user && ['owner', 'admin', 'member'].includes(user.role) ? <WhatsAppLiveSync /> : null}
-      <aside className={clsx('hidden shrink-0 transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-[76px]' : 'w-[256px]')}><Sidebar items={visibleItems} pathname={pathname} collapsed={sidebarCollapsed} onToggle={toggleSidebar} /></aside>
+      <aside className={clsx('hidden shrink-0 transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-[76px]' : 'w-[256px]')}><Sidebar items={visibleItems} pathname={pathname} collapsed={sidebarCollapsed} onToggle={toggleSidebar} badges={navBadges} /></aside>
       <button type="button" aria-label="Cerrar menú" className={clsx('fixed inset-0 z-40 bg-[#04132b]/55 md:hidden', mobileOpen ? 'block' : 'hidden')} onClick={() => setMobileOpen(false)} />
-      <aside className={clsx('fixed inset-y-0 left-0 z-50 w-[min(88vw,286px)] transition-transform md:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}><Sidebar items={visibleItems} pathname={pathname} onClose={() => setMobileOpen(false)} /></aside>
+      <aside className={clsx('fixed inset-y-0 left-0 z-50 w-[min(88vw,286px)] transition-transform md:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}><Sidebar items={visibleItems} pathname={pathname} onClose={() => setMobileOpen(false)} badges={navBadges} /></aside>
       <main className="min-w-0 flex-1 overflow-x-hidden md:flex md:flex-col">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-4 md:px-6">
           <div className="flex items-center gap-3 md:hidden">
             <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           </div>
           <TopbarSlot />
-          <div className="shrink-0"><UserMenu user={user} onLogout={logout} /></div>
+          <div className="flex shrink-0 items-center gap-2">{promisesEnabled ? <PaymentPromiseBell /> : null}<UserMenu user={user} onLogout={logout} /></div>
         </header>
         <div className="min-w-0 md:flex-1 md:overflow-y-auto">
           {checking || !modulesReady ? <div className="grid min-h-[70vh] place-items-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--brand-blue)] border-t-transparent" /></div> : blockedModule ? <DisabledModuleNotice canManage={role === 'owner' || role === 'admin'} /> : children}

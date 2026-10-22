@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Check, Circle, Download, FileText, MessageSquareText, Pencil, Plus, Receipt, Save, UserCheck, UserMinus, Upload, UsersRound, WalletCards, X } from 'lucide-react'
+import { Building2, CalendarClock, Check, Circle, Download, FileText, MessageSquareText, Pencil, Plus, Receipt, Save, UserCheck, UserMinus, Upload, UsersRound, WalletCards, X } from 'lucide-react'
 import clsx from 'clsx'
 import { checklistsApi, clientsApi, collectionsApi, contactsApi, salesApi, teamApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
@@ -17,6 +17,8 @@ import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail } from '@/components/romez/SaleDetail'
 import { RECEIVABLE_LABELS } from '@/lib/collection-labels'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
+import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
+import { PaymentPromisesBoard } from '@/components/romez/PaymentPromisesBoard'
 
 type Tab = 'ficha' | 'contactos' | 'cuenta' | 'facturas' | 'personal' | 'checklist' | 'tickets' | 'documentos'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
@@ -64,6 +66,9 @@ export default function ClientDetailPage() {
   const canManage = role === 'owner' || role === 'admin'
   const { modules } = useWorkspaceModules()
   const visibleTabs = TABS.filter((item) => item.id !== 'facturas' || modules.sales)
+  // Agendar una promesa no toca el legajo: alcanza con ver al cliente y no ser viewer.
+  const canPromise = Boolean(modules.collections && role && role !== 'viewer')
+  const [promiseTarget, setPromiseTarget] = useState<PromiseTarget | null>(null)
 
   useEffect(() => {
     const syncRole = () => setRole(auth.get()?.role as Role | undefined)
@@ -189,7 +194,7 @@ export default function ClientDetailPage() {
 
   return (
     <PageFrame>
-      <PageHeader eyebrow="Legajo contable" title={client.name} description={client.legalName || 'Información fiscal y operativa consolidada.'} backHref="/clients" action={canClaim || canRelease || canWrite || canManage ? <div className="flex flex-wrap gap-2">{canClaim ? <button type="button" className="btn-primary" disabled={claimClient.isPending} onClick={() => claimClient.mutate()}><UserCheck size={16} />{claimClient.isPending ? 'Tomando…' : 'Tomar cliente'}</button> : null}{canRelease ? <button type="button" className="btn-secondary" disabled={releaseClient.isPending} onClick={() => releaseClient.mutate()}><UserMinus size={16} />{releaseClient.isPending ? 'Liberando…' : 'Liberar cliente'}</button> : null}{canManage ? <PaymentSummaryButton clientId={id} clientName={client.name} /> : null}{canWrite ? <button type="button" className="btn-secondary" onClick={startEditing}><Pencil size={16} />Editar legajo</button> : null}{canManage ? <button type="button" className="btn-danger" disabled={deleteClient.isPending} onClick={async () => { if (await confirmDelete(`El cliente "${client.name}" se enviará a la papelera. Sus pagos y cargos se conservan para mantener el historial contable.`)) deleteClient.mutate() }}>{deleteClient.isPending ? 'Eliminando…' : 'Eliminar cliente'}</button> : null}</div> : undefined} />
+      <PageHeader eyebrow="Legajo contable" title={client.name} description={client.legalName || 'Información fiscal y operativa consolidada.'} backHref="/clients" action={canClaim || canRelease || canWrite || canManage || canPromise ? <div className="flex flex-wrap gap-2">{canPromise ? <button type="button" className="btn-secondary" onClick={() => setPromiseTarget({ client })}><CalendarClock size={16} />Promesa de pago</button> : null}{canClaim ? <button type="button" className="btn-primary" disabled={claimClient.isPending} onClick={() => claimClient.mutate()}><UserCheck size={16} />{claimClient.isPending ? 'Tomando…' : 'Tomar cliente'}</button> : null}{canRelease ? <button type="button" className="btn-secondary" disabled={releaseClient.isPending} onClick={() => releaseClient.mutate()}><UserMinus size={16} />{releaseClient.isPending ? 'Liberando…' : 'Liberar cliente'}</button> : null}{canManage ? <PaymentSummaryButton clientId={id} clientName={client.name} /> : null}{canWrite ? <button type="button" className="btn-secondary" onClick={startEditing}><Pencil size={16} />Editar legajo</button> : null}{canManage ? <button type="button" className="btn-danger" disabled={deleteClient.isPending} onClick={async () => { if (await confirmDelete(`El cliente "${client.name}" se enviará a la papelera. Sus pagos y cargos se conservan para mantener el historial contable.`)) deleteClient.mutate() }}>{deleteClient.isPending ? 'Eliminando…' : 'Eliminar cliente'}</button> : null}</div> : undefined} />
       {claimClient.isError || releaseClient.isError ? <p className="rounded-lg border border-[var(--danger-line)] bg-[var(--danger-paper)] px-4 py-3 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(claimClient.error || releaseClient.error, 'No pudimos cambiar el responsable del cliente.')}</p> : null}
       {deleteClient.isError ? <p role="alert" className="text-sm text-[var(--danger)]">{getErrorMessage(deleteClient.error)}</p> : null}
       <ClientIdentityStrip client={client} account={account} pending={pending} />
@@ -204,7 +209,9 @@ export default function ClientDetailPage() {
       {tab === 'ficha' ? <FiscalTab client={client} /> : null}
       {tab === 'contactos' ? <ContactsTab contacts={summary.contacts ?? client.contacts ?? []} canWrite={canWrite} create={(value) => createContact.mutate(value)} creating={createContact.isPending} error={createContact.error} /> : null}
       {tab === 'cuenta' && canManage ? <PaymentSummaryButton clientId={id} clientName={client.name} /> : null}
+      {tab === 'cuenta' && modules.collections ? <PaymentPromisesBoard companyId={id} onNew={canPromise ? () => setPromiseTarget({ client }) : undefined} /> : null}
       {tab === 'cuenta' ? <AccountTab accounts={summary.account} payments={summary.recentPayments} receivables={receivablesQuery.data?.items ?? []} loading={receivablesQuery.isLoading} /> : null}
+      <PaymentPromiseDialog target={promiseTarget} onClose={() => setPromiseTarget(null)} />
       {tab === 'facturas' ? <SalesTab clientId={id} /> : null}
       {tab === 'personal' ? <StaffTab client={client} members={teamQuery.data ?? []} canManage={canManage} onEdit={startEditing} saveAssignments={saveAssignments} saving={updateAssignments.isPending} error={updateAssignments.error} /> : null}
       {tab === 'checklist' ? <ChecklistTab checklists={summary.checklists} canWrite={canWrite} toggle={(checklistId, itemId, completed) => updateChecklistItem.mutate({ checklistId, itemId, isCompleted: !completed })} pending={updateChecklistItem.isPending} /> : null}

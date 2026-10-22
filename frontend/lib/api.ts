@@ -16,6 +16,7 @@ import type {
   EmbeddedSignupCompletionResult, EmbeddedSignupConfig, MetaApiStatus,
   AccountSummary, ChecklistSummary, ChecklistTemplate, Client, ClientChecklist, ClientDocument,
   ClientBalances, ClientNote, ClientSummary, CollectionInsights, CollectionPayment, CollectionSummary, CollectionTrashItem, CustomerServiceSummary,
+  PaymentPromise, PaymentPromiseBoard, PaymentPromiseCounts, PaymentPromiseStatus,
   Receivable, RecurringCharge, Ticket, TicketPriority, TicketStatus, WhatsAppSessionSnapshot,
   InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage,
   Sale, SaleHistoryEntry, SaleStatus, SaleSummary,
@@ -399,6 +400,30 @@ export const collectionsApi = {
   }) => api.post<RecurringCharge>('/collections/recurring-charges', data),
 
   generateRecurring: (periodKey: string) => api.post('/collections/recurring-charges/generate', { periodKey }),
+
+  listPromises: (params?: { scope?: 'mine' | 'all'; companyId?: string }) =>
+    api.get<PaymentPromiseBoard>('/collections/promises', { params }),
+
+  promiseCounts: () => api.get<PaymentPromiseCounts>('/collections/promises/counts'),
+
+  createPromise: (data: {
+    companyId: string
+    promisedDate: string
+    amount?: string | null
+    currency?: string
+    note?: string | null
+    chatId?: string | null
+    assignedUserId?: string | null
+  }) => api.post<PaymentPromise>('/collections/promises', data),
+
+  updatePromise: (id: string, data: {
+    promisedDate?: string
+    amount?: string | null
+    currency?: string
+    note?: string | null
+    status?: PaymentPromiseStatus
+    assignedUserId?: string | null
+  }) => api.patch<PaymentPromise>(`/collections/promises/${id}`, data),
 }
 
 export const ticketsApi = {
