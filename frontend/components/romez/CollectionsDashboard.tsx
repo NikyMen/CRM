@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, ChevronDown, Minus } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight, Download, Minus, Search, X } from 'lucide-react'
 import clsx from 'clsx'
-import type { CollectionInsights } from '@/types'
+import type { CollectionAgingClient, CollectionInsights } from '@/types'
 import { formatMoney } from '@/lib/format'
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -167,16 +167,112 @@ function TrendChart({ data, className }: { data: CollectionInsights; className?:
 
 function AgingChart({ data, className }: { data: CollectionInsights; className?: string }) {
   const mounted = useMounted()
+  const [report, setReport] = useState<string | null>(null)
   const max = Math.max(...data.aging.map((item) => item.amount), 1)
   const total = data.aging.reduce((sum, item) => sum + item.amount, 0)
-  return <Card title="Antigüedad de la deuda" subtitle="Saldo pendiente según días de atraso" className={className}>
-    {total <= 0 ? <p className="py-10 text-center text-sm text-[var(--ink-tertiary)]">No hay saldos pendientes. 🎉</p> : <ul className="space-y-3">
-      {data.aging.map((item, index) => <li key={item.key} className="group" title={`${item.label}: ${money(item.amount, data.currency)} en ${item.count} cargos`}>
-        <div className="mb-1 flex items-baseline justify-between gap-2 text-xs"><span className="font-semibold text-[var(--ink-secondary)]">{item.label}</span><span className="font-mono font-bold tabular-nums text-[var(--ink-primary)]">{money(item.amount, data.currency)} <span className="font-sans font-medium text-[var(--ink-muted)]">· {total ? Math.round((item.amount / total) * 100) : 0}%</span></span></div>
-        <div className="h-3 overflow-hidden rounded-[4px] bg-[var(--viz-track)]"><div className="h-full rounded-[4px] transition-[width] duration-700 ease-out group-hover:brightness-110 motion-reduce:transition-none" style={{ width: mounted ? `${(item.amount / max) * 100}%` : '0%', transitionDelay: `${index * 90}ms`, background: `var(--viz-seq-${index + 1})` }} /></div>
+  return <Card title="Antigüedad de la deuda" subtitle="Saldo pendiente según días de atraso · tocá un tramo para ver cada cliente" className={className}>
+    {total <= 0 ? <p className="py-10 text-center text-sm text-[var(--ink-tertiary)]">No hay saldos pendientes. 🎉</p> : <ul className="space-y-1">
+      {data.aging.map((item, index) => <li key={item.key}>
+        <button type="button" disabled={!item.clients.length} onClick={() => setReport(item.key)} className="group block w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--viz-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-default disabled:hover:bg-transparent" title={`${item.label}: ${money(item.amount, data.currency)} en ${item.count} cargos de ${item.clients.length} clientes`}>
+          <div className="mb-1 flex items-baseline justify-between gap-2 text-xs"><span className="inline-flex items-center gap-1 font-semibold text-[var(--ink-secondary)] group-hover:text-[var(--brand-blue)]">{item.label}{item.clients.length ? <span className="font-medium text-[var(--ink-muted)]">· {item.clients.length} {item.clients.length === 1 ? 'cliente' : 'clientes'}</span> : null}</span><span className="inline-flex items-center gap-1 font-mono font-bold tabular-nums text-[var(--ink-primary)]">{money(item.amount, data.currency)} <span className="font-sans font-medium text-[var(--ink-muted)]">· {total ? Math.round((item.amount / total) * 100) : 0}%</span>{item.clients.length ? <ChevronRight size={13} className="text-[var(--ink-muted)] group-hover:text-[var(--brand-blue)]" /> : null}</span></div>
+          <div className="h-3 overflow-hidden rounded-[4px] bg-[var(--viz-track)]"><div className="h-full rounded-[4px] transition-[width] duration-700 ease-out group-hover:brightness-110 motion-reduce:transition-none" style={{ width: mounted ? `${(item.amount / max) * 100}%` : '0%', transitionDelay: `${index * 90}ms`, background: `var(--viz-seq-${index + 1})` }} /></div>
+        </button>
       </li>)}
     </ul>}
+    {report ? <AgingReport data={data} initialKey={report} onClose={() => setReport(null)} /> : null}
   </Card>
+}
+
+const amountText = (value: number, currency: string) => currency === 'PYG' ? String(Math.round(value)) : value.toFixed(2)
+const lateText = (days: number) => days <= 0 ? 'Por vencer' : `${days} ${days === 1 ? 'día' : 'días'}`
+
+function csvCell(value: unknown) {
+  let text = value == null ? '' : String(value)
+  text = text.replace(/[\r\n]+/g, ' ')
+  if (/^[=+\-@]/.test(text.trimStart())) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+/** Informe de antigüedad: clientes y saldo dentro de los tramos elegidos, con descarga CSV. */
+function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; initialKey: string; onClose: () => void }) {
+  const [selected, setSelected] = useState<string[]>([initialKey])
+  const [search, setSearch] = useState('')
+  const toggle = (key: string) => setSelected((current) => current.includes(key) ? (current.length > 1 ? current.filter((item) => item !== key) : current) : [...current, key])
+  const rows = useMemo(() => {
+    const merged = new Map<string, CollectionAgingClient>()
+    for (const bucket of data.aging) {
+      if (!selected.includes(bucket.key)) continue
+      for (const client of bucket.clients) {
+        const row = merged.get(client.id)
+        merged.set(client.id, row ? { ...row, amount: row.amount + client.amount, count: row.count + client.count, maxDaysLate: Math.max(row.maxDaysLate, client.maxDaysLate) } : client)
+      }
+    }
+    return [...merged.values()].sort((left, right) => right.amount - left.amount)
+  }, [data.aging, selected])
+  const needle = search.trim().toLowerCase()
+  const visible = needle ? rows.filter((row) => row.name.toLowerCase().includes(needle) || (row.ruc ?? '').includes(needle)) : rows
+  const total = visible.reduce((sum, row) => sum + row.amount, 0)
+  const charges = visible.reduce((sum, row) => sum + row.count, 0)
+  const rangeLabel = data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.label).join(' + ')
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const download = () => {
+    const headers = ['Cliente', 'RUC', 'DV', 'Tramos', 'Cargos', 'Atraso máximo (días)', 'Saldo', 'Moneda']
+    const lines = visible.map((row) => [row.name, row.ruc, row.dv, rangeLabel, row.count, Math.max(row.maxDaysLate, 0), amountText(row.amount, data.currency), data.currency].map(csvCell).join(','))
+    const blob = new Blob([`﻿${headers.map(csvCell).join(',')}\r\n${lines.join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = window.document.createElement('a')
+    anchor.href = url
+    anchor.download = `antiguedad-deuda-${data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.key.replace('+', '-mas')).join('_')}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section role="dialog" aria-modal="true" aria-labelledby="aging-report-title" className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] shadow-2xl animate-slide-up">
+      <header className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
+        <div className="min-w-0">
+          <h2 id="aging-report-title" className="font-display text-lg font-extrabold text-[var(--ink-primary)]">Informe de antigüedad de la deuda</h2>
+          <p className="text-xs text-[var(--ink-tertiary)]">Saldo pendiente de cada cliente en los tramos elegidos · {data.currency}</p>
+        </div>
+        <button type="button" className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" onClick={onClose}><X size={18} /></button>
+      </header>
+
+      <div className="space-y-3 border-b border-[var(--line)] px-5 py-4">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Tramos incluidos">
+          {data.aging.map((bucket, index) => {
+            const active = selected.includes(bucket.key)
+            return <button key={bucket.key} type="button" aria-pressed={active} disabled={!bucket.clients.length && !active} onClick={() => toggle(bucket.key)} className={clsx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-40', active ? 'border-[var(--brand-blue)] bg-[var(--brand-blue)] text-white' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-secondary)] hover:border-[var(--brand-blue)]')}>
+              <span className="h-2 w-2 rounded-full" style={{ background: `var(--viz-seq-${index + 1})` }} />{bucket.label}
+            </button>
+          })}
+        </div>
+        <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input className="ctrl-input pl-8" placeholder="Buscar cliente o RUC" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {visible.length ? <table className="data-table">
+          <thead><tr><th>Cliente / RUC</th><th className="text-right">Cargos</th><th className="text-right">Atraso máx.</th><th className="text-right">Saldo</th></tr></thead>
+          <tbody>{visible.map((row) => <tr key={row.id}>
+            <td><Link href={`/clients/${row.id}`} className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]">{row.name}</Link><p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">RUC {row.ruc ? `${row.ruc}${row.dv ? `-${row.dv}` : ''}` : 'sin registrar'}</p></td>
+            <td className="text-right tabular-nums">{row.count}</td>
+            <td className={clsx('text-right tabular-nums', row.maxDaysLate > 60 && 'font-bold text-[var(--danger)]')}>{lateText(row.maxDaysLate)}</td>
+            <td className="text-right font-mono font-bold tabular-nums">{money(row.amount, data.currency)}</td>
+          </tr>)}</tbody>
+        </table> : <p className="py-10 text-center text-sm text-[var(--ink-tertiary)]">{needle ? 'Ningún cliente coincide con la búsqueda.' : 'No hay clientes con deuda en estos tramos.'}</p>}
+      </div>
+
+      <footer className="flex flex-col gap-3 border-t border-[var(--line)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-[var(--ink-tertiary)]"><strong className="text-[var(--ink-primary)]">{visible.length}</strong> {visible.length === 1 ? 'cliente' : 'clientes'} · {charges} cargos · total <strong className="font-mono text-[var(--ink-primary)]">{money(total, data.currency)}</strong></p>
+        <div className="flex gap-2"><button type="button" className="btn-secondary" onClick={onClose}>Cerrar</button><button type="button" className="btn-primary" disabled={!visible.length} onClick={download}><Download size={15} /> Descargar CSV</button></div>
+      </footer>
+    </section>
+  </div>
 }
 
 function TopDebtors({ data }: { data: CollectionInsights }) {

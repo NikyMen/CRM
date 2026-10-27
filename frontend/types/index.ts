@@ -1014,6 +1014,17 @@ export interface CollectionSummary {
   overdueCount: number
 }
 
+/** Saldo de un cliente dentro de un tramo de antigüedad (suma de sus cargos de ese tramo). */
+export interface CollectionAgingClient {
+  id: string
+  name: string
+  ruc: string | null
+  dv: string | null
+  amount: number
+  count: number
+  maxDaysLate: number
+}
+
 export interface CollectionInsights {
   currency: string
   months: Array<{ key: string; billed: number; collected: number }>
@@ -1026,7 +1037,7 @@ export interface CollectionInsights {
   overdueOutstanding: number
   creditBalance: number
   clientsWithDebt: number
-  aging: Array<{ key: string; label: string; amount: number; count: number }>
+  aging: Array<{ key: string; label: string; amount: number; count: number; clients: CollectionAgingClient[] }>
   topDebtors: Array<{ id: string; name: string; outstanding: number; overdue: number }>
 }
 

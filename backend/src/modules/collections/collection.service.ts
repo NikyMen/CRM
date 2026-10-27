@@ -694,7 +694,7 @@ export class CollectionService {
       }),
       db.receivable.findMany({
         where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
-        select: { amount: true, paidAmount: true, dueDate: true, companyId: true, company: { select: { id: true, name: true } } },
+        select: { amount: true, paidAmount: true, dueDate: true, companyId: true, company: { select: { id: true, name: true, ruc: true, dv: true } } },
       }),
       db.receivable.aggregate({
         where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' } },
@@ -716,13 +716,14 @@ export class CollectionService {
       if (bucket) bucket.collected += toNumber(payment.amount)
     }
 
+    type AgingClient = { id: string; name: string; ruc: string | null; dv: string | null; amount: number; count: number; maxDaysLate: number }
     const agingBuckets = [
       { key: 'current', label: 'Por vencer', amount: 0, count: 0 },
       { key: '1-30', label: '1 a 30 días', amount: 0, count: 0 },
       { key: '31-60', label: '31 a 60 días', amount: 0, count: 0 },
       { key: '61-90', label: '61 a 90 días', amount: 0, count: 0 },
       { key: '90+', label: 'Más de 90 días', amount: 0, count: 0 },
-    ]
+    ].map((bucket) => ({ ...bucket, clientsById: new Map<string, AgingClient>() }))
     const todayMs = Date.parse(`${today}T00:00:00Z`)
     const debtors = new Map<string, { id: string; name: string; outstanding: number; overdue: number }>()
     let overdueOutstanding = 0
@@ -733,6 +734,12 @@ export class CollectionService {
       const bucket = daysLate <= 0 ? agingBuckets[0] : daysLate <= 30 ? agingBuckets[1] : daysLate <= 60 ? agingBuckets[2] : daysLate <= 90 ? agingBuckets[3] : agingBuckets[4]
       bucket.amount += outstanding
       bucket.count += 1
+      const agingClient = bucket.clientsById.get(receivable.companyId)
+        ?? { id: receivable.company.id, name: receivable.company.name, ruc: receivable.company.ruc, dv: receivable.company.dv, amount: 0, count: 0, maxDaysLate: 0 }
+      agingClient.amount += outstanding
+      agingClient.count += 1
+      agingClient.maxDaysLate = Math.max(agingClient.maxDaysLate, daysLate)
+      bucket.clientsById.set(receivable.companyId, agingClient)
       const debtor = debtors.get(receivable.companyId) ?? { id: receivable.company.id, name: receivable.company.name, outstanding: 0, overdue: 0 }
       debtor.outstanding += outstanding
       if (daysLate > 0) {
@@ -757,7 +764,11 @@ export class CollectionService {
       overdueOutstanding,
       creditBalance: Math.max(0, toNumber(received._sum.amount) - applied),
       clientsWithDebt: debtors.size,
-      aging: agingBuckets,
+      // Cada tramo trae el detalle por cliente para el informe de antigüedad.
+      aging: agingBuckets.map(({ clientsById, ...bucket }) => ({
+        ...bucket,
+        clients: [...clientsById.values()].sort((left, right) => right.amount - left.amount),
+      })),
       topDebtors: [...debtors.values()].sort((left, right) => right.outstanding - left.outstanding).slice(0, 5),
     }
   }
