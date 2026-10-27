@@ -1,6 +1,7 @@
 import { db } from '../../core/database'
 import { EventBus } from '../../core/event-bus'
 import { whatsAppManager } from '../whatsapp/whatsapp.manager'
+import { commercialWhatsAppManager } from '../collections-whatsapp/collection-whatsapp.manager'
 import { KANBAN_DEAL_STATUSES } from './deal-kanban'
 import {
   NotFoundError,
@@ -353,7 +354,7 @@ export class DealService {
             phoneNumber: commercialChat.phoneNumber ?? extractPhoneNumberFromJid(commercialChat.jid),
             assignedToUserId: null,
             assignee: null,
-            profileImageUrl: null,
+            profileImageUrl: await commercialWhatsAppManager.getProfileImageUrl(workspaceId, commercialChat.jid),
             unreadCount: commercialChat.unreadCount,
             lastMessageAt: commercialChat.lastMessageAt,
             lastMessagePreview: commercialChat.lastMessagePreview,

@@ -37,10 +37,12 @@ function chatTitle(deal: KanbanCard) {
 }
 
 function chatPhone(deal: KanbanCard) {
-  const explicit = deal.chat?.phoneNumber
-  if (explicit) return explicit
-  const match = deal.chat?.jid.match(/^(\d+)(?=@s\.whatsapp\.net$)/)
-  return match?.[1] ?? 'Sin telefono'
+  const raw = deal.chat?.phoneNumber ?? deal.chat?.jid.match(/^(\d+)(?=@s\.whatsapp\.net$)/)?.[1]
+  if (!raw) return 'Sin teléfono'
+  const digits = raw.replace(/\D/g, '')
+  const paraguay = digits.match(/^595(\d{3})(\d{3})(\d{3})$/)
+  if (paraguay) return `+595 ${paraguay[1]} ${paraguay[2]} ${paraguay[3]}`
+  return digits ? `+${digits}` : raw
 }
 
 function chatInitial(deal: KanbanCard) {
@@ -151,6 +153,8 @@ function Avatar({ deal, size = 'h-11 w-11', textSize = 'text-sm' }: { deal: Kanb
 
 function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCard) => void }) {
   const chat = deal.chat
+  const title = chatTitle(deal)
+  const phone = chatPhone(deal)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: deal.id })
   const stableTransform = transform ? { ...transform, x: 0 } : null
 
@@ -179,11 +183,11 @@ function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCar
           <GripVertical size={17} />
         </button>
         <Avatar deal={deal} />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-extrabold leading-5 text-slate-950">#{deal.leadNumber} · {chatTitle(deal)}</p>
-          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{chatPhone(deal)}</p>
-          <p className="mt-1 truncate text-[10px] font-bold text-slate-400">@ {chat?.lidJid || (chat?.jid.endsWith('@lid') ? chat.jid : 'LID pendiente')}</p>
-          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-primary-700">{chat?.assignee ? `${chat.assignee.firstName} ${chat.assignee.lastName ?? ''}` : 'Sin asignar'}</p>
+        <div className="min-w-0 self-center">
+          <p className="truncate text-sm font-extrabold leading-5 text-slate-950">{title}</p>
+          {phone.replace(/\D/g, '') !== title.replace(/\D/g, '') ? (
+            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{phone}</p>
+          ) : null}
         </div>
       </div>
 
