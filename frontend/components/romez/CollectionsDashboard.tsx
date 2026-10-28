@@ -6,6 +6,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronRight, Download, Minu
 import clsx from 'clsx'
 import type { CollectionAgingClient, CollectionInsights } from '@/types'
 import { formatMoney } from '@/lib/format'
+import { buildXlsx } from '@/lib/xlsx'
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const monthLabel = (key: string) => MONTHS[Number(key.slice(5, 7)) - 1] ?? key
@@ -183,17 +184,9 @@ function AgingChart({ data, className }: { data: CollectionInsights; className?:
   </Card>
 }
 
-const amountText = (value: number, currency: string) => currency === 'PYG' ? String(Math.round(value)) : value.toFixed(2)
 const lateText = (days: number) => days <= 0 ? 'Por vencer' : `${days} ${days === 1 ? 'día' : 'días'}`
 
-function csvCell(value: unknown) {
-  let text = value == null ? '' : String(value)
-  text = text.replace(/[\r\n]+/g, ' ')
-  if (/^[=+\-@]/.test(text.trimStart())) text = `'${text}`
-  return `"${text.replace(/"/g, '""')}"`
-}
-
-/** Informe de antigüedad: clientes y saldo dentro de los tramos elegidos, con descarga CSV. */
+/** Informe de antigüedad: clientes y saldo dentro de los tramos elegidos, con descarga en Excel. */
 function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; initialKey: string; onClose: () => void }) {
   const [selected, setSelected] = useState<string[]>([initialKey])
   const [search, setSearch] = useState('')
@@ -221,14 +214,15 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
   }, [onClose])
 
   const download = () => {
-    // Excel en es-PY usa «;» como separador de lista; con «,» deja todo en la columna A.
-    const headers = ['Cliente', 'RUC', 'DV', 'Tramos', 'Cargos', 'Atraso máximo (días)', 'Saldo', 'Moneda']
-    const lines = visible.map((row) => [row.name, row.ruc, row.dv, row.ranges.join(' + '), row.count, Math.max(row.maxDaysLate, 0), amountText(row.amount, data.currency), data.currency].map(csvCell).join(';'))
-    const blob = new Blob([`﻿${headers.map(csvCell).join(';')}\r\n${lines.join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' })
+    const pyg = data.currency === 'PYG'
+    const blob = buildXlsx('Antigüedad de la deuda', [
+      { header: 'Cliente' }, { header: 'RUC' }, { header: 'DV' }, { header: 'Tramos' }, { header: 'Cargos', format: 'integer' },
+      { header: 'Atraso máximo (días)', format: 'integer' }, { header: 'Saldo', format: pyg ? 'integer' : 'decimal' }, { header: 'Moneda' },
+    ], visible.map((row) => [row.name, row.ruc, row.dv, row.ranges.join(' + '), row.count, Math.max(row.maxDaysLate, 0), pyg ? Math.round(row.amount) : Number(row.amount.toFixed(2)), data.currency]))
     const url = URL.createObjectURL(blob)
     const anchor = window.document.createElement('a')
     anchor.href = url
-    anchor.download = `antiguedad-deuda-${data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.key.replace('+', '-mas')).join('_')}.csv`
+    anchor.download = `antiguedad-deuda-${data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.key.replace('+', '-mas')).join('_')}.xlsx`
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -269,7 +263,7 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
 
       <footer className="flex flex-col gap-3 border-t border-[var(--line)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-[var(--ink-tertiary)]"><strong className="text-[var(--ink-primary)]">{visible.length}</strong> {visible.length === 1 ? 'cliente' : 'clientes'} · {charges} cargos · total <strong className="font-mono text-[var(--ink-primary)]">{money(total, data.currency)}</strong></p>
-        <div className="flex gap-2"><button type="button" className="btn-secondary" onClick={onClose}>Cerrar</button><button type="button" className="btn-primary" disabled={!visible.length} onClick={download}><Download size={15} /> Descargar CSV</button></div>
+        <div className="flex gap-2"><button type="button" className="btn-secondary" onClick={onClose}>Cerrar</button><button type="button" className="btn-primary" disabled={!visible.length} onClick={download}><Download size={15} /> Descargar Excel</button></div>
       </footer>
     </section>
   </div>
