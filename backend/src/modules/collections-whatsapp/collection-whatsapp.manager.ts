@@ -88,6 +88,8 @@ const messageSelect = {
   sentBy: { select: { id: true, firstName: true, lastName: true } },
 } as const
 
+const PROFILE_PHOTO_TIMEOUT_MS = 3_000
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -111,6 +113,7 @@ export class CollectionWhatsAppManager {
   private baileysModule: any | null = null
   private baileysVersion: number[] | null = null
   private leadLocks = new Map<string, Promise<unknown>>()
+  private profilePhotos = new Map<string, { url: string | null; expiresAt: number }>()
 
   constructor(readonly line: WhatsAppLine) {
     const settings = LINE_SETTINGS[line]
@@ -359,6 +362,31 @@ export class CollectionWhatsAppManager {
       throw new AppError(404, 'No encontramos el archivo en el servidor.', 'LINE_WHATSAPP_MEDIA_MISSING')
     }
     return { buffer: await fs.readFile(absolutePath), mimeType: message.mediaMimeType || 'application/octet-stream', fileName: message.mediaFileName || path.basename(absolutePath) }
+  }
+
+  /**
+   * Foto de perfil pública del contacto según este número. Devuelve la URL de
+   * WhatsApp (caduca, por eso se cachea poco) o null si no hay foto, la
+   * privacidad la oculta o la línea no está conectada.
+   */
+  async getProfileImageUrl(workspaceId: string, jid?: string | null) {
+    if (!jid || !isSupportedChatJid(jid)) return null
+    const key = `${workspaceId}:${jid}`
+    const cached = this.profilePhotos.get(key)
+    if (cached && cached.expiresAt > Date.now()) return cached.url
+    const sock = this.sockets.get(workspaceId)?.sock
+    if (!sock?.profilePictureUrl) return null
+    let url: string | null = null
+    try {
+      url = await Promise.race([
+        sock.profilePictureUrl(jid, 'image') as Promise<string | undefined>,
+        sleep(PROFILE_PHOTO_TIMEOUT_MS).then(() => undefined),
+      ]) ?? null
+    } catch {
+      url = null
+    }
+    this.profilePhotos.set(key, { url, expiresAt: Date.now() + (url ? 30 : 5) * 60 * 1000 })
+    return url
   }
 
   // ── Socket ────────────────────────────────────────────────────────────────

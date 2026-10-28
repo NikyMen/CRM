@@ -470,9 +470,11 @@ export class ClientService {
     const ruc = normalizeRuc(input.ruc)
     if (ruc) {
       const duplicate = await db.company.findFirst({
-        where: { workspaceId: ctx.workspaceId, ruc, isArchived: false, ...(currentId ? { id: { not: currentId } } : {}) },
-        select: { id: true },
+        where: { workspaceId: ctx.workspaceId, ruc, ...(currentId ? { id: { not: currentId } } : {}) },
+        select: { id: true, isArchived: true },
       })
+      // El índice único (workspaceId, ruc) también cubre los clientes en la papelera.
+      if (duplicate?.isArchived) throw new ConflictError('Ese RUC pertenece a un cliente en la papelera. Un owner o admin puede restaurarlo desde Clientes → Papelera.')
       if (duplicate) throw new ConflictError('Ya existe un cliente con ese RUC')
     }
 
