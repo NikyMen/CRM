@@ -199,12 +199,12 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
   const [search, setSearch] = useState('')
   const toggle = (key: string) => setSelected((current) => current.includes(key) ? (current.length > 1 ? current.filter((item) => item !== key) : current) : [...current, key])
   const rows = useMemo(() => {
-    const merged = new Map<string, CollectionAgingClient>()
+    const merged = new Map<string, CollectionAgingClient & { ranges: string[] }>()
     for (const bucket of data.aging) {
       if (!selected.includes(bucket.key)) continue
       for (const client of bucket.clients) {
         const row = merged.get(client.id)
-        merged.set(client.id, row ? { ...row, amount: row.amount + client.amount, count: row.count + client.count, maxDaysLate: Math.max(row.maxDaysLate, client.maxDaysLate) } : client)
+        merged.set(client.id, row ? { ...row, amount: row.amount + client.amount, count: row.count + client.count, maxDaysLate: Math.max(row.maxDaysLate, client.maxDaysLate), ranges: [...row.ranges, bucket.label] } : { ...client, ranges: [bucket.label] })
       }
     }
     return [...merged.values()].sort((left, right) => right.amount - left.amount)
@@ -213,7 +213,6 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
   const visible = needle ? rows.filter((row) => row.name.toLowerCase().includes(needle) || (row.ruc ?? '').includes(needle)) : rows
   const total = visible.reduce((sum, row) => sum + row.amount, 0)
   const charges = visible.reduce((sum, row) => sum + row.count, 0)
-  const rangeLabel = data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.label).join(' + ')
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
@@ -222,15 +221,16 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
   }, [onClose])
 
   const download = () => {
+    // Excel en es-PY usa «;» como separador de lista; con «,» deja todo en la columna A.
     const headers = ['Cliente', 'RUC', 'DV', 'Tramos', 'Cargos', 'Atraso máximo (días)', 'Saldo', 'Moneda']
-    const lines = visible.map((row) => [row.name, row.ruc, row.dv, rangeLabel, row.count, Math.max(row.maxDaysLate, 0), amountText(row.amount, data.currency), data.currency].map(csvCell).join(','))
-    const blob = new Blob([`﻿${headers.map(csvCell).join(',')}\r\n${lines.join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' })
+    const lines = visible.map((row) => [row.name, row.ruc, row.dv, row.ranges.join(' + '), row.count, Math.max(row.maxDaysLate, 0), amountText(row.amount, data.currency), data.currency].map(csvCell).join(';'))
+    const blob = new Blob([`﻿${headers.map(csvCell).join(';')}\r\n${lines.join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const anchor = window.document.createElement('a')
     anchor.href = url
     anchor.download = `antiguedad-deuda-${data.aging.filter((bucket) => selected.includes(bucket.key)).map((bucket) => bucket.key.replace('+', '-mas')).join('_')}.csv`
     anchor.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   return <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
