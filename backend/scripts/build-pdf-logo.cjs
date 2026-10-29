@@ -1,8 +1,10 @@
 /**
- * Genera el logo ROMEZ que usa el resumen de cuenta en PDF (sin fondo, con canal alfa).
- * Salida: backend/assets/romez-logo-rgb.zlib y romez-logo-alpha.zlib, listos para
- * incrustarse como imagen /FlateDecode con /SMask. Se ejecuta a mano sólo si cambia el logo:
- *   node backend/scripts/build-pdf-logo.cjs
+ * Genera el logo de la marca que usan los PDF (sin fondo, con canal alfa).
+ * Salida: backend/assets/<nombre>-rgb.zlib, <nombre>-alpha.zlib y <nombre>.json (tamaño),
+ * listos para incrustarse como imagen /FlateDecode con /SMask. El backend elige <nombre>
+ * con BRAND_PDF_LOGO. Se ejecuta a mano sólo si cambia el logo:
+ *   node backend/scripts/build-pdf-logo.cjs [origen] [nombre] [recorte izq,arriba,ancho,alto]
+ * Sin argumentos regenera el logo de ROMEZ. El fondo del origen debe ser un color uniforme.
  * Usa `sharp`, que ya está instalado como dependencia transitiva de baileys.
  */
 const fs = require('node:fs')
@@ -14,13 +16,21 @@ const sharpDir = fs.readdirSync(path.join(repo, 'node_modules', '.pnpm')).find((
 if (!sharpDir) throw new Error('No encontré sharp en node_modules/.pnpm')
 const sharp = require(path.join(repo, 'node_modules', '.pnpm', sharpDir, 'node_modules', 'sharp'))
 
-const source = path.join(repo, 'frontend', 'public', 'brand', 'romez-light.jpg')
+const [sourceArg, nameArg, cropArg] = process.argv.slice(2)
+const source = sourceArg ? path.resolve(sourceArg) : path.join(repo, 'frontend', 'public', 'brand', 'romez-light.jpg')
+const name = nameArg || 'romez-logo'
+if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error('El nombre del logo debe ser un slug: minúsculas, números y guiones')
+const crop = cropArg
+  ? cropArg.split(',').map(Number)
+  : sourceArg ? null : [352, 222, 376, 640]
+if (crop && (crop.length !== 4 || crop.some((value) => !Number.isInteger(value) || value < 0))) throw new Error('El recorte va como izq,arriba,ancho,alto en píxeles enteros')
 const outDir = path.join(repo, 'backend', 'assets')
 const WIDTH = 480
 
 async function main() {
-  const { data, info } = await sharp(source)
-    .extract({ left: 352, top: 222, width: 376, height: 640 })
+  let image = sharp(source)
+  if (crop) image = image.extract({ left: crop[0], top: crop[1], width: crop[2], height: crop[3] })
+  const { data, info } = await image
     .resize({ width: WIDTH })
     .removeAlpha()
     .raw()
@@ -45,9 +55,11 @@ async function main() {
   }
 
   fs.mkdirSync(outDir, { recursive: true })
-  fs.writeFileSync(path.join(outDir, 'romez-logo-rgb.zlib'), zlib.deflateSync(rgb, { level: 9 }))
-  fs.writeFileSync(path.join(outDir, 'romez-logo-alpha.zlib'), zlib.deflateSync(alpha, { level: 9 }))
-  console.log(`logo ${info.width}x${info.height} background=${background.join(',')}`)
+  fs.writeFileSync(path.join(outDir, `${name}-rgb.zlib`), zlib.deflateSync(rgb, { level: 9 }))
+  fs.writeFileSync(path.join(outDir, `${name}-alpha.zlib`), zlib.deflateSync(alpha, { level: 9 }))
+  fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify({ width: info.width, height: info.height }, null, 2) + '
+')
+  console.log(`logo ${name} ${info.width}x${info.height} background=${background.join(',')}`)
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })

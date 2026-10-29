@@ -1,12 +1,13 @@
 import { buildApp } from './app'
 import { config } from './core/config'
+import { brand } from './core/brand'
 
 async function startServer() {
   const app = await buildApp()
 
   try {
     await app.listen({ port: config.PORT, host: config.HOST })
-    app.log.info(`🚀 Gestión ROMEZ disponible en http://${config.HOST}:${config.PORT}`)
+    app.log.info(`🚀 ${brand.name} disponible en http://${config.HOST}:${config.PORT}`)
   } catch (err) {
     app.log.error(err)
     process.exit(1)

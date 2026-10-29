@@ -1,3 +1,4 @@
+import { brand } from '../../core/brand'
 import { buildPdf, DANGER, fit, INK, loadLogo, MUTED, NAVY, Page, SOFT, type Rgb } from '../collections/payment-summary'
 
 // Réplica de la "Planilla Diaria" en papel del estudio: A4 vertical, dos recuadros por fila,
@@ -141,9 +142,9 @@ export function renderDailyReportPdf(day: DailyReportPdfDay, now = new Date()) {
     const top = PAGE_H - MARGIN
     const headerH = 50
     page.stroke(MARGIN, top - headerH, CONTENT_W, headerH, INK, 0.8)
-    if (logo) page.logo(MARGIN + 10, top - headerH + 5, headerH - 10)
+    if (logo) page.logo(logo, MARGIN + 10, top - headerH + 5, headerH - 10)
     page.text(label, PAGE_W / 2, top - 23, { size: 14, bold: true, align: 'center' })
-    page.text('Planilla diaria · Gestión ROMEZ', PAGE_W / 2, top - 37, { size: 8, rgb: MUTED, align: 'center' })
+    page.text(`Planilla diaria · ${brand.name}`, PAGE_W / 2, top - 37, { size: 8, rgb: MUTED, align: 'center' })
     const { totals } = day
     page.text(`Enviaron ${totals.submitted} de ${totals.members}`, MARGIN + CONTENT_W - 10, top - 17, { size: 7.5, bold: true, rgb: NAVY, align: 'right' })
     page.text(`Tareas ${totals.tasks} · Pendientes ${totals.pending}`, MARGIN + CONTENT_W - 10, top - 28, { size: 7.5, rgb: MUTED, align: 'right' })

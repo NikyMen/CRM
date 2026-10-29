@@ -7,6 +7,7 @@ import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Mail 
 import { authApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import { DevelopedBy } from '@/components/AuthBrand'
+import { brand } from '@/lib/brand'
 
 const CAPABILITIES = [
   'Legajos y obligaciones en un solo lugar',
@@ -52,7 +53,7 @@ export default function LoginPage() {
       <section className="relative hidden overflow-hidden bg-[var(--brand-navy-deep)] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
         <div className="absolute inset-y-0 right-0 w-px bg-white/12" />
         <div>
-          <Image src="/brand/romez-light.jpg" alt="ROMEZ Servicios Contables" width={176} height={176} className="h-40 w-40 object-contain" priority />
+          <Image src={brand.logo} alt={brand.legalName} width={176} height={176} className="h-40 w-40 object-contain" priority />
           <p className="mt-8 max-w-lg font-display text-4xl font-extrabold leading-tight tracking-[-0.04em]">Cada cliente, vencimiento y conversación en orden.</p>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/66">El espacio de trabajo diario del estudio para resolver pendientes con contexto y responsabilidad clara.</p>
         </div>
@@ -64,10 +65,10 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-[var(--paper-soft)] px-5 py-10 sm:px-10">
         <div className="w-full max-w-[430px]">
           <div className="mb-8 lg:hidden">
-            <Image src="/brand/romez-navy.jpg" alt="ROMEZ Servicios Contables" width={128} height={128} className="mx-auto h-28 w-28 object-contain" priority />
+            <Image src={brand.logoOnDark} alt={brand.legalName} width={128} height={128} className="mx-auto h-28 w-28 object-contain" priority />
           </div>
           <div className="mb-7">
-            <p className="section-label">Gestión ROMEZ</p>
+            <p className="section-label">{brand.name}</p>
             <h1 className="page-title mt-2">Ingresá a tu mesa de trabajo</h1>
             <p className="page-subtitle">Acceso exclusivo para el equipo autorizado del estudio.</p>
           </div>
@@ -75,7 +76,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="paper-panel space-y-5 p-5 sm:p-7">
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Correo electrónico</span>
-              <span className="relative block">{!email ? <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@romez.com.py" required /></span>
+              <span className="relative block">{!email ? <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@empresa.com.py" required /></span>
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Contraseña</span>

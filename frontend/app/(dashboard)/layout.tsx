@@ -16,6 +16,7 @@ import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
 import { isPathEnabled, moduleForPath, type ModuleKey } from '@/lib/modules'
 import { TopbarSlot } from '@/components/romez/Topbar'
 import { PaymentPromiseBell, usePromiseCounts } from '@/components/romez/PaymentPromiseBell'
+import { brand } from '@/lib/brand'
 
 type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
@@ -56,9 +57,9 @@ function DisabledModuleNotice({ canManage }: { canManage: boolean }) {
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <Image src="/brand/romez-navy.jpg" alt="ROMEZ Servicios Contables" width={60} height={60} className="h-14 w-14 shrink-0 object-contain" priority />
+      <Image src={brand.logoOnDark} alt={brand.legalName} width={60} height={60} className="h-14 w-14 shrink-0 object-contain" priority />
       <div className={clsx('min-w-0 transition-opacity duration-200', collapsed && 'hidden')}>
-        <p className="font-display text-sm font-extrabold tracking-tight text-white">Gestión ROMEZ</p>
+        <p className="font-display text-sm font-extrabold tracking-tight text-white">{brand.name}</p>
         <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/52">Servicios contables</p>
       </div>
     </div>

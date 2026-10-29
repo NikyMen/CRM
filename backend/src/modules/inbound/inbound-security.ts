@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../types'
+import { brand } from '../../core/brand'
 
 export type InboundEntityType = 'contact' | 'deal' | 'company' | 'task'
 
@@ -20,7 +21,7 @@ export function assertInboundChannelAllowed(
 ) {
   if (channel === 'whatsapp' && !legacyChannelsEnabled) {
     throw new ValidationError(
-      'WhatsApp debe ingresar por la sesión QR de Gestión ROMEZ'
+      `WhatsApp debe ingresar por la sesión QR de ${brand.name}`
     )
   }
 }

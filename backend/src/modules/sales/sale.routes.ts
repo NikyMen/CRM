@@ -7,6 +7,7 @@ import type { EventBus } from '../../core/event-bus'
 import type { WorkspaceContext } from '../../types'
 import { normalizeParaguayDateInput } from '../collections/collection-calculations'
 import { SaleService, type SaleFilters, type SaleInput } from './sale.service'
+import { brand } from '../../core/brand'
 
 const nullableText = (max: number) => z.preprocess(
   (value) => value === '' ? null : value,
@@ -73,7 +74,7 @@ export async function saleRoutes(app: FastifyInstance, options: { eventBus?: Eve
     const csv = await service.exportCsv(req.user as WorkspaceContext, query)
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date())
     reply.header('Content-Type', 'text/csv; charset=utf-8')
-    reply.header('Content-Disposition', 'attachment; filename="ventas-romez-' + date + '.csv"')
+    reply.header('Content-Disposition', 'attachment; filename="ventas-' + brand.slug + '-' + date + '.csv"')
     reply.header('X-Content-Type-Options', 'nosniff')
     return reply.send(csv)
   })

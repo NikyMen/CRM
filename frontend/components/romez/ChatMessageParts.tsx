@@ -6,6 +6,7 @@ import { AlertCircle, Download, FileText, ImageIcon, Loader2, Lock, Play, Rotate
 import clsx from 'clsx'
 import { getErrorMessage } from '@/lib/format'
 import type { MessageReaction } from '@/types'
+import { brand } from '@/lib/brand'
 
 /** Emojis rápidos para reaccionar. ✅ y 👀 sirven para marcar archivos hechos o en revisión. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '✅', '👀']
@@ -196,7 +197,7 @@ export function MessageReactions({ reactions, outgoing, contactLabel = 'Cliente'
   for (const reaction of reactions) groups.set(reaction.emoji, [...(groups.get(reaction.emoji) ?? []), reaction])
   return <div className={clsx('relative z-[1] -mt-2 flex flex-wrap gap-1 px-2', outgoing ? 'justify-end' : 'justify-start')}>
     {[...groups.entries()].map(([emoji, items]) => (
-      <span key={emoji} title={items.map((item) => item.fromMe ? 'Equipo ROMEZ' : contactLabel).join(', ')} className="inline-flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-1.5 py-0.5 text-sm leading-none shadow-sm">
+      <span key={emoji} title={items.map((item) => item.fromMe ? `Equipo ${brand.shortName}` : contactLabel).join(', ')} className="inline-flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-1.5 py-0.5 text-sm leading-none shadow-sm">
         {emoji}{items.length > 1 ? <span className="text-[10px] font-bold text-[var(--ink-tertiary)]">{items.length}</span> : null}
       </span>
     ))}

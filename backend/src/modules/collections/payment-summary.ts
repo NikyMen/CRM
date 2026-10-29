@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Prisma } from '@prisma/client'
+import { brand } from '../../core/brand'
 
 type PaymentRow = { paidAt: Date; amount: Prisma.Decimal; currency: string; method: string | null; reference: string | null; voidedAt: Date | null }
 type ChargeRow = { amount: Prisma.Decimal; paidAmount: Prisma.Decimal; currency: string; description?: string; dueDate?: Date; status?: string }
@@ -23,7 +24,7 @@ export function unappliedCreditByCurrency(payments: CreditSource[]) {
 }
 export type Rgb = [number, number, number]
 
-// Informe A4 dibujado a mano: fuentes PDF estándar (Helvetica, WinAnsi) y el logo ROMEZ
+// Informe A4 dibujado a mano: fuentes PDF estándar (Helvetica, WinAnsi) y el logo de la marca
 // incrustado como imagen con canal alfa. Los datos sólo se escriben como cadenas escapadas,
 // nunca como operadores del documento.
 
@@ -34,8 +35,8 @@ const RIGHT = PAGE_W - 42
 const CONTENT_W = RIGHT - LEFT
 const BOTTOM = 72
 
-export const NAVY: Rgb = [0, 0.149, 0.376]
-export const BLUE: Rgb = [0.2, 0.345, 0.647]
+export const NAVY: Rgb = brand.pdfPrimary ?? [0, 0.149, 0.376]
+export const BLUE: Rgb = brand.pdfAccent ?? [0.2, 0.345, 0.647]
 export const INK: Rgb = [0.122, 0.161, 0.216]
 export const MUTED: Rgb = [0.42, 0.447, 0.502]
 export const LINE: Rgb = [0.886, 0.898, 0.918]
@@ -44,21 +45,36 @@ const WHITE: Rgb = [1, 1, 1]
 export const DANGER: Rgb = [0.706, 0.137, 0.094]
 export const SUCCESS: Rgb = [0.024, 0.463, 0.278]
 
-export const LOGO_W = 480
-export const LOGO_H = 817
+export type Logo = { rgb: Buffer; alpha: Buffer; width: number; height: number }
 
-let cachedLogo: { rgb: Buffer; alpha: Buffer } | null | undefined
+let cachedLogo: Logo | null | undefined
+/**
+ * Logo de la marca generado por `scripts/build-pdf-logo.cjs`: `<BRAND_PDF_LOGO>-rgb.zlib`,
+ * `-alpha.zlib` y `.json` con el tamaño en píxeles. Si falta algo, el PDF sale sin logo.
+ */
 export function loadLogo() {
   if (cachedLogo !== undefined) return cachedLogo
+  const name = brand.pdfLogo
   // src/modules/collections (tsx) o dist/src/modules/collections (build) → backend/assets
   const candidates = [path.resolve(__dirname, '..', '..', '..', 'assets'), path.resolve(__dirname, '..', '..', '..', '..', 'assets')]
-  const dir = candidates.find((candidate) => fs.existsSync(path.join(candidate, 'romez-logo-rgb.zlib')))
+  const dir = candidates.find((candidate) => ['-rgb.zlib', '-alpha.zlib', '.json'].every((suffix) => fs.existsSync(path.join(candidate, name + suffix))))
   if (!dir) {
-    console.warn('[payment-summary] No se encontró backend/assets/romez-logo-*.zlib; el PDF sale sin logo.')
+    console.warn(`[payment-summary] No se encontró backend/assets/${name}-*.zlib y ${name}.json; el PDF sale sin logo.`)
     cachedLogo = null
     return cachedLogo
   }
-  cachedLogo = { rgb: fs.readFileSync(path.join(dir, 'romez-logo-rgb.zlib')), alpha: fs.readFileSync(path.join(dir, 'romez-logo-alpha.zlib')) }
+  const size = JSON.parse(fs.readFileSync(path.join(dir, name + '.json'), 'utf8')) as { width?: unknown; height?: unknown }
+  if (!Number.isInteger(size.width) || !Number.isInteger(size.height) || (size.width as number) <= 0 || (size.height as number) <= 0) {
+    console.warn(`[payment-summary] ${name}.json no tiene width/height válidos; el PDF sale sin logo.`)
+    cachedLogo = null
+    return cachedLogo
+  }
+  cachedLogo = {
+    rgb: fs.readFileSync(path.join(dir, name + '-rgb.zlib')),
+    alpha: fs.readFileSync(path.join(dir, name + '-alpha.zlib')),
+    width: size.width as number,
+    height: size.height as number,
+  }
   return cachedLogo
 }
 
@@ -150,8 +166,8 @@ export class Page {
   line(x1: number, y1: number, x2: number, y2: number, rgb: Rgb, lineWidth = 0.75) {
     this.ops.push(`${color(rgb)} RG ${num(lineWidth)} w ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`)
   }
-  logo(x: number, y: number, height: number, watermark = false) {
-    const width = (height * LOGO_W) / LOGO_H
+  logo(image: Logo, x: number, y: number, height: number, watermark = false) {
+    const width = (height * image.width) / image.height
     this.ops.push(`q ${watermark ? '/GSw gs ' : ''}${num(width)} 0 0 ${num(height)} ${num(x)} ${num(y)} cm /Logo Do Q`)
   }
 }
@@ -168,17 +184,17 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   const newPage = () => {
     page = new Page()
     pages.push(page)
-    if (logo) page.logo((PAGE_W - 330 * LOGO_W / LOGO_H) / 2, (PAGE_H - 330) / 2 - 10, 330, true)
+    if (logo) page.logo(logo, (PAGE_W - 330 * logo.width / logo.height) / 2, (PAGE_H - 330) / 2 - 10, 330, true)
     if (pages.length === 1) {
-      if (logo) page.logo(LEFT, 738, 76)
+      if (logo) page.logo(logo, LEFT, 738, 76)
       page.text('RESUMEN DE CUENTA', RIGHT, 794, { size: 19, bold: true, rgb: NAVY, align: 'right', spacing: 0.6 })
       page.text('Estado de cuenta corriente del cliente', RIGHT, 778, { size: 9, rgb: MUTED, align: 'right' })
-      page.text('Gestión ROMEZ · Servicios contables', RIGHT, 765, { size: 9, rgb: MUTED, align: 'right' })
+      page.text(`${brand.name} · ${brand.tagline}`, RIGHT, 765, { size: 9, rgb: MUTED, align: 'right' })
       page.rect(LEFT, 722, CONTENT_W, 2.2, NAVY)
       page.rect(LEFT, 722, 120, 2.2, BLUE)
       y = 704
     } else {
-      if (logo) page.logo(LEFT, 772, 44)
+      if (logo) page.logo(logo, LEFT, 772, 44)
       page.text('RESUMEN DE CUENTA', RIGHT, 800, { size: 11, bold: true, rgb: NAVY, align: 'right', spacing: 0.4 })
       page.text(fit(client.name, 300, 9), RIGHT, 786, { size: 9, rgb: MUTED, align: 'right' })
       page.rect(LEFT, 762, CONTENT_W, 1.5, NAVY)
@@ -361,7 +377,7 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   // Pie de página con numeración (se conoce el total recién al terminar).
   pages.forEach((current, index) => {
     current.line(LEFT, 50, RIGHT, 50, LINE, 0.75)
-    current.text('Gestión ROMEZ · Servicios contables', LEFT, 36, { size: 7.5, bold: true, rgb: NAVY })
+    current.text(`${brand.name} · ${brand.tagline}`, LEFT, 36, { size: 7.5, bold: true, rgb: NAVY })
     current.text(`Emitido el ${paraguayDateTime(now)} h`, PAGE_W / 2, 36, { size: 7.5, rgb: MUTED, align: 'center' })
     current.text(`Página ${index + 1} de ${pages.length}`, RIGHT, 36, { size: 7.5, rgb: MUTED, align: 'right' })
   })
@@ -369,7 +385,7 @@ export function renderPaymentSummary(client: Client, payments: PaymentRow[], cha
   return buildPdf(pages, logo)
 }
 
-export function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | null, title = 'Resumen de cuenta') {
+export function buildPdf(pages: Page[], logo: Logo | null, title = 'Resumen de cuenta') {
   // Objetos fijos: 1 catálogo, 2 páginas, 3–4 fuentes, 5 estado gráfico, 6–7 logo y su máscara.
   const chunks: Buffer[] = []
   const objects: Array<Buffer | string> = [
@@ -381,8 +397,8 @@ export function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | n
   ]
   const streamObject = (dict: string, data: Buffer) => Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>\nstream\n`, 'latin1'), data, Buffer.from('\nendstream', 'latin1')])
   if (logo) {
-    objects.push(streamObject(`/Type /XObject /Subtype /Image /Width ${LOGO_W} /Height ${LOGO_H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /SMask 7 0 R`, logo.rgb))
-    objects.push(streamObject(`/Type /XObject /Subtype /Image /Width ${LOGO_W} /Height ${LOGO_H} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, logo.alpha))
+    objects.push(streamObject(`/Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /SMask 7 0 R`, logo.rgb))
+    objects.push(streamObject(`/Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, logo.alpha))
   }
   const resources = `<< /Font << /F1 3 0 R /F2 4 0 R >> /ExtGState << /GSw 5 0 R >>${logo ? ' /XObject << /Logo 6 0 R >>' : ''} >>`
   const kids: number[] = []
@@ -395,7 +411,8 @@ export function buildPdf(pages: Page[], logo: { rgb: Buffer; alpha: Buffer } | n
     objects.push(streamObject('', content))
   }
   objects[1] = `<< /Type /Pages /Kids [${kids.map((id) => `${id} 0 R`).join(' ')}] /Count ${kids.length} >>`
-  objects.push(`<< /Title (${escapeText(toWinAnsi(title))}) /Author (Gestión ROMEZ) /Producer (Gestión ROMEZ) >>`)
+  const author = escapeText(toWinAnsi(brand.name))
+  objects.push(`<< /Title (${escapeText(toWinAnsi(title))}) /Author (${author}) /Producer (${author}) >>`)
   const infoId = objects.length
 
   let length = 0

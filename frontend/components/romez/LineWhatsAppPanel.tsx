@@ -16,6 +16,7 @@ import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
+import { brand } from '@/lib/brand'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
 export type WhatsAppLineConfig = {
@@ -33,7 +34,7 @@ export const COLLECTIONS_WHATSAPP: WhatsAppLineConfig = {
   key: 'collections-whatsapp',
   title: 'WhatsApp de Cobranzas',
   linkDescription: 'Un número aparte del de Tickets, para escribirle a los clientes por sus cobros.',
-  teamLabel: 'Cobranzas ROMEZ',
+  teamLabel: `Cobranzas ${brand.shortName}`,
   emptyDescription: 'Cuando un cliente escriba al número de Cobranzas, o le escribas desde la tabla, va a aparecer acá.',
   api: collectionsWhatsAppApi,
   promises: true,
@@ -43,7 +44,7 @@ export const COMMERCIAL_WHATSAPP: WhatsAppLineConfig = {
   key: 'commercial-whatsapp',
   title: 'WhatsApp de Gestión comercial',
   linkDescription: 'Un número aparte del de Tickets y del de Cobranzas, para la atención comercial y los prospectos.',
-  teamLabel: 'Comercial ROMEZ',
+  teamLabel: `Comercial ${brand.shortName}`,
   emptyDescription: 'Cuando alguien escriba al número comercial va a aparecer acá.',
   api: commercialWhatsAppApi,
 }
