@@ -1,0 +1,14 @@
+# Wolves Indumentaria: contenedores y volúmenes propios para no compartir ni pisar
+# los de ROMEZ (crm_postgres, crm_redis, crm_romez_*). Levantar siempre con
+#   docker compose -p crm-wolves up -d postgres redis
+services:
+  postgres:
+    container_name: wolves_postgres
+  redis:
+    container_name: wolves_redis
+
+volumes:
+  postgres_data:
+    name: crm_wolves_postgres_data
+  redis_data:
+    name: crm_wolves_redis_data
