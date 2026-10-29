@@ -7,6 +7,7 @@
 - Usá exclusivamente `pnpm`; no agregues lockfiles ni dependencias sin justificar.
 - Nunca muestres ni versiones `.env`, claves, tokens, sesiones, medios, documentos o datos de clientes.
 - Los identificadores técnicos `crm`, rutas y nombres históricos se conservan por compatibilidad. La marca visible es **Gestión ROMEZ**.
+- Una sola rama: `main` (desde el 2026-10-29). Es el código fuente de todos los clientes; cada cliente difiere sólo por configuración (`.env`, marca, assets), nunca por rama. No crear ramas por cliente. Trabajo viejo sin fusionar: tags `archivo/crm-base` y `archivo/roles_y_visibilidad`.
 
 ## Producto actual
 
@@ -96,7 +97,7 @@ pnpm acceptance
 
 ## Evidencia al 2026-08-30
 
-- Rama de trabajo: `codex/gestion-romez`; base `197267c`, PR #1 de Facu ya fusionada.
+- Rama de trabajo de entonces: `codex/gestion-romez` (ya fusionada en `main` y borrada); base `197267c`, PR #1 de Facu ya fusionada.
 - Backend: build correcto y 53 pruebas automatizadas en verde.
 - Frontend: ESLint sin errores, TypeScript correcto y build de 28 rutas.
 - Dependencias productivas: auditoría sin vulnerabilidades críticas ni altas; quedan 3 moderadas transitivas.
