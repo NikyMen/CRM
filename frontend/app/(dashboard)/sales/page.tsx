@@ -15,6 +15,7 @@ import { SALE_STATUS_LABEL, SALE_STATUS_TONE, SaleDetail, Total } from '@/compon
 import { ClientPicker } from '@/components/romez/ClientPicker'
 import { DateField } from '@/components/romez/DateField'
 import { ReceiptScanner } from '@/components/romez/ReceiptScanner'
+import { brand } from '@/lib/brand'
 
 const PAGE_SIZE = 25
 
@@ -141,7 +142,7 @@ export default function SalesPage() {
       const url = URL.createObjectURL(response.data as Blob)
       const anchor = window.document.createElement('a')
       anchor.href = url
-      anchor.download = `ventas-romez-${paraguayBusinessDate()}.csv`
+      anchor.download = `ventas-${brand.slug}-${paraguayBusinessDate()}.csv`
       anchor.click()
       URL.revokeObjectURL(url)
     },

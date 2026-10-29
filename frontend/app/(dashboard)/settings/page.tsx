@@ -19,6 +19,7 @@ import ApiKeysPage from '../api-keys/page'
 import { PillNav } from '@/components/react-bits/PillNav'
 import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleState } from '@/lib/modules'
 import { useWorkspaceModules, WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
+import { brand } from '@/lib/brand'
 
 type SettingsTab = 'profile' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
@@ -280,7 +281,7 @@ function AvatarSettingsPanel() {
               <div>
                 <p className="section-label">Imagen personalizada</p>
                 <p className="mt-1 text-sm font-medium text-slate-500">
-                  Tu identidad visual, lista para usar en todo ROMEZ.
+                  Tu identidad visual, lista para usar en todo {brand.shortName}.
                 </p>
               </div>
               <button
@@ -429,10 +430,10 @@ function WhatsAppSettingsPanel() {
   const error = sessionQuery.error || connect.error || disconnect.error
 
   return <div className="mx-auto max-w-5xl space-y-6 p-6">
-    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">WhatsApp de ROMEZ</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
+    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">WhatsApp de {brand.shortName}</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
 
     <section className="paper-panel overflow-hidden">
-      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-lg border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm('¿Desconectar el WhatsApp compartido de ROMEZ?')) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
+      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-lg border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm(`¿Desconectar el WhatsApp compartido de ${brand.shortName}?`)) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
 
       {!runtimeReady ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p><strong>El servidor de WhatsApp no está disponible.</strong> Revisá que el proceso persistente y Baileys estén instalados antes de vincular el número.</p></div> : null}
       {error || session?.lastError ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p>{session?.lastError || getErrorMessage(error, 'No pudimos consultar la sesión.')}</p></div> : null}

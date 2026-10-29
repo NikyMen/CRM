@@ -15,6 +15,7 @@ import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketC
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
+import { brand } from '@/lib/brand'
 
 type Inbox = 'free' | 'mine' | 'all'
 type Member = { id: string; role: Role; user: { id: string; firstName: string; lastName?: string | null; email: string } }
@@ -115,7 +116,7 @@ export default function TicketsPage() {
         </section>
       </div>
       {metricsOpen ? <ServiceMetricsModal summary={summary} loading={summaryQuery.isLoading} error={summaryQuery.error} retry={() => summaryQuery.refetch()} onClose={() => setMetricsOpen(false)} /> : null}
-      {linkOpen ? <WhatsAppLinkDialog title="WhatsApp de Tickets" description="El número compartido que alimenta la bandeja de tickets de todo el estudio." queryKey="whatsapp-session" getSession={() => whatsappApi.getSession().then((response) => response.data)} connect={() => whatsappApi.connect()} disconnect={async () => { await whatsappApi.disconnect(); queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] }) }} disconnectConfirm="¿Desconectar el WhatsApp compartido de ROMEZ?" canManage={canManage} onClose={() => setLinkOpen(false)} /> : null}
+      {linkOpen ? <WhatsAppLinkDialog title="WhatsApp de Tickets" description="El número compartido que alimenta la bandeja de tickets de todo el estudio." queryKey="whatsapp-session" getSession={() => whatsappApi.getSession().then((response) => response.data)} connect={() => whatsappApi.connect()} disconnect={async () => { await whatsappApi.disconnect(); queryClient.invalidateQueries({ queryKey: ['customer-service-summary'] }) }} disconnectConfirm={`¿Desconectar el WhatsApp compartido de ${brand.shortName}?`} canManage={canManage} onClose={() => setLinkOpen(false)} /> : null}
     </PageFrame>
   )
 }
@@ -164,7 +165,7 @@ function MessageBubble({ ticketId, message, onReact }: { ticketId: string; messa
   return <div className={clsx('group flex items-end gap-1', fromMe ? 'flex-row-reverse' : 'flex-row')}>
     <div className={clsx('flex max-w-[82%] flex-col', fromMe ? 'items-end' : 'items-start')}>
       <div className={clsx('rounded-lg border px-3 py-2.5', fromMe ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--chat-outgoing-text)]' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}>
-        <p className={clsx('text-[10px] font-bold', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}>{fromMe ? 'Equipo ROMEZ' : message.pushName || message.senderName || 'Cliente'}</p>
+        <p className={clsx('text-[10px] font-bold', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}>{fromMe ? `Equipo ${brand.shortName}` : message.pushName || message.senderName || 'Cliente'}</p>
         {hasMedia ? <ChatMedia messageType={message.messageType} mimeType={message.mediaMimeType} fileName={message.mediaFileName} sizeBytes={message.mediaSizeBytes} durationSeconds={message.mediaDurationSeconds} outgoing={fromMe} load={() => ticketsApi.getMessageMedia(ticketId, message.id).then((response) => response.data)} /> : null}
         {text ? <p className="mt-1 whitespace-pre-wrap text-sm leading-5">{text}</p> : !hasMedia ? <p className="mt-1 text-sm">Mensaje multimedia</p> : null}
         <p className={clsx('mt-1.5 flex items-center justify-end gap-1 text-[10px]', fromMe ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-muted)]')}>{formatDateTime(message.sentAt)}{fromMe ? <CheckCheck size={11} /> : null}</p>
@@ -193,7 +194,7 @@ function ServiceMetricsModal({ summary, loading, error, retry, onClose }: { summ
       <Metric icon={CheckCircle2} label="Resueltos hoy" value={summary.resolvedToday} tone="success" />
       <Metric icon={Radio} label="Primera respuesta" value={summary.avgFirstResponseMinutes == null ? '—' : `${Math.round(summary.avgFirstResponseMinutes)} min`} tone={summary.avgFirstResponseMinutes != null && summary.avgFirstResponseMinutes > 30 ? 'warning' : undefined} />
     </section>
-    <MetricsBlock title="WhatsApp compartido"><div className="flex items-center gap-3"><Wifi size={18} className={whatsappConnected ? 'text-[var(--success)]' : 'text-[var(--danger)]'} /><div className="min-w-0 flex-1"><p className="truncate font-bold text-[var(--ink-primary)]">{summary.whatsapp?.pushName || 'WhatsApp ROMEZ'}</p><p className="text-xs text-[var(--ink-tertiary)]">{summary.whatsapp?.phoneNumber || 'Número no informado'} · {whatsappConnected ? `Última conexión ${formatDateTime(summary.whatsapp?.lastConnectedAt)}` : summary.whatsapp?.lastError || 'Requiere reconexión desde Configuración.'}</p></div><StatusPill tone={whatsappConnected ? 'success' : 'danger'}>{whatsappConnected ? 'Conectado' : summary.whatsapp?.status || 'Sin conexión'}</StatusPill></div></MetricsBlock>
+    <MetricsBlock title="WhatsApp compartido"><div className="flex items-center gap-3"><Wifi size={18} className={whatsappConnected ? 'text-[var(--success)]' : 'text-[var(--danger)]'} /><div className="min-w-0 flex-1"><p className="truncate font-bold text-[var(--ink-primary)]">{summary.whatsapp?.pushName || `WhatsApp ${brand.shortName}`}</p><p className="text-xs text-[var(--ink-tertiary)]">{summary.whatsapp?.phoneNumber || 'Número no informado'} · {whatsappConnected ? `Última conexión ${formatDateTime(summary.whatsapp?.lastConnectedAt)}` : summary.whatsapp?.lastError || 'Requiere reconexión desde Configuración.'}</p></div><StatusPill tone={whatsappConnected ? 'success' : 'danger'}>{whatsappConnected ? 'Conectado' : summary.whatsapp?.status || 'Sin conexión'}</StatusPill></div></MetricsBlock>
     <MetricsBlock title="Carga por responsable"><div className="divide-y divide-[var(--line-soft)]">{summary.byAssignee.length ? summary.byAssignee.map((item) => <div key={item.userId || 'unassigned'} className="flex items-center gap-3 py-2.5"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand-paper)] text-xs font-extrabold text-[var(--brand-navy)] dark:text-[var(--brand-blue)]">{item.user?.firstName?.slice(0, 1) || '?'}</span><p className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ink-primary)]">{item.user ? fullName(item.user) : 'Sin responsable'}</p><span className="font-mono text-sm font-bold tabular-nums text-[var(--ink-primary)]">{item.count}</span></div>) : <p className="py-2 text-sm text-[var(--ink-tertiary)]">No hay carga pendiente.</p>}</div></MetricsBlock>
   </div>}</div></div>
 }

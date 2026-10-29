@@ -5,6 +5,7 @@ import type { CRMEvent } from '../../types'
 import { authenticate } from '../../core/auth/auth.service'
 import { requireModule } from '../../core/modules/require-module'
 import { requireRole } from '../../core/auth/require-role'
+import { brand } from '../../core/brand'
 
 // Todos los eventos disponibles para suscribirse
 // Cuando el usuario configura un webhook, elige cuáles le interesan
@@ -160,7 +161,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           event: 'test',
           timestamp: new Date().toISOString(),
           data: {
-            message: 'Test desde Gestión ROMEZ',
+            message: `Test desde ${brand.name}`,
             workspaceId: ctx.workspaceId,
           },
         }),

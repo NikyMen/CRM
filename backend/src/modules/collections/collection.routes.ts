@@ -20,6 +20,7 @@ import {
   type RecurringChargeInput,
 } from './collection.service'
 import { PaymentPromiseService, type PaymentPromiseInput, type PaymentPromiseUpdate } from './payment-promise.service'
+import { brand } from '../../core/brand'
 
 const amountSchema = z.union([
   z.number().positive(),
@@ -187,7 +188,7 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const csv = await service.exportReceivables(ctx, query)
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date())
     reply.header('Content-Type', 'text/csv; charset=utf-8')
-    reply.header('Content-Disposition', `attachment; filename="cobranzas-romez-${date}.csv"`)
+    reply.header('Content-Disposition', `attachment; filename="cobranzas-${brand.slug}-${date}.csv"`)
     reply.header('X-Content-Type-Options', 'nosniff')
     return reply.send(csv)
   })

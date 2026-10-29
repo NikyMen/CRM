@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
 import type { ApiKey } from '@/types'
 import { Key, Plus, Trash2, Copy, Check, Loader2, Eye, EyeOff } from 'lucide-react'
+import { brand } from '@/lib/brand'
 
 export default function ApiKeysPage() {
   const confirmDelete = useConfirmDelete()
@@ -138,7 +139,7 @@ export default function ApiKeysPage() {
           <Key size={56} className="text-slate-300 mx-auto mb-4" strokeWidth={1.5} />
           <p className="text-slate-500 font-medium text-lg">No hay API Keys generadas</p>
           <p className="text-slate-400 text-sm mt-1">
-            Creá una credencial para automatizar Gestión ROMEZ con otros servicios.
+            Creá una credencial para automatizar {brand.name} con otros servicios.
           </p>
         </div>
       ) : (

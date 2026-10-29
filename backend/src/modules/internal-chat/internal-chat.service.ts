@@ -1,6 +1,7 @@
 import { InternalConversationType, Prisma } from '@prisma/client'
 import { db } from '../../core/database'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../types'
+import { brand } from '../../core/brand'
 
 const memberSelect = {
   id: true,
@@ -100,7 +101,7 @@ export class InternalChatService {
       return {
         id: conversation.id,
         type: conversation.type,
-        title: conversation.type === InternalConversationType.GENERAL ? 'Equipo ROMEZ' : null,
+        title: conversation.type === InternalConversationType.GENERAL ? `Equipo ${brand.shortName}` : null,
         otherParticipant,
         participantCount: conversation.type === InternalConversationType.GENERAL
           ? generalMemberCount
@@ -240,7 +241,7 @@ export class InternalChatService {
         workspaceId: ctx.workspaceId,
         type: InternalConversationType.GENERAL,
         key: 'general',
-        title: 'Equipo ROMEZ',
+        title: `Equipo ${brand.shortName}`,
       },
       select: { id: true },
     })

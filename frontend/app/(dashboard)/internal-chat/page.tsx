@@ -10,6 +10,7 @@ import { auth } from '@/lib/auth'
 import { BASE_URL, internalChatApi } from '@/lib/api'
 import { formatDate, formatDateTime, fullName, getErrorMessage } from '@/lib/format'
 import type { InternalChatConversation, InternalChatMember, InternalChatMessage, InternalChatMessagesPage } from '@/types'
+import { brand } from '@/lib/brand'
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner',
@@ -117,7 +118,7 @@ export default function InternalChatPage() {
       <PageHeader
         eyebrow="Coordinación del equipo"
         title="Chat interno"
-        description="Conversaciones privadas y un espacio común para todos los miembros de Gestión ROMEZ."
+        description={`Conversaciones privadas y un espacio común para todos los miembros de ${brand.name}.`}
         action={<button type="button" className="btn-secondary lg:hidden" onClick={() => setShowMobileMembers(true)}><UserRoundPlus size={16} /> Nuevo privado</button>}
       />
 
@@ -134,7 +135,7 @@ export default function InternalChatPage() {
 
         <section className={clsx('min-h-0 flex-col', showMobileMembers ? 'hidden lg:flex' : selectedId ? 'flex' : 'hidden lg:flex')}>
           {!selectedConversation ? (
-            <EmptyState icon={MessageCircleMore} title="Elegí una conversación" description="Usá el grupo Equipo ROMEZ o iniciá un mensaje privado con otro miembro." />
+            <EmptyState icon={MessageCircleMore} title="Elegí una conversación" description={`Usá el grupo Equipo ${brand.shortName} o iniciá un mensaje privado con otro miembro.`} />
           ) : (
             <>
               <ConversationHeader
@@ -264,7 +265,7 @@ function MessageTimeline({ messages, currentUserId }: { messages: InternalChatMe
 }
 
 function conversationName(conversation: InternalChatConversation) {
-  return conversation.type === 'GENERAL' ? 'Equipo ROMEZ' : fullName(conversation.otherParticipant)
+  return conversation.type === 'GENERAL' ? `Equipo ${brand.shortName}` : fullName(conversation.otherParticipant)
 }
 
 function useInternalChatLiveSync(queryClient: QueryClient) {
