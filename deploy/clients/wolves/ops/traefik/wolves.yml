@@ -1,16 +1,34 @@
+# Wolves en el VPS compartido (72.60.15.125). Traefik (container n8n-traefik-1) enruta directo
+# a los procesos PM2, que escuchan en 172.18.0.1 (gateway de n8n_default): no pasa por Nginx.
+# Va en /docker/n8n/dynamic/wolves.yml; Traefik lo toma solo (file provider con watch), sin
+# reiniciar el container, que es el mismo que sirve n8n.
 http:
   routers:
-    wolves:
-      rule: "Host(`wolves.consultoriadigital.io`)"
+    wolves-api:
+      rule: "Host(`wolves.consultoriadigital.io`) && (PathPrefix(`/api/v1`) || Path(`/health`))"
+      priority: 100
       entryPoints:
         - websecure
-      service: wolves
+      service: wolves-backend
+      tls:
+        certResolver: mytlschallenge
+    wolves:
+      rule: "Host(`wolves.consultoriadigital.io`)"
+      priority: 10
+      entryPoints:
+        - websecure
+      service: wolves-frontend
       tls:
         certResolver: mytlschallenge
 
   services:
-    wolves:
+    wolves-backend:
       loadBalancer:
         passHostHeader: true
         servers:
-          - url: "http://172.18.0.1:8080"
+          - url: "http://172.18.0.1:3820"
+    wolves-frontend:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://172.18.0.1:3821"

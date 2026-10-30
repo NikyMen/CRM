@@ -14,7 +14,7 @@ se arreglan en esta instancia.
 | `brand.env` | Marca y región (`BRAND_*`, `NEXT_PUBLIC_BRAND_*`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`). Sin secretos. |
 | `docker-compose.override.yml` | Contenedores, puertos y volúmenes propios, para no tocar los de ROMEZ. |
 | `post-bootstrap.cjs` | Ajustes posteriores al bootstrap por la API: embudo, checklists y módulos. |
-| `ops/` | Producción en `wolves.consultoriadigital.io`: env, PM2, Nginx, Traefik y logrotate. Ver [`ops/README.md`](ops/README.md). |
+| `ops/` | Producción en `wolves.consultoriadigital.io` (VPS compartido 72.60.15.125): env, PM2, Traefik y logrotate. Ver [`ops/README.md`](ops/README.md). |
 | `source/instagram-profile-150.jpg` | Foto de perfil original de Instagram (150 px), origen del logo provisorio. |
 | `source/wolves-pdf-source.png` | Origen limpio del logo de los PDF: fondo blanco liso, lienzo 1,55:1. |
 
