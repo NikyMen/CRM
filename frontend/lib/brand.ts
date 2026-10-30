@@ -38,6 +38,8 @@ export const brand = {
   /** Logo sobre fondos oscuros (sidebar, panel del login, ícono de Apple). */
   logoOnDark: localPath(process.env.NEXT_PUBLIC_BRAND_LOGO_ON_DARK, '/brand/romez-navy.jpg'),
   favicon: localPath(process.env.NEXT_PUBLIC_BRAND_FAVICON, '/favicon.ico'),
+  /** Ejemplo gris del campo de email en el login y la recuperación de acceso. */
+  emailPlaceholder: text(process.env.NEXT_PUBLIC_BRAND_EMAIL_PLACEHOLDER, 'nombre@empresa.com.py'),
 }
 
 const HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/

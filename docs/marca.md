@@ -51,6 +51,7 @@ Next reemplaza `NEXT_PUBLIC_*` al compilar: cambiar la marca exige recompilar, i
 | `NEXT_PUBLIC_BRAND_LOGO` | Logo sobre fondo claro | `/brand/romez-light.jpg` |
 | `NEXT_PUBLIC_BRAND_LOGO_ON_DARK` | Logo sobre fondo oscuro, ícono de Apple | `/brand/romez-navy.jpg` |
 | `NEXT_PUBLIC_BRAND_FAVICON` | Favicon | `/favicon.ico` |
+| `NEXT_PUBLIC_BRAND_EMAIL_PLACEHOLDER` | Ejemplo gris del campo de email (login y recuperación) | `nombre@empresa.com.py` |
 
 Los logos son rutas dentro de `frontend/public/` (por ejemplo `/brand/cliente-light.png`). Una
 ruta externa o inválida se ignora y se usa la de ROMEZ.

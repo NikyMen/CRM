@@ -11,5 +11,5 @@ export function AuthBrand({ title, subtitle }: { title: string; subtitle: string
 }
 
 export function DevelopedBy({ prominent = false }: { prominent?: boolean }) {
-  return <div className="mt-6 flex flex-col items-center justify-center gap-1"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por</span>{prominent ? <Image src="/brand/consultoria-digital.jpeg" alt="Consultoría Digital" width={1080} height={1080} className="h-[150px] w-full max-w-[340px] object-cover" /> : <Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={234} height={54} className="h-[54px] w-auto object-contain" />}</div>
+  return <div className="mt-6 flex flex-col items-center justify-center gap-1"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-tertiary)]">Desarrollado por</span>{prominent ? <Image src="/brand/consultoria-digital.png" alt="Consultoría Digital" width={865} height={235} className="mt-2 h-auto w-full max-w-[240px] object-contain" /> : <Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={234} height={54} className="h-[54px] w-auto object-contain" />}</div>
 }

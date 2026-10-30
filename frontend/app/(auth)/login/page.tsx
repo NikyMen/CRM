@@ -76,7 +76,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="paper-panel space-y-5 p-5 sm:p-7">
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Correo electrónico</span>
-              <span className="relative block">{!email ? <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder="nombre@empresa.com.py" required /></span>
+              <span className="relative block">{!email ? <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /> : null}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ctrl-input pl-10" placeholder={brand.emailPlaceholder} required /></span>
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-[var(--ink-secondary)]">Contraseña</span>
