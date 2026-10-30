@@ -10,8 +10,10 @@ import {
 } from './collection-import'
 import {
   calculateReceivableStatus,
+  futureYearError,
   normalizeParaguayDateInput,
   startOfParaguayDay,
+  visibleReceivableWhere,
 } from './collection-calculations'
 
 test('normaliza importes paraguayos y decimales', () => {
@@ -40,6 +42,23 @@ test('calcula estado contable desde monto aplicado y vencimiento', () => {
   assert.equal(normalizeParaguayDateInput('2026-08-29') instanceof Date, true)
   assert.equal(Number.isNaN((normalizeParaguayDateInput('2026-02-31') as Date).getTime()), true)
   assert.equal(startOfParaguayDay(new Date('2026-08-29T15:00:00Z')).toISOString(), '2026-08-29T03:00:00.000Z')
+})
+
+test('rechaza fechas de años posteriores al actual en Paraguay', () => {
+  const now = new Date('2026-10-29T15:00:00Z')
+  assert.equal(futureYearError(new Date('2026-12-31T12:00:00Z'), now), null)
+  assert.equal(futureYearError(new Date('2020-01-10T12:00:00Z'), now), null)
+  assert.equal(futureYearError(new Date('2027-01-10T12:00:00Z'), now), 'No se pueden cargar fechas posteriores a 2026')
+  // 31/12 a las 22:00 en Asunción ya es 2027 en UTC: sigue siendo 2026.
+  assert.equal(futureYearError(new Date('2027-01-01T01:00:00Z'), new Date('2026-12-31T15:00:00Z')), null)
+})
+
+test('oculta cargos que vencen en años posteriores al actual', () => {
+  const { dueDate } = visibleReceivableWhere(new Date('2026-10-29T15:00:00Z'))
+  // 01/01/2027 00:00 en Asunción (UTC-3).
+  assert.equal(dueDate.lt.toISOString(), '2027-01-01T03:00:00.000Z')
+  assert.equal(new Date('2026-12-31T12:00:00Z') < dueDate.lt, true)
+  assert.equal(new Date('2027-01-10T12:00:00Z') < dueDate.lt, false)
 })
 
 test('previsualiza cobranza CSV con clave idempotente', async () => {

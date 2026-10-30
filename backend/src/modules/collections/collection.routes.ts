@@ -8,7 +8,7 @@ import type { EventBus } from '../../core/event-bus'
 import { config } from '../../core/config'
 import { ValidationError, type WorkspaceContext } from '../../types'
 import { parseCollectionSpreadsheet } from './collection-import'
-import { normalizeParaguayDateInput, startOfParaguayDay } from './collection-calculations'
+import { normalizeParaguayDateInput, startOfParaguayDay, visibleReceivableWhere } from './collection-calculations'
 import { paymentSummaryFileName, renderPaymentSummary, unappliedCreditByCurrency } from './payment-summary'
 import { ensureClientAccess } from '../clients/client-access'
 import { db } from '../../core/database'
@@ -138,7 +138,7 @@ export async function collectionRoutes(app: FastifyInstance, options: { eventBus
     const client = await ensureClientAccess(ctx, id)
     const [payments, charges, creditSources] = await db.$transaction([
       db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, ...dateFilter('paidAt') }, orderBy: [{ paidAt: 'asc' }, { id: 'asc' }] }),
-      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...dateFilter('dueDate') } }),
+      db.receivable.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, AND: [visibleReceivableWhere(), dateFilter('dueDate')] } }),
       // El saldo a favor es de todo el historial: un pago del período puede cancelar cargos de otro.
       db.payment.findMany({ where: { workspaceId: ctx.workspaceId, companyId: id, voidedAt: null }, select: { amount: true, currency: true, voidedAt: true, allocations: { select: { amount: true } } } }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })

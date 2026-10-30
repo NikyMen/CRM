@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
 import { Prisma } from '@prisma/client'
+import { futureYearError } from './collection-calculations'
 
 export interface CollectionImportRow {
   rowNumber: number
@@ -130,7 +131,8 @@ export async function parseCollectionSpreadsheet(buffer: Buffer, filename: strin
     if (amount && currency === 'PYG' && !new Prisma.Decimal(amount).isInteger()) {
       errors.push('PYG no admite centavos')
     }
-    if (!dueDate) errors.push('Fecha de vencimiento inválida')
+    const dateError = dueDate ? futureYearError(dueDate) : 'Fecha de vencimiento inválida'
+    if (dateError) errors.push(dateError)
     if (!/^[A-Z]{3}$/.test(currency)) errors.push('Moneda inválida')
     const naturalKey = [type, ruc, description.toLowerCase(), amount, dueDate?.toISOString().slice(0, 10), currency, raw.reference].join('|')
     const externalKey = raw.externalKey?.trim() || `import:${crypto.createHash('sha256').update(naturalKey).digest('hex')}`

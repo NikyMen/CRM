@@ -16,6 +16,7 @@ import {
   ensureWorkspaceUser,
 } from './client-access'
 import type { ClientImportRow } from './client-import'
+import { visibleReceivableWhere } from '../collections/collection-calculations'
 import { whatsAppRealtime } from '../whatsapp/whatsapp.events'
 
 const clientInclude = {
@@ -109,8 +110,8 @@ export class ClientService {
     if (filters.ownerId) conditions.push({ ownerId: filters.ownerId })
     if (filters.hasDebt !== undefined) {
       conditions.push(filters.hasDebt
-        ? { receivables: { some: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } } } }
-        : { receivables: { none: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } } } })
+        ? { receivables: { some: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] }, ...visibleReceivableWhere() } } }
+        : { receivables: { none: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] }, ...visibleReceivableWhere() } } })
     }
 
     const where: Prisma.CompanyWhereInput = { AND: conditions }
@@ -130,6 +131,7 @@ export class ClientService {
           workspaceId: ctx.workspaceId,
           companyId: { in: clientIds },
           status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+          ...visibleReceivableWhere(),
         },
         select: { companyId: true, currency: true, amount: true, paidAmount: true, status: true },
       }),
@@ -324,7 +326,7 @@ export class ClientService {
     const [receivables, recentPayments, checklists, tickets, documents, notes] = await Promise.all([
       db.receivable.groupBy({
         by: ['currency'],
-        where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' } },
+        where: { workspaceId: ctx.workspaceId, companyId: id, status: { not: 'VOID' }, ...visibleReceivableWhere() },
         _sum: { amount: true, paidAmount: true },
         _count: true,
       }),

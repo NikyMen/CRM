@@ -11,6 +11,30 @@ export function isPastParaguayDate(dueDate: Date, now = new Date()) {
   return asuncionDay.format(dueDate) < asuncionDay.format(now)
 }
 
+export function paraguayYear(date = new Date()) {
+  return Number(asuncionDay.format(date).slice(0, 4))
+}
+
+/**
+ * Cobranzas no acepta fechas de años posteriores al actual: un "noviembre 2027"
+ * cargado en 2026 casi siempre es un error de tipeo que después descuadra saldos.
+ * Devuelve el motivo del rechazo, o null si la fecha se puede cargar.
+ */
+export function futureYearError(date: Date, now = new Date()) {
+  const year = paraguayYear(now)
+  return paraguayYear(date) > year ? `No se pueden cargar fechas posteriores a ${year}` : null
+}
+
+/**
+ * Cargos visibles: los que vencen hasta fin del año actual. Lo generado para
+ * años siguientes (p. ej. enero 2027 generado en 2026) queda en la base pero no
+ * se lista, no suma saldos ni recibe pagos hasta que llegue su año.
+ */
+export function visibleReceivableWhere(now = new Date()) {
+  const nextYearStart = startOfParaguayDay(new Date(Date.UTC(paraguayYear(now) + 1, 0, 1, 12)))
+  return { dueDate: { lt: nextYearStart } }
+}
+
 export function normalizeParaguayDateInput(value: unknown) {
   if (typeof value !== 'string') return value
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())

@@ -18,7 +18,12 @@ import {
   ensureClientAccess,
 } from '../clients/client-access'
 import type { CollectionImportRow } from './collection-import'
-import { calculateReceivableStatus, startOfParaguayDay } from './collection-calculations'
+import { calculateReceivableStatus, futureYearError, startOfParaguayDay, visibleReceivableWhere } from './collection-calculations'
+
+function assertLoadableDate(date: Date | null | undefined) {
+  const error = date ? futureYearError(date) : null
+  if (error) throw new ValidationError(error)
+}
 
 export interface ReceivableInput {
   companyId: string
@@ -124,6 +129,7 @@ function receivableListWhere(
     ...(filters.companyId ? { companyId: filters.companyId } : {}),
     // Los anulados (eliminados) solo aparecen al filtrarlos explícitamente.
     status: filters.status ?? { not: 'VOID' },
+    ...visibleReceivableWhere(),
     ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
     ...(search
       ? {
@@ -249,6 +255,7 @@ export class CollectionService {
       workspaceId: ctx.workspaceId,
       company: clientVisibilityWhere(ctx),
       status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      ...visibleReceivableWhere(),
       ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
     }
     const [groups, overdueGroups] = await Promise.all([
@@ -315,6 +322,7 @@ export class CollectionService {
         company: clientVisibilityWhere(ctx),
         ...(filters.companyId ? { companyId: filters.companyId } : {}),
         ...(filters.status ? { status: filters.status } : {}),
+        ...visibleReceivableWhere(),
         ...(filters.currency ? { currency: currencyCode(filters.currency) } : {}),
       },
       select: {
@@ -365,6 +373,7 @@ export class CollectionService {
   }
 
   async createReceivable(ctx: WorkspaceContext, input: ReceivableInput) {
+    assertLoadableDate(input.dueDate)
     await this.ensureFinancialWrite(ctx, input.companyId)
     const currency = currencyCode(input.currency)
     const amount = money(input.amount, currency)
@@ -395,6 +404,7 @@ export class CollectionService {
   ) {
     const receivable = await db.receivable.findFirst({ where: { id, workspaceId: ctx.workspaceId } })
     if (!receivable) throw new NotFoundError('Cuenta por cobrar', id)
+    assertLoadableDate(input.dueDate)
     const amount = input.amount !== undefined ? money(input.amount, receivable.currency) : receivable.amount
     if (amount.lt(receivable.paidAmount)) throw new ValidationError('El monto no puede ser menor a lo ya cobrado')
     if (input.status === 'VOID' && receivable.paidAmount.gt(0)) {
@@ -491,6 +501,7 @@ export class CollectionService {
   }
 
   async createPayment(ctx: WorkspaceContext, input: PaymentInput) {
+    assertLoadableDate(input.paidAt)
     await this.ensureFinancialWrite(ctx, input.companyId)
     const currency = currencyCode(input.currency)
     const amount = money(input.amount, currency)
@@ -515,6 +526,7 @@ export class CollectionService {
             companyId: input.companyId,
             currency,
             status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+            ...visibleReceivableWhere(),
           },
           orderBy: { dueDate: 'asc' },
         })
@@ -536,7 +548,7 @@ export class CollectionService {
       const receivableIds = requested.map((allocation) => allocation.receivableId)
       if (new Set(receivableIds).size !== receivableIds.length) throw new ValidationError('No repitas una cuenta por cobrar')
       const receivables = receivableIds.length
-        ? await tx.receivable.findMany({ where: { id: { in: receivableIds }, workspaceId: ctx.workspaceId, companyId: input.companyId } })
+        ? await tx.receivable.findMany({ where: { id: { in: receivableIds }, workspaceId: ctx.workspaceId, companyId: input.companyId, ...visibleReceivableWhere() } })
         : []
       if (receivables.length !== receivableIds.length) throw new ValidationError('Una cuenta por cobrar no pertenece al cliente')
       const byId = new Map(receivables.map((receivable) => [receivable.id, receivable]))
@@ -635,7 +647,7 @@ export class CollectionService {
     const [receivables, payments, overdueCount] = await Promise.all([
       db.receivable.groupBy({
         by: ['currency'],
-        where: { workspaceId: ctx.workspaceId, company: clientScope, status: { not: 'VOID' } },
+        where: { workspaceId: ctx.workspaceId, company: clientScope, status: { not: 'VOID' }, ...visibleReceivableWhere() },
         _sum: { amount: true, paidAmount: true },
         _count: true,
       }),
@@ -683,9 +695,10 @@ export class CollectionService {
     const rangeStart = new Date(Date.UTC(year, month - 7, 25))
     const toNumber = (value: Prisma.Decimal | null | undefined) => Number((value ?? new Prisma.Decimal(0)).toString())
 
+    const visible = visibleReceivableWhere()
     const [periodCharges, periodPayments, openReceivables, totals, received] = await Promise.all([
       db.receivable.findMany({
-        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' }, dueDate: { gte: rangeStart } },
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' }, dueDate: { gte: rangeStart, ...visible.dueDate } },
         select: { amount: true, dueDate: true },
       }),
       db.payment.findMany({
@@ -693,11 +706,11 @@ export class CollectionService {
         select: { amount: true, paidAt: true },
       }),
       db.receivable.findMany({
-        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] }, ...visible },
         select: { amount: true, paidAmount: true, dueDate: true, companyId: true, company: { select: { id: true, name: true, ruc: true, dv: true } } },
       }),
       db.receivable.aggregate({
-        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' } },
+        where: { workspaceId: ctx.workspaceId, company: clientScope, currency, status: { not: 'VOID' }, ...visible },
         _sum: { amount: true, paidAmount: true },
       }),
       db.payment.aggregate({
@@ -794,6 +807,7 @@ export class CollectionService {
   }
 
   async createRecurring(ctx: WorkspaceContext, input: RecurringChargeInput) {
+    assertLoadableDate(input.startDate)
     await ensureClientAccess(ctx, input.companyId, 'write')
     const currency = currencyCode(input.currency)
     return db.recurringCharge.create({
@@ -816,6 +830,7 @@ export class CollectionService {
   async updateRecurring(ctx: WorkspaceContext, id: string, input: Partial<RecurringChargeInput>) {
     const existing = await db.recurringCharge.findFirst({ where: { id, workspaceId: ctx.workspaceId, deletedAt: null } })
     if (!existing) throw new NotFoundError('Plan recurrente', id)
+    assertLoadableDate(input.startDate)
     if (input.companyId) await ensureClientAccess(ctx, input.companyId, 'write')
     const nextCurrency = currencyCode(input.currency ?? existing.currency)
     const nextAmount = money(input.amount ?? existing.amount, nextCurrency)
@@ -905,6 +920,7 @@ export class CollectionService {
     const year = Number(match[1])
     const monthIndex = Number(match[2]) - 1
     if (monthIndex < 0 || monthIndex > 11) throw new ValidationError('Período inválido')
+    assertLoadableDate(new Date(Date.UTC(year, monthIndex, 1, 12)))
     const periodStart = new Date(Date.UTC(year, monthIndex, 1, 0))
     const periodEnd = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59))
     const charges = await db.recurringCharge.findMany({
@@ -983,6 +999,7 @@ export class CollectionService {
         workspaceId: ctx.workspaceId,
         companyId: { in: clientIds },
         status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+        ...visibleReceivableWhere(),
       },
       select: { companyId: true, currency: true, amount: true, paidAmount: true },
     })
@@ -1041,6 +1058,7 @@ export class CollectionService {
             companyId: row.companyId!,
             currency: row.currency,
             status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+            ...visibleReceivableWhere(),
           },
           orderBy: { dueDate: 'asc' },
         })
