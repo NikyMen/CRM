@@ -215,5 +215,5 @@ node backend/scripts/build-pdf-logo.cjs deploy/clients/wolves/source/wolves-pdf-
 
 - Logo en alta resolución y regenerar los tres PNG y el logo de los PDF.
 - Escanear el QR de WhatsApp.
-- Desplegar en `wolves.consultoriadigital.io` siguiendo [`ops/README.md`](ops/README.md): falta
-  el registro DNS `A` y ejecutar los pasos en el VPS.
+- Producción: desplegada el 2026-10-30 en `https://wolves.consultoriadigital.io` (VPS 72.60.15.125),
+  según [`ops/README.md`](ops/README.md). Falta escanear el QR de WhatsApp de producción.
