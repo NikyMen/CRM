@@ -1,0 +1,12 @@
+/home/wolves/.pm2/logs/*.log {
+    su wolves wolves
+    daily
+    maxsize 20M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 0600 wolves wolves
+}

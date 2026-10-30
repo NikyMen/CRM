@@ -1,0 +1,16 @@
+http:
+  routers:
+    wolves:
+      rule: "Host(`wolves.consultoriadigital.io`)"
+      entryPoints:
+        - websecure
+      service: wolves
+      tls:
+        certResolver: mytlschallenge
+
+  services:
+    wolves:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://172.18.0.1:8080"
