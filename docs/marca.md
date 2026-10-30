@@ -45,6 +45,7 @@ Next reemplaza `NEXT_PUBLIC_*` al compilar: cambiar la marca exige recompilar, i
 | --- | --- | --- |
 | `NEXT_PUBLIC_BRAND_NAME` | Título de la pestaña, login, sidebar, textos | `Gestión ROMEZ` |
 | `NEXT_PUBLIC_BRAND_SHORT_NAME` | "Equipo …", "Cobranzas …", "WhatsApp de …" | `ROMEZ` |
+| `NEXT_PUBLIC_BRAND_TAGLINE` | Subtítulo del menú lateral | `Servicios contables` |
 | `NEXT_PUBLIC_BRAND_LEGAL_NAME` | Texto alternativo de los logos | `ROMEZ Servicios Contables` |
 | `NEXT_PUBLIC_BRAND_DESCRIPTION` | Meta descripción | se arma con la razón social |
 | `NEXT_PUBLIC_BRAND_SLUG` | Nombre de los CSV descargados desde el navegador | `romez` |
@@ -75,6 +76,19 @@ Pisan las variables `--brand-*` de `app/globals.css`. Sólo se aceptan hex (`#rr
 Quedan fijos en azul ROMEZ: la escala `--primary-50…900`, el anillo de foco de `.ctrl-input` y
 la trama del fondo del chat. Si un cliente usa una paleta muy distinta, conviene pasarlos a
 variables derivadas de `--brand-*`.
+
+## Desde la app (Configuración → Marca)
+
+Owner y admin pueden cambiar título, subtítulo, logo principal, logo del menú lateral y favicon
+sin recompilar. Título y subtítulo se guardan en `workspace.settings.branding`; las imágenes, en
+la tabla `workspace_assets` (entran en los respaldos de la base). Lo que quede vacío usa los
+valores de este documento. Se aceptan PNG, JPG y WebP para los logos (hasta 512 KB) y PNG o ICO
+para el favicon (hasta 256 KB); el tipo se valida por contenido y SVG no se acepta.
+
+La API es `GET /api/v1/branding` (pública, la usa el login) y `PATCH /api/v1/branding`,
+`PUT|DELETE /api/v1/branding/assets/{logo|logo-dark|favicon}` (owner/admin). La marca pública es
+la del workspace con slug `BRAND_SLUG` o, si no existe, la del primero. Los PDF siguen usando
+`BRAND_*` y el logo procesado de `backend/assets/`.
 
 ## Fuera de esta fase
 

@@ -98,49 +98,50 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                 WorkspaceUser[]
-  contacts              Contact[]
-  pipelines             Pipeline[]
-  deals                 Deal[]
-  companies             Company[]
-  activities            Activity[]
-  notes                 Note[]
-  webhooks              WebhookEndpoint[]
-  apiKeys               ApiKey[]
-  eventLogs             EventLog[]
-  channelConnections    ChannelConnection[]
-  contactIdentities     ContactIdentity[]
-  conversations         Conversation[]
-  messages              Message[]
-  whatsappSessions      WhatsAppSession[]
-  whatsappChats         WhatsAppChat[]
-  whatsappMessages      WhatsAppMessage[]
-  stockCategories       StockCategory[]
-  stockProducts         StockProduct[]
-  stockMovements        StockMovement[]
-  stockCashTransactions StockCashTransaction[]
-  clientAssignments     ClientAssignment[]
-  checklistTemplates    ChecklistTemplate[]
-  clientChecklists      ClientChecklist[]
-  recurringCharges      RecurringCharge[]
-  receivables           Receivable[]
-  payments              Payment[]
-  clientDocuments       ClientDocument[]
-  tickets               Ticket[]
-  ticketComments        TicketComment[]
-  ticketEvents          TicketEvent[]
-  internalConversations InternalConversation[]
-  internalChatMessages  InternalChatMessage[]
-  sales                 Sale[]
-  saleItems             SaleItem[]
-  saleEvents            SaleEvent[]
-  dailyReports          DailyReport[]
-  dailyReportItems      DailyReportItem[]
-  quickReplies          QuickReply[]
+  users                      WorkspaceUser[]
+  contacts                   Contact[]
+  pipelines                  Pipeline[]
+  deals                      Deal[]
+  companies                  Company[]
+  activities                 Activity[]
+  notes                      Note[]
+  webhooks                   WebhookEndpoint[]
+  apiKeys                    ApiKey[]
+  eventLogs                  EventLog[]
+  channelConnections         ChannelConnection[]
+  contactIdentities          ContactIdentity[]
+  conversations              Conversation[]
+  messages                   Message[]
+  whatsappSessions           WhatsAppSession[]
+  whatsappChats              WhatsAppChat[]
+  whatsappMessages           WhatsAppMessage[]
+  stockCategories            StockCategory[]
+  stockProducts              StockProduct[]
+  stockMovements             StockMovement[]
+  stockCashTransactions      StockCashTransaction[]
+  clientAssignments          ClientAssignment[]
+  checklistTemplates         ChecklistTemplate[]
+  clientChecklists           ClientChecklist[]
+  recurringCharges           RecurringCharge[]
+  receivables                Receivable[]
+  payments                   Payment[]
+  clientDocuments            ClientDocument[]
+  tickets                    Ticket[]
+  ticketComments             TicketComment[]
+  ticketEvents               TicketEvent[]
+  internalConversations      InternalConversation[]
+  internalChatMessages       InternalChatMessage[]
+  sales                      Sale[]
+  saleItems                  SaleItem[]
+  saleEvents                 SaleEvent[]
+  dailyReports               DailyReport[]
+  dailyReportItems           DailyReportItem[]
+  quickReplies               QuickReply[]
   collectionWhatsAppSessions CollectionWhatsAppSession[]
   collectionWhatsAppChats    CollectionWhatsAppChat[]
   collectionWhatsAppMessages CollectionWhatsAppMessage[]
   paymentPromises            PaymentPromise[]
+  assets                     WorkspaceAsset[]
 
   @@map("workspaces")
 }
@@ -158,52 +159,52 @@ model User {
   resetToken       String?   @unique
   resetTokenExpiry DateTime?
 
-  workspaces               WorkspaceUser[]
-  ownedContacts            Contact[]             @relation("ContactOwner")
-  ownedDeals               Deal[]                @relation("DealOwner")
-  activities               Activity[]
-  notes                    Note[]
-  stockMovements           StockMovement[]
-  assignedWhatsAppChats    WhatsAppChat[]        @relation("WhatsAppChatAssignee")
-  ownedCompanies           Company[]             @relation("CompanyOwner")
-  clientAssignments        ClientAssignment[]
-  assignedClientChecklists ClientChecklist[]     @relation("ClientChecklistAssignee")
-  completedChecklistItems  ClientChecklistItem[] @relation("ClientChecklistItemCompletedBy")
-  createdReceivables       Receivable[]          @relation("ReceivableCreatedBy")
-  createdPayments          Payment[]             @relation("PaymentCreatedBy")
-  uploadedClientDocuments  ClientDocument[]      @relation("ClientDocumentUploadedBy")
-  assignedTickets          Ticket[]              @relation("TicketAssignee")
-  ticketComments           TicketComment[]       @relation("TicketCommentAuthor")
-  ticketEvents             TicketEvent[]         @relation("TicketEventActor")
-  internalChatParticipants InternalConversationParticipant[]
-  internalChatMessages     InternalChatMessage[]
-  createdSales             Sale[]                @relation("SaleCreatedBy")
-  deletedSales             Sale[]                @relation("SaleDeletedBy")
-  voidedReceivables        Receivable[]          @relation("ReceivableVoidedBy")
-  voidedPayments           Payment[]             @relation("PaymentVoidedBy")
-  deletedRecurringCharges  RecurringCharge[]     @relation("RecurringChargeDeletedBy")
-  saleEvents               SaleEvent[]           @relation("SaleEventActor")
-  dailyReports             DailyReport[]         @relation("DailyReportAuthor")
-  reopenedDailyReports     DailyReport[]         @relation("DailyReportReopenedBy")
-  quickReplies             QuickReply[]          @relation("QuickReplyAuthor")
-  collectionWhatsAppMessages CollectionWhatsAppMessage[] @relation("CollectionWhatsAppSender")
-  assignedPaymentPromises  PaymentPromise[]      @relation("PaymentPromiseAssignee")
-  createdPaymentPromises   PaymentPromise[]      @relation("PaymentPromiseCreatedBy")
-  closedPaymentPromises    PaymentPromise[]      @relation("PaymentPromiseClosedBy")
+  workspaces                 WorkspaceUser[]
+  ownedContacts              Contact[]                         @relation("ContactOwner")
+  ownedDeals                 Deal[]                            @relation("DealOwner")
+  activities                 Activity[]
+  notes                      Note[]
+  stockMovements             StockMovement[]
+  assignedWhatsAppChats      WhatsAppChat[]                    @relation("WhatsAppChatAssignee")
+  ownedCompanies             Company[]                         @relation("CompanyOwner")
+  clientAssignments          ClientAssignment[]
+  assignedClientChecklists   ClientChecklist[]                 @relation("ClientChecklistAssignee")
+  completedChecklistItems    ClientChecklistItem[]             @relation("ClientChecklistItemCompletedBy")
+  createdReceivables         Receivable[]                      @relation("ReceivableCreatedBy")
+  createdPayments            Payment[]                         @relation("PaymentCreatedBy")
+  uploadedClientDocuments    ClientDocument[]                  @relation("ClientDocumentUploadedBy")
+  assignedTickets            Ticket[]                          @relation("TicketAssignee")
+  ticketComments             TicketComment[]                   @relation("TicketCommentAuthor")
+  ticketEvents               TicketEvent[]                     @relation("TicketEventActor")
+  internalChatParticipants   InternalConversationParticipant[]
+  internalChatMessages       InternalChatMessage[]
+  createdSales               Sale[]                            @relation("SaleCreatedBy")
+  deletedSales               Sale[]                            @relation("SaleDeletedBy")
+  voidedReceivables          Receivable[]                      @relation("ReceivableVoidedBy")
+  voidedPayments             Payment[]                         @relation("PaymentVoidedBy")
+  deletedRecurringCharges    RecurringCharge[]                 @relation("RecurringChargeDeletedBy")
+  saleEvents                 SaleEvent[]                       @relation("SaleEventActor")
+  dailyReports               DailyReport[]                     @relation("DailyReportAuthor")
+  reopenedDailyReports       DailyReport[]                     @relation("DailyReportReopenedBy")
+  quickReplies               QuickReply[]                      @relation("QuickReplyAuthor")
+  collectionWhatsAppMessages CollectionWhatsAppMessage[]       @relation("CollectionWhatsAppSender")
+  assignedPaymentPromises    PaymentPromise[]                  @relation("PaymentPromiseAssignee")
+  createdPaymentPromises     PaymentPromise[]                  @relation("PaymentPromiseCreatedBy")
+  closedPaymentPromises      PaymentPromise[]                  @relation("PaymentPromiseClosedBy")
 
   @@map("users")
 }
 
 model WorkspaceUser {
-  id          String   @id @default(cuid())
-  workspaceId String
-  userId      String
-  role        String   @default("member")
+  id           String           @id @default(cuid())
+  workspaceId  String
+  userId       String
+  role         String           @default("member")
   /// Overrides de módulos de esta persona dentro del workspace. Nunca contiene
   /// credenciales; las claves válidas se validan en el registro de módulos.
-  moduleAccess Json     @default("{}")
-  createdAt   DateTime @default(now())
-  invitations TeamInvitation[]
+  moduleAccess Json             @default("{}")
+  createdAt    DateTime         @default(now())
+  invitations  TeamInvitation[]
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -213,13 +214,13 @@ model WorkspaceUser {
 }
 
 model TeamInvitation {
-  id          String   @id @default(cuid())
-  tokenHash   String   @unique
+  id          String        @id @default(cuid())
+  tokenHash   String        @unique
   role        String
   createdById String
   expiresAt   DateTime
   usedAt      DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime      @default(now())
   createdBy   WorkspaceUser @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([createdById, expiresAt])
@@ -857,21 +858,21 @@ model Company {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner            User?              @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  contacts         Contact[]
-  deals            Deal[]
-  assignments      ClientAssignment[]
-  checklists       ClientChecklist[]
-  recurringCharges RecurringCharge[]
-  receivables      Receivable[]
-  payments         Payment[]
-  documents        ClientDocument[]
-  tickets          Ticket[]
-  sales            Sale[]
-  dailyReportItems DailyReportItem[]
+  workspace               Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner                   User?                    @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  contacts                Contact[]
+  deals                   Deal[]
+  assignments             ClientAssignment[]
+  checklists              ClientChecklist[]
+  recurringCharges        RecurringCharge[]
+  receivables             Receivable[]
+  payments                Payment[]
+  documents               ClientDocument[]
+  tickets                 Ticket[]
+  sales                   Sale[]
+  dailyReportItems        DailyReportItem[]
   collectionWhatsAppChats CollectionWhatsAppChat[]
-  paymentPromises  PaymentPromise[]
+  paymentPromises         PaymentPromise[]
 
   @@unique([workspaceId, ruc])
   @@index([workspaceId])
@@ -984,23 +985,23 @@ model ClientChecklistItem {
 }
 
 model RecurringCharge {
-  id          String                   @id @default(cuid())
-  workspaceId String
-  companyId   String
-  name        String
-  description String?
-  amount      Decimal                  @db.Decimal(18, 2)
-  currency    String                   @default("PYG")
-  frequency   RecurringChargeFrequency @default(MONTHLY)
-  dayOfMonth  Int                      @default(1)
-  startDate   DateTime
-  endDate     DateTime?
-  isActive    Boolean                  @default(true)
+  id              String                   @id @default(cuid())
+  workspaceId     String
+  companyId       String
+  name            String
+  description     String?
+  amount          Decimal                  @db.Decimal(18, 2)
+  currency        String                   @default("PYG")
+  frequency       RecurringChargeFrequency @default(MONTHLY)
+  dayOfMonth      Int                      @default(1)
+  startDate       DateTime
+  endDate         DateTime?
+  isActive        Boolean                  @default(true)
   // Papelera: un plan eliminado deja de generar cargos y puede restaurarse.
   deletedAt       DateTime?
   deletedByUserId String?
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -1073,9 +1074,9 @@ model Payment {
   document    ClientDocument?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
   allocations PaymentAllocation[]
 
+  @@unique([workspaceId, externalKey])
   @@index([workspaceId, companyId, paidAt])
   @@index([workspaceId, paidAt])
-  @@unique([workspaceId, externalKey])
   @@map("payments")
 }
 
@@ -1138,10 +1139,10 @@ model Sale {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  createdBy User?      @relation("SaleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  deletedBy User?      @relation("SaleDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy User?       @relation("SaleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  deletedBy User?       @relation("SaleDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   items     SaleItem[]
   events    SaleEvent[]
 
@@ -1198,20 +1199,20 @@ enum DailyReportStatus {
 /// Planilla diaria: lo que cada integrante hizo en un día calendario de Paraguay.
 /// Se carga al final de la jornada y se envía para que owner/admin la revisen.
 model DailyReport {
-  id                String            @id @default(cuid())
-  workspaceId       String
-  userId            String
-  date              DateTime          @db.Date
-  status            DailyReportStatus @default(DRAFT)
-  notes             String?
+  id               String            @id @default(cuid())
+  workspaceId      String
+  userId           String
+  date             DateTime          @db.Date
+  status           DailyReportStatus @default(DRAFT)
+  notes            String?
   /// "Carga físico" e "Imputado / migrado" de la planilla en papel: cantidades de comprobantes.
-  physicalCount     Int?
-  migratedCount     Int?
-  submittedAt       DateTime?
-  reopenedAt        DateTime?
-  reopenedByUserId  String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  physicalCount    Int?
+  migratedCount    Int?
+  submittedAt      DateTime?
+  reopenedAt       DateTime?
+  reopenedByUserId String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user       User              @relation("DailyReportAuthor", fields: [userId], references: [id], onDelete: Cascade)
@@ -1378,9 +1379,9 @@ model CollectionWhatsAppChat {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  workspace Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  company   Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  messages  CollectionWhatsAppMessage[]
+  workspace       Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company         Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  messages        CollectionWhatsAppMessage[]
   paymentPromises PaymentPromise[]
 
   @@unique([workspaceId, line, jid])
@@ -1450,4 +1451,20 @@ model PaymentPromise {
   @@index([workspaceId, assignedUserId, status, promisedDate])
   @@index([workspaceId, companyId, status])
   @@map("payment_promises")
+}
+
+/// Imágenes de marca editables desde Configuración: logo claro, logo oscuro y favicon.
+/// En la base (y no en disco) para que entren en los respaldos y sobrevivan a los redeploys.
+model WorkspaceAsset {
+  id          String    @id @default(cuid())
+  workspaceId String
+  kind        String
+  mimeType    String
+  data        Bytes
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind])
+  @@map("workspace_assets")
 }

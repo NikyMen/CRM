@@ -26,6 +26,8 @@ const legalName = text(process.env.NEXT_PUBLIC_BRAND_LEGAL_NAME, 'ROMEZ Servicio
 export const brand = {
   /** Nombre del producto: títulos, login, sidebar. */
   name,
+  /** Subtítulo del menú lateral. */
+  tagline: text(process.env.NEXT_PUBLIC_BRAND_TAGLINE, 'Servicios contables'),
   /** Nombre corto para etiquetas como "Equipo ROMEZ". */
   shortName: text(process.env.NEXT_PUBLIC_BRAND_SHORT_NAME, 'ROMEZ'),
   /** Razón social: textos alternativos de los logos. */

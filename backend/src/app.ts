@@ -44,6 +44,7 @@ import { internalChatRoutes } from './modules/internal-chat/internal-chat.routes
 import { saleRoutes } from './modules/sales/sale.routes'
 import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
+import { brandingRoutes } from './modules/branding/branding.routes'
 import { quickReplyRoutes } from './modules/quick-replies/quick-reply.routes'
 import { collectionWhatsAppRoutes, commercialWhatsAppRoutes } from './modules/collections-whatsapp/collection-whatsapp.routes'
 import { collectionWhatsAppManager, commercialWhatsAppManager } from './modules/collections-whatsapp/collection-whatsapp.manager'
@@ -206,6 +207,7 @@ export async function buildApp() {
   await app.register(saleRoutes, { prefix: `${API}/sales`, eventBus })
   await app.register(dailyReportRoutes, { prefix: `${API}/daily-reports` })
   await app.register(stockRoutes, { prefix: `${API}/stock` })
+  await app.register(brandingRoutes, { prefix: `${API}/branding` })
 
   app.addHook('onReady', async () => {
     await whatsAppManager.startBackgroundRuntime()
