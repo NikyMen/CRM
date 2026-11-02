@@ -47,7 +47,7 @@ set('wppiaUrl', 'http://127.0.0.1:3720')
 set('webhookSecret', ses.webhookSecret)
 // Seguro por defecto: el bot NO contesta a nadie hasta que pongas acá tu teléfono de prueba.
 set('soloPrueba', '000000000')
-for (const n of wf.nodes) if (n.credentials?.httpBearerAuth) n.credentials.httpBearerAuth = { id: CRED_ID, name: 'wppia ROMEZ comercial' }
+for (const n of wf.nodes) if (n.credentials?.httpBearerAuth) n.credentials.httpBearerAuth = { id: CRED_ID, name: 'Bearer Auth WppIA' }
 const patched = path.join(N8N, 'romez-comercial.local.n8n.json')
 fs.writeFileSync(patched, JSON.stringify([wf]), { mode: 0o600 })
 
@@ -55,7 +55,7 @@ fs.writeFileSync(patched, JSON.stringify([wf]), { mode: 0o600 })
 if (!fs.existsSync(MARCA) || FORCE) {
   const env = { ...process.env, N8N_USER_FOLDER: path.join(N8N, 'data'), N8N_DIAGNOSTICS_ENABLED: 'false' }
   const credFile = path.join(N8N, 'cred.tmp.json')
-  fs.writeFileSync(credFile, JSON.stringify([{ id: CRED_ID, name: 'wppia ROMEZ comercial', type: 'httpBearerAuth', data: { token: ses.token } }]), { mode: 0o600 })
+  fs.writeFileSync(credFile, JSON.stringify([{ id: CRED_ID, name: 'Bearer Auth WppIA', type: 'httpBearerAuth', data: { token: ses.token } }]), { mode: 0o600 })
   try {
     run('node', ['node_modules/n8n/bin/n8n', 'import:credentials', `--input=${credFile}`], { cwd: N8N, env })
     run('node', ['node_modules/n8n/bin/n8n', 'import:workflow', `--input=${patched}`], { cwd: N8N, env })
@@ -65,4 +65,4 @@ if (!fs.existsSync(MARCA) || FORCE) {
 } else {
   console.log('• el flujo ya estaba importado (usá --force para importarlo de nuevo)')
 }
-console.log('\nListo. Falta: crear usuario en n8n, la credencial OpenAI, la Data Table y tu teléfono en soloPrueba (ver LOCAL.md).')
+console.log('\nListo. Falta: crear usuario en n8n, la credencial OpenAI, la credencial y la tabla de PostgreSQL y tu teléfono en soloPrueba (ver LOCAL.md).')

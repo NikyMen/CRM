@@ -1,5 +1,7 @@
 # Asistente comercial de WhatsApp · pruebas en local
 
+> Esta guía es la opción 100 % local. Si ya tenés **wppia deployado y n8n en el servidor**, usá [`INSTALAR-EN-SERVIDOR.md`](INSTALAR-EN-SERVIDOR.md): es el camino más corto.
+
 Entorno de pruebas en tu PC: **wppia** (gateway Baileys) + **n8n** locales. Nada de esto toca producción ni el backend del CRM.
 
 ```
@@ -26,13 +28,13 @@ otro teléfono ──► WhatsApp (tu número de prueba, vinculado por QR) ─�
 powershell -ExecutionPolicy Bypass -File docs\asistente-comercial\local\iniciar-local.ps1
 ```
 
-Crea la sesión de wppia con el webhook apuntando al n8n local, importa la credencial `wppia ROMEZ comercial` y el flujo ya configurado, y abre dos ventanas (wppia y n8n). Es idempotente.
+Crea la sesión de wppia con el webhook apuntando al n8n local, importa la credencial `Bearer Auth WppIA` y el flujo ya configurado, y abre dos ventanas (wppia y n8n). Es idempotente.
 
 ## Lo que falta hacer a mano (5 pasos)
 
 1. **n8n** (`http://127.0.0.1:5678`): crear el usuario dueño de tu instancia local.
 2. **Credencial OpenAI**: *Credentials → Create → OpenAI API*, nombre exacto **`OpenAI ROMEZ`**, y tu API key.
-3. **Data Table**: *Data tables → Create* con el nombre `romez_chats` y 4 columnas de tipo texto: `phone`, `estado`, `lastMsgId`, `buffer`. Abrí el flujo y elegí esa tabla en los 8 nodos *Leer…/Guardar…*.
+3. **PostgreSQL**: el flujo guarda el estado de cada chat en una tabla. Creá la credencial `Postgres ROMEZ` (necesitás un PostgreSQL al que llegue tu n8n local, por ejemplo uno en Docker), ejecutá `romez_chats.sql` una vez y elegí esa credencial en los 8 nodos Postgres.
 4. **wppia** (`http://127.0.0.1:3720`, usuario `admin`): abrí la sesión *ROMEZ comercial (local)*, activá **mensajes propios (`includeFromMe`)** y escaneá el QR desde *WhatsApp → Dispositivos vinculados*.
 5. **Nodo `Config` del flujo**: poné en `soloPrueba` el teléfono **desde el que vas a escribir** (con código de país, solo dígitos, p. ej. `595981123456`) y, si querés recibir avisos de derivación, `notificarA`. Después **activá** el workflow (interruptor arriba a la derecha).
 

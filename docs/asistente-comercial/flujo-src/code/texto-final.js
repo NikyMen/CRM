@@ -26,8 +26,8 @@ if (['image', 'document', 'video', 'location', 'contact'].includes(base.kind)) {
 }
 if (base.location) e.ubicacion = base.location;
 
-const prev = String($('Leer estado (entrante)').first().json.buffer ?? '').trim();
-const buffer = prev ? prev + '\n' + text : text;
+// El texto nuevo se agrega al buffer dentro de la base (atómico): acá va solo este mensaje.
+const buffer = text
 
 return [{
   json: { ...base, text, e, estado: JSON.stringify(e), buffer, lastMsgId: base.messageId },
