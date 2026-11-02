@@ -4,9 +4,12 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { auth } from '@/lib/auth'
 import { BASE_URL } from '@/lib/api'
+import { notifyIncomingMessage, unlockAudioOnFirstGesture, type NotificationLine } from '@/lib/notifications'
 
 type RealtimeEvent = {
+  line?: NotificationLine
   type?:
+    | 'message.received'
     | 'session.updated'
     | 'chat.updated'
     | 'message.updated'
@@ -28,7 +31,15 @@ export function WhatsAppLiveSync() {
     let stopped = false
     let retry = 0
 
+    const stopUnlock = unlockAudioOnFirstGesture()
+
     const refresh = (event?: RealtimeEvent) => {
+      if (event?.type === 'message.received') {
+        if (event.line) notifyIncomingMessage(event.line)
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-chats'] })
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] })
+        return
+      }
       const kind = event?.type?.split('.')[0]
       if (!kind || kind === 'session') {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-session'] })
@@ -118,6 +129,7 @@ export function WhatsAppLiveSync() {
     document.addEventListener('visibilitychange', resync)
     return () => {
       stopped = true
+      stopUnlock()
       controller?.abort()
       if (retryTimer) clearTimeout(retryTimer)
       window.removeEventListener('online', resync)

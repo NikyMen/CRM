@@ -6,10 +6,11 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Bell, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
+import { NotificationSettingsDialog } from '@/components/romez/NotificationSettingsDialog'
 import { ConfirmDeleteProvider } from '@/components/romez/ConfirmDelete'
 import { UserAvatar } from '@/components/UserAvatar'
 import { useWorkspaceModules } from '@/lib/useWorkspaceModules'
@@ -102,6 +103,7 @@ function Sidebar({ items, pathname, onClose, collapsed = false, onToggle, badges
 
 function UserMenu({ user, onLogout, showTeam = false }: { user: ReturnType<typeof auth.get>; onLogout: () => void; showTeam?: boolean }) {
   const [open, setOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
 
@@ -129,10 +131,12 @@ function UserMenu({ user, onLogout, showTeam = false }: { user: ReturnType<typeo
         <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] py-1 shadow-lg">
           <div className="border-b border-[var(--line)] px-4 py-3 sm:hidden"><p className="truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
           {showTeam ? <Link href="/team" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><UsersRound size={15} /> Equipo</Link> : null}
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); setNotificationsOpen(true) }} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Bell size={15} /> Notificaciones</button>
           <Link href="/settings" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Settings size={15} /> Configuración</Link>
           <button type="button" role="menuitem" onClick={onLogout} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-red-600 hover:bg-[var(--background)]"><LogOut size={15} /> Cerrar sesión</button>
         </div>
       ) : null}
+      {notificationsOpen ? <NotificationSettingsDialog onClose={() => setNotificationsOpen(false)} /> : null}
     </div>
   )
 }

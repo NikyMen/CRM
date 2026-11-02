@@ -21,6 +21,7 @@ import {
   WHATSAPP_OUTBOUND_FILE_MAX_BYTES,
 } from '../whatsapp/whatsapp.manager'
 import { ME_SENDER, mergeReaction, readReactionMessage } from '../whatsapp/whatsapp.reactions'
+import { whatsAppRealtime } from '../whatsapp/whatsapp.events'
 import { ensureCommercialLead } from '../deals/commercial-lead'
 import { normalizeCollectionPhone, phoneMatchKey } from './collection-whatsapp.phone'
 
@@ -678,6 +679,9 @@ export class CollectionWhatsAppManager {
         ...(!fromMe && isNew ? { unreadCount: { increment: 1 } } : {}),
       },
     })
+
+    // Aviso en vivo (sonido/notificación) sólo para mensajes entrantes recién llegados, no historial.
+    if (!fromMe && isNew) whatsAppRealtime.publish(workspaceId, { type: 'message.received', line: this.line })
 
     // El número comercial alimenta el tablero de Gestión comercial.
     if (this.line === 'commercial' && !fromMe && isNew) await this.ensureLead(workspaceId, chat.id, message?.pushName)
