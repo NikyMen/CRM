@@ -8,6 +8,23 @@ otro teléfono ──► WhatsApp (número de pruebas vinculado a wppia) ──�
                                                                       └──── send-message ◄─┘      (estado de cada chat: PostgreSQL)
 ```
 
+## Ya instalado en el servidor (1/11/2026)
+
+En `72.60.15.125` se creó un PostgreSQL dedicado para el asistente (opción 2 de [`opciones-base-de-datos.html`](opciones-base-de-datos.html)):
+
+| Qué | Valor |
+| --- | --- |
+| Contenedor | `romez-asistente-pg` (`postgres:16-alpine`, reinicio `unless-stopped`, 512 MB) |
+| Red | `n8n_default`, **sin puertos publicados** (solo n8n lo ve) |
+| Volumen | `romez_asistente_pgdata` |
+| Base / usuario | `romez_asistente` / `romez_asistente` |
+| Contraseña | en `/root/romez-asistente-pg.env` (permiso 600): `ssh farmacia "grep POSTGRES_PASSWORD /root/romez-asistente-pg.env"` |
+| Tabla | `romez_chats` ya creada |
+
+**Credencial `Postgres ROMEZ` en n8n:** host `romez-asistente-pg`, puerto `5432`, base `romez_asistente`, usuario `romez_asistente`, SSL *Disable*. Con eso se salta el paso 3 de abajo (crear la tabla).
+
+Deshacer todo: `docker rm -f romez-asistente-pg && docker volume rm romez_asistente_pgdata && rm /root/romez-asistente-pg.env`.
+
 ## 1 · Sesión nueva en wppia (panel deployado)
 
 1. Creá una sesión nueva (p. ej. "ROMEZ prueba"). No toques las sesiones de otros clientes.
@@ -25,7 +42,7 @@ otro teléfono ──► WhatsApp (número de pruebas vinculado a wppia) ──�
 | `Postgres ROMEZ` | Postgres | host, base, usuario y contraseña de un PostgreSQL al que llegue tu n8n |
 | `ROMEZ CRM X-API-Key` | Header Auth | solo si algún día activás el nodo del CRM (viene desactivado) |
 
-## 3 · Crear la tabla (una sola vez)
+## 3 · Crear la tabla (una sola vez; en farmacia ya está hecho)
 
 La tabla es `romez_chats` (una fila por chat). El SQL está en [`romez_chats.sql`](romez_chats.sql). La forma más simple, sin consola:
 
