@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Mail } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import { DevelopedBy } from '@/components/AuthBrand'
 import { brand } from '@/lib/brand'
+import { useBranding } from '@/lib/useBranding'
+import { BrandImage } from '@/components/BrandImage'
 
 const CAPABILITIES = [
   'Legajos y obligaciones en un solo lugar',
@@ -17,6 +18,7 @@ const CAPABILITIES = [
 
 export default function LoginPage() {
   const router = useRouter()
+  const branding = useBranding()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -53,7 +55,7 @@ export default function LoginPage() {
       <section className="relative hidden overflow-hidden bg-[var(--brand-navy-deep)] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
         <div className="absolute inset-y-0 right-0 w-px bg-white/12" />
         <div>
-          <Image src={brand.logo} alt={brand.legalName} width={176} height={176} className="h-40 w-40 object-contain" priority />
+          {branding.ready ? <BrandImage src={branding.logo} alt={brand.legalName} size={176} className="h-40 w-40 object-contain" priority /> : <div className="h-40 w-40" />}
           <p className="mt-8 max-w-lg font-display text-4xl font-extrabold leading-tight tracking-[-0.04em]">Cada cliente, vencimiento y conversación en orden.</p>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/66">El espacio de trabajo diario del estudio para resolver pendientes con contexto y responsabilidad clara.</p>
         </div>
@@ -65,10 +67,10 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-[var(--paper-soft)] px-5 py-10 sm:px-10">
         <div className="w-full max-w-[430px]">
           <div className="mb-8 lg:hidden">
-            <Image src={brand.logoOnDark} alt={brand.legalName} width={128} height={128} className="mx-auto h-28 w-28 object-contain" priority />
+            {branding.ready ? <BrandImage src={branding.logoOnDark} alt={brand.legalName} size={128} className="mx-auto h-28 w-28 object-contain" priority /> : <div className="mx-auto h-28 w-28" />}
           </div>
           <div className="mb-7">
-            <p className="section-label">{brand.name}</p>
+            <p className="section-label">{branding.name}</p>
             <h1 className="page-title mt-2">Ingresá a tu mesa de trabajo</h1>
             <p className="page-subtitle">Acceso exclusivo para el equipo autorizado del estudio.</p>
           </div>
