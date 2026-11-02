@@ -1,4 +1,4 @@
-// Tras la espera: solo sigue la ejecución del ÚLTIMO mensaje de la ráfaga, con todo el texto junto.
+// Tras la espera: la base devuelve fila (y vacía el buffer) solo a la ejecución del ÚLTIMO mensaje de la ráfaga.
 const base = $('Texto final').first().json;
 const row = $input.first().json;
 const now = Date.now();
@@ -14,5 +14,6 @@ if (e.pausedUntil && e.pausedUntil > now) {
   return [{ json: { continuar: false, motivo: 'pausado_por_persona' } }];
 }
 
-const text = String(row.buffer ?? '').trim() || base.text;
+const text = String(row.buffer ?? '').trim();
+if (!text) return [{ json: { continuar: false, motivo: 'ya_consumido' } }];
 return [{ json: { continuar: true, phone: base.phone, name: base.name, kind: base.kind, messageId: base.messageId, text, e } }];

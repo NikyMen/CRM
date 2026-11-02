@@ -30,6 +30,26 @@ t('los nodos Code compilan', () => {
     new Function('$input', '$json', '$', '$now', '$getWorkflowStaticData', `return (async () => {${n.parameters.jsCode}\n})()`)
   }
 })
+t('no quedan nodos Data Table: el estado vive en 8 nodos PostgreSQL', () => {
+  assert.strictEqual(wf.nodes.filter((n) => /dataTable/.test(n.type)).length, 0)
+  const pg = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.postgres')
+  assert.strictEqual(pg.length, 8)
+  for (const n of pg) { assert.strictEqual(n.parameters.operation, 'executeQuery'); assert.strictEqual(n.credentials.postgres.name, 'Postgres ROMEZ') }
+})
+t('las lecturas devuelven un item aunque no haya fila (alwaysOutputData)', () => {
+  for (const n of wf.nodes.filter((x) => /^Leer /.test(x.name))) assert.strictEqual(n.alwaysOutputData, true, n.name)
+})
+t('cada consulta con parámetros $N recibe esa cantidad de valores', () => {
+  for (const n of wf.nodes.filter((x) => x.type === 'n8n-nodes-base.postgres')) {
+    const max = Math.max(0, ...[...n.parameters.query.matchAll(/\$(\d)/g)].map((m) => Number(m[1])))
+    const given = n.parameters.options.queryReplacement ? (n.parameters.options.queryReplacement.match(/\$json|\$\('/g) || []).length : 0
+    assert.strictEqual(given, max, n.name)
+  }
+})
+t('las credenciales de wppia se llaman «Bearer Auth WppIA»', () => {
+  const nombres = new Set(wf.nodes.filter((n) => n.credentials?.httpBearerAuth).map((n) => n.credentials.httpBearerAuth.name))
+  assert.deepStrictEqual([...nombres], ['Bearer Auth WppIA'])
+})
 t('el prompt no contiene {{ (evita expresiones accidentales)', () => {
   const ag = wf.nodes.find((n) => n.name === 'AI Agent')
   assert.ok(!ag.parameters.options.systemMessage.includes('{{'))
@@ -113,15 +133,22 @@ t('texto final: audio transcripto', () => {
   const r2 = run('Texto final', { input: item({ error: 'x' }), nodes: wfNodes({ 'Estado del chat': item(e2), 'Leer estado (entrante)': item({}) }) })[0].json
   assert.match(r2.text, /AUDIO NO COMPRENDIDO/)
 })
-t('texto final: ráfaga concatena mensajes previos', () => {
-  const r = run('Texto final', { input: item(est), nodes: wfNodes({ 'Estado del chat': item(est), 'Leer estado (entrante)': item({ buffer: 'Hola' }) }) })[0].json
-  assert.strictEqual(r.buffer, 'Hola\n' + lead.text)
+t('texto final: manda solo el texto NUEVO (la base lo agrega al buffer)', () => {
+  const r = run('Texto final', { input: item(est), nodes: wfNodes({ 'Estado del chat': item(est) }) })[0].json
+  assert.strictEqual(r.buffer, lead.text)
 })
 
 const rowSaved = { estado: tf.estado, lastMsgId: tf.lastMsgId, buffer: tf.buffer }
 t('último mensaje: el más reciente sigue, con todo el texto', () => {
   const r = run('¿Último mensaje?', { input: item(rowSaved), nodes: wfNodes({ 'Texto final': item(tf) }) })[0].json
   assert.strictEqual(r.continuar, true); assert.strictEqual(r.text, tf.buffer)
+})
+t('último mensaje: buffer ya consumido por otra ejecución → no responde dos veces', () => {
+  const r = run('¿Último mensaje?', { input: item({ ...rowSaved, buffer: '' }), nodes: wfNodes({ 'Texto final': item(tf) }) })[0].json
+  assert.strictEqual(r.continuar, false); assert.strictEqual(r.motivo, 'ya_consumido')
+})
+t('último mensaje: sin fila (otro mensaje lo reemplazó) → termina', () => {
+  assert.strictEqual(run('¿Último mensaje?', { input: item({}), nodes: wfNodes({ 'Texto final': item(tf) }) })[0].json.continuar, false)
 })
 t('último mensaje: si llegó otro, esta ejecución termina', () => {
   assert.strictEqual(run('¿Último mensaje?', { input: item({ ...rowSaved, lastMsgId: 'OTRO' }), nodes: wfNodes({ 'Texto final': item(tf) }) })[0].json.continuar, false)

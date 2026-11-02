@@ -38,35 +38,23 @@ const ifNode = (name, left, pos, { op = 'boolTrue', right = '' } = {}) => {
 }
 
 const BEARER = { authentication: 'genericCredentialType', genericAuthType: 'httpBearerAuth' }
-const wppiaCred = { httpBearerAuth: { name: 'wppia ROMEZ comercial' } }
+const wppiaCred = { httpBearerAuth: { name: 'Bearer Auth WppIA' } }
 const WPPIA = "={{ $('Config').first().json.wppiaUrl }}"
 
-const col = (id) => ({ id, displayName: id, required: false, defaultMatch: false, display: true, type: 'string', canBeUsedToMatch: true, removed: false })
-const tableRef = { __rl: true, value: '', mode: 'list', cachedResultName: 'romez_chats' }
-const dtGet = (name, phoneExpr, pos, opts = {}) => add({
-  parameters: opts.all
-    ? { operation: 'get', dataTableId: tableRef, returnAll: true }
-    : { operation: 'get', dataTableId: tableRef, matchType: 'allConditions', filters: { conditions: [{ keyName: 'phone', keyValue: phoneExpr }] }, limit: 1 },
-  type: 'n8n-nodes-base.dataTable', typeVersion: 1.1, position: pos, name, alwaysOutputData: true,
-})
-const dtUpsert = (name, values, pos, phoneExpr = '={{ $json.phone }}') => add({
+const SQL = require('./sql.js')
+const pgCred = { postgres: { name: 'Postgres ROMEZ' } }
+const pgNode = (name, query, params, pos, { read = false } = {}) => add({
   parameters: {
-    operation: 'upsert',
-    dataTableId: tableRef,
-    matchType: 'allConditions',
-    filters: { conditions: [{ keyName: 'phone', keyValue: phoneExpr }] },
-    columns: {
-      mappingMode: 'defineBelow',
-      value: values,
-      matchingColumns: [],
-      schema: Object.keys(values).map(col),
-      attemptToConvertTypes: false,
-      convertFieldsToString: false,
-    },
-    options: {},
+    operation: 'executeQuery',
+    query,
+    options: params ? { queryReplacement: '={{ [' + params.join(', ') + '] }}' } : {},
   },
-  type: 'n8n-nodes-base.dataTable', typeVersion: 1.1, position: pos, name,
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.5, position: pos, name, credentials: pgCred,
+  ...(read ? { alwaysOutputData: true } : {}),
 })
+const pgGet = (name, phoneExpr, pos) => pgNode(name, SQL.GET_ONE, [phoneExpr], pos, { read: true })
+const pgGetAll = (name, pos) => pgNode(name, SQL.GET_ALL, null, pos, { read: true })
+const pgSaveEstado = (name, pos) => pgNode(name, SQL.UPSERT_ESTADO, ['$json.phone', '$json.estado'], pos)
 
 const sticky = (content, pos, w, h, color = 4) =>
   add({ parameters: { content, height: h, width: w, color }, type: 'n8n-nodes-base.stickyNote', typeVersion: 1, position: pos, name: 'Nota ' + (nodes.length + 1) })
@@ -128,17 +116,17 @@ link(ifIn.name, ifMe.name, 1)
 link(ifMe.name, ifScan.name, 1)
 
 // ---------- toma humana ----------
-const leerMe = dtGet('Leer estado (toma humana)', '={{ $json.phone }}', [1080, 560])
+const leerMe = pgGet('Leer estado (toma humana)', '$json.phone', [1080, 560])
 const toma = codeNode('Toma humana', 'toma-humana.js', [1320, 560])
 const ifGuardarMe = ifNode('¿Pausar al bot?', '={{ $json.guardar }}', [1560, 560])
-const guardarMe = dtUpsert('Guardar pausa', { phone: '={{ $json.phone }}', estado: '={{ $json.estado }}', buffer: '' }, [1800, 540])
+const guardarMe = pgSaveEstado('Guardar pausa', [1800, 540])
 link(ifMe.name, leerMe.name, 0)
 link(leerMe.name, toma.name)
 link(toma.name, ifGuardarMe.name)
 link(ifGuardarMe.name, guardarMe.name, 0)
 
 // ---------- mensaje entrante ----------
-const leerIn = dtGet('Leer estado (entrante)', '={{ $json.phone }}', [1080, 240])
+const leerIn = pgGet('Leer estado (entrante)', '$json.phone', [1080, 240])
 const estado = codeNode('Estado del chat', 'estado-chat.js', [1320, 240])
 const ifResp = ifNode('¿Responde el bot?', '={{ $json.responder }}', [1560, 240])
 link(ifIn.name, leerIn.name, 0)
@@ -200,14 +188,12 @@ link(largo.name, textoFinal.name)
 link(ifAudio.name, textoFinal.name, 1)
 
 // buffer anti-ráfaga
-const guardarBuf = dtUpsert('Guardar mensaje (buffer)', {
-  phone: '={{ $json.phone }}', estado: '={{ $json.estado }}', lastMsgId: '={{ $json.lastMsgId }}', buffer: '={{ $json.buffer }}',
-}, [3240, 240])
+const guardarBuf = pgNode('Guardar mensaje (buffer)', SQL.UPSERT_BUFFER, ['$json.phone', '$json.estado', '$json.lastMsgId', '$json.buffer'], [3240, 240])
 const espera = add({
   parameters: { resume: 'timeInterval', amount: "={{ $('Config').first().json.esperaSegundos }}", unit: 'seconds' },
   type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [3480, 240], name: 'Esperar ráfaga', webhookId: uid(),
 })
-const leerPost = dtGet('Leer estado (post espera)', "={{ $('Texto final').first().json.phone }}", [3720, 240])
+const leerPost = pgNode('Leer estado (post espera)', SQL.CONSUMIR_BUFFER, ["$('Texto final').first().json.phone", "$('Texto final').first().json.messageId"], [3720, 240], { read: true })
 const ultimo = codeNode('¿Último mensaje?', 'ultimo-mensaje.js', [3960, 240])
 const ifUlt = ifNode('¿Sigo yo?', '={{ $json.continuar }}', [4200, 240])
 link(textoFinal.name, guardarBuf.name)
@@ -259,7 +245,7 @@ const enviar = add({
 link(parsear.name, split.name)
 link(split.name, enviar.name)
 
-const guardarResp = dtUpsert('Guardar estado (respuesta)', { phone: '={{ $json.phone }}', estado: '={{ $json.estado }}', buffer: '' }, [5460, 280])
+const guardarResp = pgSaveEstado('Guardar estado (respuesta)', [5460, 280])
 link(parsear.name, guardarResp.name)
 
 const ifAviso = ifNode('¿Avisar al equipo?', "={{ $json.handoff && !!$json.avisoTo }}", [5460, 440])
@@ -292,9 +278,9 @@ link(parsear.name, ifCrm.name)
 link(ifCrm.name, crm.name, 0)
 
 // ---------- seguimientos ----------
-const leerTodos = dtGet('Leer todos los chats', '', [1080, 760], { all: true })
+const leerTodos = pgGetAll('Leer todos los chats', [1080, 760])
 const segui = codeNode('Seguimientos pendientes', 'seguimientos.js', [1320, 760])
-const guardarSeg = dtUpsert('Guardar estado (seguimiento)', { phone: '={{ $json.phone }}', estado: '={{ $json.estado }}' }, [1560, 760])
+const guardarSeg = pgSaveEstado('Guardar estado (seguimiento)', [1560, 760])
 const enviarSeg = add({
   parameters: {
     method: 'POST', url: "={{ $('Config').first().json.wppiaUrl }}/api/send-message",
@@ -313,8 +299,8 @@ link(guardarSeg.name, enviarSeg.name)
 // ---------- notas ----------
 sticky(
   '## ROMEZ · Asistente comercial de WhatsApp\n' +
-  '**Antes de activar:** 1) crear la Data Table `romez_chats` (columnas de texto: phone, estado, lastMsgId, buffer) y elegirla en los 8 nodos *Data Table* (los que dicen Leer/Guardar estado); ' +
-  '2) crear las credenciales `wppia ROMEZ comercial` (Bearer), `OpenAI ROMEZ` y, si se usa, `ROMEZ CRM X-API-Key`; ' +
+  '**Antes de activar:** 1) crear la tabla en PostgreSQL con `romez_chats.sql` (una sola vez) y elegir la credencial `Postgres ROMEZ` en los 8 nodos Postgres; ' +
+  '2) credenciales `Bearer Auth WppIA` (token de la sesión de wppia) y `OpenAI ROMEZ`; ' +
   '3) editar el nodo **Config** (secreto del webhook, `soloPrueba`, `notificarA`); ' +
   '4) en wppia, apuntar el webhook de la sesión a `/webhook/romez-comercial` y activar `includeFromMe` (mensajes propios) para que funcione la pausa por toma humana.',
   [-40, -260], 760, 220, 4)
@@ -338,4 +324,5 @@ const wf = {
 const outDir = process.argv[2] || path.join(__dirname, '..')
 fs.mkdirSync(outDir, { recursive: true })
 fs.writeFileSync(path.join(outDir, 'romez-asistente-comercial.n8n.json'), JSON.stringify(wf, null, 2))
+fs.writeFileSync(path.join(outDir, 'romez_chats.sql'), SQL.SETUP + '\n')
 console.log('nodos:', nodes.length, '→', path.join(outDir, 'romez-asistente-comercial.n8n.json'))
