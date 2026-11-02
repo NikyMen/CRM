@@ -24,8 +24,8 @@ const trivial = /^(ok|oka|okey|okis|dale|listo|gracias|muchas gracias|jaja|ja|ðŸ
 if (duplicado) { responder = false; motivo = 'duplicado'; }
 else if (cfg.botActivo === false) { responder = false; motivo = 'bot_apagado'; }
 else if (e.pausedUntil && e.pausedUntil > now) { responder = false; motivo = 'pausado_por_persona'; }
-else if (e.hist.length >= 10) {
-  // Corta cualquier bucle o abuso: mÃ¡s de 10 respuestas en una hora.
+else if (e.hist.length >= (Number(cfg.maxRespuestasPorHora) > 0 ? Number(cfg.maxRespuestasPorHora) : 10)) {
+  // Corta cualquier bucle o abuso: tope de respuestas por hora (configurable, 10 por defecto).
   responder = false; motivo = 'limite_por_hora'; e.pausedUntil = now + 2 * 3600e3;
 }
 else if (msg.kind === 'text' && trivial.test(msg.text) && (e.botReplies || 0) > 0) {

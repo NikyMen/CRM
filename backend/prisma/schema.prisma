@@ -141,6 +141,8 @@ model Workspace {
   collectionWhatsAppChats    CollectionWhatsAppChat[]
   collectionWhatsAppMessages CollectionWhatsAppMessage[]
   paymentPromises            PaymentPromise[]
+  assistantSettings          AssistantSettings?
+  assistantServices          AssistantService[]
 
   @@map("workspaces")
 }
@@ -1450,4 +1452,68 @@ model PaymentPromise {
   @@index([workspaceId, assignedUserId, status, promisedDate])
   @@index([workspaceId, companyId, status])
   @@map("payment_promises")
+}
+
+/// Ajustes del asistente comercial de WhatsApp (módulo oculto `/asistente`). Una fila por workspace.
+model AssistantSettings {
+  id                String   @id @default(cuid())
+  workspaceId       String   @unique
+  /// Interruptor general: n8n no responde si está apagado.
+  enabled           Boolean  @default(false)
+  /// Teléfonos de prueba: si hay alguno, el asistente sólo responde a ellos.
+  testOnlyPhones    String[] @default([])
+  excludedPhones    String[] @default([])
+  /// WhatsApp que recibe el aviso cuando hay que derivar a una persona.
+  notifyTo          String?
+  pauseHours        Int      @default(8)
+  waitSeconds       Int      @default(6)
+  maxAudioSeconds   Int      @default(150)
+  maxRepliesPerHour Int      @default(10)
+  timezone          String   @default("America/Asuncion")
+  officeDays        Int[]    @default([1, 2, 3, 4, 5])
+  officeFrom        String   @default("08:00")
+  officeTo          String   @default("18:00")
+  followUpEnabled   Boolean  @default(false)
+  followUpHours     Int      @default(22)
+  followUpFrom      String   @default("08:30")
+  followUpTo        String   @default("18:00")
+  followUpMessage   String   @default("")
+  fallbackMessage   String   @default("")
+  extraInstructions String   @default("")
+  /// Temas sin tarifa: el asistente deriva a una persona y no inventa.
+  handoffTopics     String[] @default([])
+  crmSyncEnabled    Boolean  @default(false)
+  /// Los servicios iniciales se cargan una sola vez, para respetar lo que se borre después.
+  servicesSeeded    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_settings")
+}
+
+/// Bloques de texto exacto que el asistente envía (costos, requisitos…). El modelo sólo elige el código.
+model AssistantService {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// Código estable que usa el flujo de n8n, p. ej. EAS_COSTO.
+  code        String
+  title       String
+  /// Cuándo usarlo; es lo único que ve el modelo (nunca el precio).
+  description String   @default("")
+  /// Texto que se envía tal cual. Admite {{precio}}.
+  body        String
+  /// Guaraníes sin decimales; se inserta en {{precio}}.
+  amount      Decimal? @db.Decimal(18, 0)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, sortOrder])
+  @@map("assistant_services")
 }

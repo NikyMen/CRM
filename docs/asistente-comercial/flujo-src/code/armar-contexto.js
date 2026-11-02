@@ -4,7 +4,7 @@ const ficha = $('Ficha de servicios').first().json;
 const u = $('¿Último mensaje?').first().json;
 const e = u.e ?? {};
 
-const now = $now.setZone('America/Asuncion');
+const now = $now.setZone(cfg.zonaHoraria || 'America/Asuncion');
 const hhmm = now.toFormat('HH:mm');
 const dias = String(cfg.atencionDias ?? '1,2,3,4,5').split(',').map((d) => Number(d.trim()));
 const enHorario = dias.includes(now.weekday) && hhmm >= cfg.atencionDesde && hhmm < cfg.atencionHasta;
@@ -37,6 +37,7 @@ const lines = [
   '',
   '=== TEMAS SIN TARIFA CARGADA (derivar a una persona, no inventar) ===',
   ...ficha.sinTarifa.map((t) => `- ${t}`),
+  ...(ficha.instruccionesExtra ? ['', '=== INSTRUCCIONES ADICIONALES DEL ESTUDIO ===', ficha.instruccionesExtra] : []),
 ];
 
 return [{ json: { phone: u.phone, name: u.name, aiInput: lines.filter((l) => l !== undefined).join('\n'), enHorario } }];

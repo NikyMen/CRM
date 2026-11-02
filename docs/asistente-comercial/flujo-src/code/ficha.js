@@ -73,4 +73,12 @@ const sinTarifa = [
   'Descuentos, precios especiales o negociación',
 ];
 
-return [{ json: { bloques, catalogo, sinTarifa } }];
+// Si el CRM respondió (nodo «Config»), manda lo que se edita en el panel /asistente; si no, valen los valores de arriba.
+const cfg = $('Config').first().json;
+if (cfg.configOrigen === 'crm') {
+  return [{ json: {
+    bloques: cfg.bloques ?? {}, catalogo: cfg.catalogo ?? {}, sinTarifa: cfg.sinTarifa ?? [],
+    instruccionesExtra: cfg.instruccionesExtra ?? '', mensajeFallback: cfg.mensajeFallback ?? '', origen: 'crm',
+  } }];
+}
+return [{ json: { bloques, catalogo, sinTarifa, instruccionesExtra: '', mensajeFallback: '', origen: 'nodo' } }];

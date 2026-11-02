@@ -249,4 +249,117 @@ t('seguimiento: apagado por defecto, de noche o en fin de semana no envía', () 
   assert.strictEqual(seg([rowFor(e)], {}, '2026-11-07T14:00:00Z').length, 0)
 })
 
+
+// ---------- configuración leída del CRM (panel /asistente) ----------
+console.log('Configuración del CRM')
+const CRM_RESP = {
+  version: 1,
+  config: { botActivo: false, soloPrueba: '595981123456', excluir: '', notificarA: '595991000111', pausaHoras: 4, esperaSegundos: 10, maxAudioSegundos: 90, maxRespuestasPorHora: 3, atencionDesde: '09:00', atencionHasta: '17:00', atencionDias: '1,2,3', seguimientoActivo: true, crmActivo: false },
+  bloques: { EAS_COSTO: 'Creación de EAS – Gs. 900.000' },
+  catalogo: { EAS_COSTO: 'Costo de la EAS' },
+  sinTarifa: ['SRL o SA'],
+  instruccionesExtra: 'No ofrezcas reuniones los viernes.',
+  mensajeFallback: 'Ahora no puedo, le escribe una persona.',
+  mensajeSeguimiento: 'Hola {{nombre}}, ¿pudo revisar todo?',
+}
+const BASE = { ...CFG, crmConfigActivo: true, crmUrl: 'https://crm/api/v1', headers: { h: 1 }, body: { b: 1 } }
+const merge = (remote, base = BASE) => run('Config', { input: item(remote), nodes: { 'Config base': item(base) } })[0].json
+
+t('el flujo lee primero Config base, decide si consultar al CRM y recién ahí Config', () => {
+  const c = wf.connections
+  const to = (from, out = 0) => (c[from]?.main?.[out] ?? []).map((x) => x.node)
+  assert.deepStrictEqual(to('Webhook wppia'), ['Config base'])
+  assert.deepStrictEqual(to('Cada hora (seguimientos)'), ['Config base'])
+  assert.deepStrictEqual(to('Config base'), ['¿Leer config del CRM?'])
+  assert.deepStrictEqual(to('¿Leer config del CRM?', 0), ['Config del CRM'])
+  assert.deepStrictEqual(to('¿Leer config del CRM?', 1), ['Config'])
+  assert.deepStrictEqual(to('Config del CRM'), ['Config'])
+  assert.deepStrictEqual(to('Config'), ['Normalizar mensaje'])
+})
+t('si el CRM falla, la lectura no corta el flujo (onError continúa)', () => {
+  assert.strictEqual(wf.nodes.find((n) => n.name === 'Config del CRM').onError, 'continueRegularOutput')
+})
+t('la lectura del CRM viene apagada por defecto', () => {
+  const base = wf.nodes.find((n) => n.name === 'Config base').parameters.assignments.assignments.find((a) => a.name === 'crmConfigActivo')
+  assert.strictEqual(base.value, false)
+})
+t('con la respuesta del CRM mandan sus valores y se conservan los del nodo (secreto, URL, webhook)', () => {
+  const out = merge(CRM_RESP)
+  assert.strictEqual(out.configOrigen, 'crm')
+  assert.strictEqual(out.botActivo, false)
+  assert.strictEqual(out.pausaHoras, 4)
+  assert.strictEqual(out.soloPrueba, '595981123456')
+  assert.strictEqual(out.webhookSecret, CFG.webhookSecret)
+  assert.strictEqual(out.crmUrl, 'https://crm/api/v1')
+  assert.deepStrictEqual(out.headers, { h: 1 })
+  assert.deepStrictEqual(out.bloques, CRM_RESP.bloques)
+  assert.strictEqual(out.instruccionesExtra, CRM_RESP.instruccionesExtra)
+})
+t('si el CRM no responde, se usa Config base y se deja marcado', () => {
+  const out = merge({ error: { status: 502 } })
+  assert.strictEqual(out.configOrigen, 'base (el CRM no respondió)')
+  assert.strictEqual(out.botActivo, CFG.botActivo)
+  assert.strictEqual(out.bloques, undefined)
+})
+t('con la lectura apagada, Config pasa igual con los valores base', () => {
+  const out = merge({ ...BASE }, { ...BASE, crmConfigActivo: false })
+  assert.strictEqual(out.configOrigen, 'base')
+})
+t('un CRM que apaga el asistente lo apaga también en el flujo', () => {
+  const cfgCrm = merge(CRM_RESP)
+  const msg = { ...lead, messageId: 'Q1' }
+  const r = run('Estado del chat', { input: item({}), nodes: { Config: item(cfgCrm), 'Normalizar mensaje': item(msg) } })[0].json
+  assert.strictEqual(r.responder, false)
+  assert.strictEqual(r.motivo, 'bot_apagado')
+})
+t('el tope de respuestas por hora sale del CRM', () => {
+  const cfgCrm = merge({ ...CRM_RESP, config: { ...CRM_RESP.config, botActivo: true } })
+  const e2 = { hist: [Date.now() - 1000, Date.now() - 2000, Date.now() - 3000] }
+  const r = run('Estado del chat', { input: item({ estado: JSON.stringify(e2) }), nodes: { Config: item(cfgCrm), 'Normalizar mensaje': item({ ...lead, messageId: 'Q2' }) } })[0].json
+  assert.strictEqual(r.motivo, 'limite_por_hora')
+})
+t('Ficha de servicios: con el CRM usa SUS bloques (incluso vacíos), sin el CRM usa los del nodo', () => {
+  const conCrm = run('Ficha de servicios', { input: item({}), nodes: { Config: item(merge(CRM_RESP)) } })[0].json
+  assert.deepStrictEqual(conCrm.bloques, CRM_RESP.bloques)
+  assert.strictEqual(conCrm.origen, 'crm')
+  const vacio = run('Ficha de servicios', { input: item({}), nodes: { Config: item(merge({ ...CRM_RESP, bloques: {}, catalogo: {} })) } })[0].json
+  assert.deepStrictEqual(vacio.bloques, {})
+  const sinCrm = run('Ficha de servicios', { input: item({}), nodes: wfNodes({}) })[0].json
+  assert.strictEqual(sinCrm.origen, 'nodo')
+  assert.ok(sinCrm.bloques.EAS_COSTO.includes('880.000'))
+})
+t('el precio del CRM llega exacto al cliente y el modelo no ve montos', () => {
+  const nodes = { Config: item(merge(CRM_RESP)) }
+  const f = run('Ficha de servicios', { input: item({}), nodes })[0].json
+  const ctx = run('Armar contexto IA', { input: item(f), nodes: { ...nodes, '¿Último mensaje?': item(ult), 'Ficha de servicios': item(f) } })[0].json
+  assert.ok(!ctx.aiInput.includes('900.000'), 'el modelo no debe ver el monto')
+  const salida = JSON.stringify({ stage: 'COSTOS_ENVIADOS', needs_human: false, reply_parts: ['Le paso los costos'], blocks: ['EAS_COSTO'] })
+  const limpio = { ...ult, e: {} } // Parsear modifica el estado que recibe: usamos una copia sin bloques ya enviados
+  const p = run('Parsear respuesta IA', { input: item({ output: salida }), nodes: { ...nodes, 'Ficha de servicios': item(f), 'Armar contexto IA': item(ctx), '¿Último mensaje?': item(limpio) } })[0].json
+  assert.ok(p.mensajes.some((m) => m.text === 'Creación de EAS – Gs. 900.000'))
+})
+t('las instrucciones extra del estudio llegan al contexto (y sólo si existen)', () => {
+  const nodes = { Config: item(merge(CRM_RESP)) }
+  const f = run('Ficha de servicios', { input: item({}), nodes })[0].json
+  const con = run('Armar contexto IA', { input: item(f), nodes: { ...nodes, '¿Último mensaje?': item(ult), 'Ficha de servicios': item(f) } })[0].json
+  assert.ok(con.aiInput.includes('INSTRUCCIONES ADICIONALES DEL ESTUDIO'))
+  assert.ok(con.aiInput.includes('reuniones los viernes'))
+  assert.ok(!ctxOut.aiInput.includes('INSTRUCCIONES ADICIONALES'))
+})
+t('el mensaje de falla de la IA sale del CRM', () => {
+  const nodes = { Config: item(merge(CRM_RESP)) }
+  const f = run('Ficha de servicios', { input: item({}), nodes })[0].json
+  const p = run('Parsear respuesta IA', { input: item({ output: 'no es json' }), nodes: { ...nodes, 'Ficha de servicios': item(f), 'Armar contexto IA': item(ctxOut), '¿Último mensaje?': item(ult) } })[0].json
+  assert.strictEqual(p.mensajes[0].text, CRM_RESP.mensajeFallback)
+})
+t('el seguimiento usa la plantilla del CRM, con y sin nombre', () => {
+  const abierto = { ...CRM_RESP.config, botActivo: true, soloPrueba: '', atencionDesde: '08:00', atencionHasta: '18:00', atencionDias: '1,2,3,4,5', seguimientoDesde: '08:30', seguimientoHasta: '18:00', seguimientoHoras: 22 }
+  const cfgCrm = merge({ ...CRM_RESP, config: abierto })
+  const fila = (extra) => [rowFor({ stage: 'COSTOS_ENVIADOS', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H, ...extra })]
+  const con = run('Seguimientos pendientes', { input: fila({ lead: { nombre: 'Alba Gómez' } }), nodes: { Config: item(cfgCrm) }, now: '2026-11-02T14:00:00Z' })
+  assert.strictEqual(con[0].json.text, 'Hola Alba, ¿pudo revisar todo?')
+  const sin = run('Seguimientos pendientes', { input: fila({}), nodes: { Config: item({ ...cfgCrm, mensajeSeguimiento: 'Buenas {{nombre}}, ¿pudo revisar?' }) }, now: '2026-11-02T14:00:00Z' })
+  assert.strictEqual(sin[0].json.text, 'Buenas, ¿pudo revisar?')
+})
+
 console.log(`\n${ok} pruebas OK`)

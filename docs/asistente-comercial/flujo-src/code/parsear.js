@@ -9,7 +9,7 @@ const now = Date.now();
 
 const STAGES = ['NUEVO', 'CALIFICANDO', 'COSTOS_ENVIADOS', 'DOCUMENTACION', 'LISTO_PARA_INICIAR', 'DERIVADO', 'DESCARTADO'];
 const clean = (v) => String(v ?? '').replace(/\r/g, '').trim();
-const SIN_IA = 'Disculpe, en este momento no puedo darle la información. Le paso con el Lic. José Rojas, que le responde a la brevedad 🙏';
+const SIN_IA = ficha.mensajeFallback || 'Disculpe, en este momento no puedo darle la información. Le paso con el Lic. José Rojas, que le responde a la brevedad 🙏';
 
 // 1) Parseo tolerante (el modelo puede envolver el JSON en ```).
 const rawOut = clean(ai.output ?? ai.text ?? '');
