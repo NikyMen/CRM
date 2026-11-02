@@ -91,21 +91,39 @@ const cfg = add({
         cfgField('seguimientoDesde', '08:30'),
         cfgField('seguimientoHasta', '18:00'),
         cfgField('crmActivo', false, 'boolean'),
+        cfgField('crmConfigActivo', false, 'boolean'),
         cfgField('crmUrl', 'https://romez.consultoriadigital.io/api/v1'),
       ],
     },
     includeOtherFields: true,
     options: {},
   },
-  type: 'n8n-nodes-base.set', typeVersion: 3.4, position: [300, 480], name: 'Config',
-  notes: 'PANEL DE CONTROL. Todo lo que se cambia a mano está acá. Empezá con soloPrueba = tu número de prueba.',
+  type: 'n8n-nodes-base.set', typeVersion: 3.4, position: [180, 480], name: 'Config base',
+  notes: 'VALORES PROPIOS del flujo. Si activás crmConfigActivo, los del CRM (panel /asistente) pasan por encima. Empezá con soloPrueba = tu número de prueba.',
   notesInFlow: true,
 })
 link(wh.name, cfg.name)
 link(sch.name, cfg.name)
 
-const norm = codeNode('Normalizar mensaje', 'normalizar.js', [560, 480])
-link(cfg.name, norm.name)
+const ifCrmCfg = ifNode('¿Leer config del CRM?', '={{ $json.crmConfigActivo === true }}', [320, 480])
+const crmCfg = add({
+  parameters: {
+    method: 'GET', url: "={{ $json.crmUrl }}/inbound/assistant/config",
+    authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+    options: { timeout: 5000 },
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [320, 660], name: 'Config del CRM',
+  credentials: { httpHeaderAuth: { name: 'ROMEZ CRM X-API-Key' } }, onError: 'continueRegularOutput',
+  notes: 'Lee el panel /asistente del CRM (precios, horarios, interruptor). Si falla, el flujo sigue con los valores de Config base.',
+  notesInFlow: true,
+})
+const cfgMerge = codeNode('Config', 'config-merge.js', [460, 480])
+link(cfg.name, ifCrmCfg.name)
+link(ifCrmCfg.name, crmCfg.name, 0)
+link(ifCrmCfg.name, cfgMerge.name, 1)
+link(crmCfg.name, cfgMerge.name)
+const norm = codeNode('Normalizar mensaje', 'normalizar.js', [600, 480])
+link(cfgMerge.name, norm.name)
 
 // ---------- enrutamiento ----------
 const ifIn = ifNode('¿Mensaje entrante?', "={{ $json.route === 'inbound' }}", [820, 360])
@@ -301,7 +319,7 @@ sticky(
   '## ROMEZ · Asistente comercial de WhatsApp\n' +
   '**Antes de activar:** 1) crear la tabla en PostgreSQL con `romez_chats.sql` (una sola vez) y elegir la credencial `Postgres ROMEZ` en los 8 nodos Postgres; ' +
   '2) credenciales `Bearer Auth WppIA` (token de la sesión de wppia) y `OpenAI ROMEZ`; ' +
-  '3) editar el nodo **Config** (secreto del webhook, `soloPrueba`, `notificarA`); ' +
+  '3) editar el nodo **Config base** (secreto del webhook, `soloPrueba`, `notificarA`); para manejar todo desde el panel /asistente del CRM, activar `crmConfigActivo` y crear la credencial `ROMEZ CRM X-API-Key`; ' +
   '4) en wppia, apuntar el webhook de la sesión a `/webhook/romez-comercial` y activar `includeFromMe` (mensajes propios) para que funcione la pausa por toma humana.',
   [-40, -260], 760, 220, 4)
 sticky('### 1 · Entrada\nwppia envía cada mensaje. Se valida el secreto, se descartan grupos, difusiones, números internos y todo lo que no esté en `soloPrueba`.', [260, 330], 560, 100, 7)

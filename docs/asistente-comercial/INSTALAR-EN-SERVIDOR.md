@@ -25,6 +25,18 @@ En `72.60.15.125` se creó un PostgreSQL dedicado para el asistente (opción 2 d
 
 Deshacer todo: `docker rm -f romez-asistente-pg && docker volume rm romez_asistente_pgdata && rm /root/romez-asistente-pg.env`.
 
+## Manejar todo desde el panel /asistente del CRM (opcional, requiere desplegar el CRM)
+
+El CRM tiene un módulo oculto en `/asistente` (sólo owner y admin, sin entrada en el menú) donde se editan **precios, textos de los servicios, horarios, números de prueba, interruptor general, límites y mensajes**. El flujo de n8n lo lee en cada mensaje.
+
+1. Desplegar el CRM con la migración `20261102120000_assistant_module` (ver `docs/obsidian` y `ops/`; **no se desplegó nada todavía**).
+2. Crear una API key en el CRM (Integraciones → API Keys).
+3. En n8n, credencial **Header Auth** llamada `ROMEZ CRM X-API-Key`: nombre `X-API-Key`, valor la key.
+4. En el nodo **Config base**: `crmConfigActivo = true` y `crmUrl = https://romez.consultoriadigital.io/api/v1`. Guardar y publicar.
+5. A partir de ahí, lo que se cambie en el panel rige desde el mensaje siguiente. Por defecto el asistente arranca **apagado** en el panel: hay que encenderlo ahí (y cargar el teléfono de prueba).
+
+Si el CRM no responde, el flujo sigue con los valores de **Config base** (nodo `Config del CRM` con `onError`).
+
 ## 1 · Sesión nueva en wppia (panel deployado)
 
 1. Creá una sesión nueva (p. ej. "ROMEZ prueba"). No toques las sesiones de otros clientes.

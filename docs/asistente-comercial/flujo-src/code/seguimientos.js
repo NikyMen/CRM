@@ -2,7 +2,7 @@
 const cfg = $('Config').first().json;
 if (cfg.seguimientoActivo !== true || cfg.botActivo === false) return [];
 
-const ahora = $now.setZone('America/Asuncion');
+const ahora = $now.setZone(cfg.zonaHoraria || 'America/Asuncion');
 const hhmm = ahora.toFormat('HH:mm');
 const dias = String(cfg.atencionDias ?? '1,2,3,4,5').split(',').map((d) => Number(d.trim()));
 if (!dias.includes(ahora.weekday) || hhmm < cfg.seguimientoDesde || hhmm > cfg.seguimientoHasta) return [];
@@ -29,7 +29,9 @@ for (const { json: row } of $input.all()) {
   if (prueba.length && !prueba.includes(last9(e.phone))) continue;
 
   const nombre = (e.lead?.nombre || e.name || '').split(' ')[0];
-  const text = `Buenas${nombre ? ' ' + nombre : ''}, le escribe nuevamente el equipo de la Consultora ROMEZ. ¿Pudo revisar la información que le enviamos? Si le quedó alguna duda, avíseme y con gusto se la resuelvo 🙌`;
+  const plantilla = cfg.mensajeSeguimiento || 'Buenas {{nombre}}, le escribe nuevamente el equipo de la Consultora ROMEZ. ¿Pudo revisar la información que le enviamos? Si le quedó alguna duda, avíseme y con gusto se la resuelvo 🙌';
+  // {{nombre}} se reemplaza por el primer nombre; si no se conoce, se omite.
+  const text = plantilla.split('{{nombre}}').join(nombre).replace(/ +,/g, ',').replace(/  +/g, ' ').trim();
 
   e.followUpSent = true;
   e.lastOutAt = now;
