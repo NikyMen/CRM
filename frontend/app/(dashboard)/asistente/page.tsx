@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Bot, Lock, Save } from 'lucide-react'
 import { auth } from '@/lib/auth'
-import { assistantApi, type AssistantSettings, type AssistantSettingsInput } from '@/lib/assistant'
+import { assistantApi, toSettingsInput, type AssistantSettings, type AssistantSettingsInput } from '@/lib/assistant'
 import { getErrorMessage } from '@/lib/format'
 import { ErrorState, LoadingState, PageFrame, PageHeader } from '@/components/romez/OperationalUI'
 import { AssistantBehavior } from '@/components/romez/assistant/AssistantBehavior'
@@ -24,12 +24,6 @@ const TABS: { key: Tab; label: string; editsSettings?: boolean }[] = [
   { key: 'connection', label: 'Conexión' },
 ]
 
-function toInput(settings: AssistantSettings): AssistantSettingsInput {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, updatedAt, ...input } = settings
-  return input
-}
-
 /**
  * Panel del asistente comercial de WhatsApp. Módulo oculto: no figura en el menú ni en
  * Configuración → Módulos; se entra por /asistente y sólo owner y admin.
@@ -46,9 +40,9 @@ export default function AssistantPage() {
   const allowed = role === 'owner' || role === 'admin'
 
   const settings = useQuery({ queryKey: ['assistant', 'settings'], queryFn: () => assistantApi.settings().then((response) => response.data), enabled: allowed })
-  useEffect(() => { if (settings.data) setDraft(toInput(settings.data)) }, [settings.data])
+  useEffect(() => { if (settings.data) setDraft(toSettingsInput(settings.data)) }, [settings.data])
 
-  const dirty = useMemo(() => Boolean(settings.data && draft) && JSON.stringify(draft) !== JSON.stringify(toInput(settings.data as AssistantSettings)), [settings.data, draft])
+  const dirty = useMemo(() => Boolean(settings.data && draft) && JSON.stringify(draft) !== JSON.stringify(toSettingsInput(settings.data as AssistantSettings)), [settings.data, draft])
 
   const save = useMutation({
     mutationFn: (input: AssistantSettingsInput) => assistantApi.saveSettings(input).then((response) => response.data),
@@ -102,7 +96,7 @@ export default function AssistantPage() {
 
       {settings.data && draft ? (
         <div className={clsx(current?.editsSettings && 'pb-24')}>
-          {tab === 'overview' ? <AssistantOverview settings={settings.data} saving={save.isPending} onToggle={(enabled) => save.mutate({ ...toInput(settings.data as AssistantSettings), enabled })} /> : null}
+          {tab === 'overview' ? <AssistantOverview settings={settings.data} saving={save.isPending} onToggle={(enabled) => save.mutate({ ...toSettingsInput(settings.data as AssistantSettings), enabled })} /> : null}
           {tab === 'services' ? <AssistantServices /> : null}
           {tab === 'behavior' ? <AssistantBehavior draft={draft} onChange={(patch) => setDraft({ ...draft, ...patch })} /> : null}
           {tab === 'settings' ? <AssistantSettingsPanel draft={draft} onChange={(patch) => setDraft({ ...draft, ...patch })} /> : null}
@@ -118,7 +112,7 @@ export default function AssistantPage() {
             {saveError ?? (saved && !dirty ? 'Cambios guardados' : 'Hay cambios sin guardar')}
           </p>
           <div className="flex gap-2">
-            <button type="button" className="btn-secondary" disabled={!dirty || save.isPending} onClick={() => { setDraft(toInput(settings.data as AssistantSettings)); setSaveError(null) }}>Descartar</button>
+            <button type="button" className="btn-secondary" disabled={!dirty || save.isPending} onClick={() => { setDraft(toSettingsInput(settings.data as AssistantSettings)); setSaveError(null) }}>Descartar</button>
             <button type="button" className="btn-primary" disabled={!dirty || save.isPending || !draft} onClick={() => draft && save.mutate(draft)}><Save size={15} /> {save.isPending ? 'Guardando…' : 'Guardar cambios'}</button>
           </div>
         </div>

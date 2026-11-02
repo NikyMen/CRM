@@ -6,6 +6,10 @@ export const PRICE_TOKEN = '{{precio}}'
 
 export type AssistantSettings = {
   id: string
+  /** Los maneja el servidor: no se reenvían al guardar. */
+  workspaceId: string
+  servicesSeeded: boolean
+  createdAt: string
   enabled: boolean
   testOnlyPhones: string[]
   excludedPhones: string[]
@@ -30,7 +34,37 @@ export type AssistantSettings = {
   updatedAt: string
 }
 
-export type AssistantSettingsInput = Omit<AssistantSettings, 'id' | 'updatedAt'>
+export type AssistantSettingsInput = Omit<AssistantSettings, 'id' | 'workspaceId' | 'servicesSeeded' | 'createdAt' | 'updatedAt'>
+
+/**
+ * Lo que acepta PUT /assistant/settings, campo por campo. El servidor rechaza (422) cualquier campo que no
+ * conozca, así que no se reenvía el objeto entero: id, workspaceId, servicesSeeded, createdAt y updatedAt los maneja él.
+ */
+export function toSettingsInput(settings: AssistantSettings): AssistantSettingsInput {
+  return {
+    enabled: settings.enabled,
+    testOnlyPhones: settings.testOnlyPhones,
+    excludedPhones: settings.excludedPhones,
+    notifyTo: settings.notifyTo,
+    pauseHours: settings.pauseHours,
+    waitSeconds: settings.waitSeconds,
+    maxAudioSeconds: settings.maxAudioSeconds,
+    maxRepliesPerHour: settings.maxRepliesPerHour,
+    timezone: settings.timezone,
+    officeDays: settings.officeDays,
+    officeFrom: settings.officeFrom,
+    officeTo: settings.officeTo,
+    followUpEnabled: settings.followUpEnabled,
+    followUpHours: settings.followUpHours,
+    followUpFrom: settings.followUpFrom,
+    followUpTo: settings.followUpTo,
+    followUpMessage: settings.followUpMessage,
+    fallbackMessage: settings.fallbackMessage,
+    extraInstructions: settings.extraInstructions,
+    handoffTopics: settings.handoffTopics,
+    crmSyncEnabled: settings.crmSyncEnabled,
+  }
+}
 
 export type AssistantService = {
   id: string
