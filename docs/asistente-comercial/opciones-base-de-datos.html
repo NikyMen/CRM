@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opciones de base de datos · asistente ROMEZ</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,800&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f4efe5;--paper2:#ebe4d4;--card:#fbf8f1;--ink:#101d36;--ink2:#44506a;--ink3:#7a8296;--navy:#082d68;--navy2:#062554;--blue:#365cab;--copper:#c2571a;--copperSoft:#f6dfcd;--green:#1f7a57;--greenSoft:#dcefe5;--red:#a3353b;--redSoft:#f4dcdd;--amber:#9a6215;--amberSoft:#f8ecc9;--line:rgba(16,29,54,.14);
+--serif:'Fraunces',Georgia,serif;--sans:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'IBM Plex Mono',ui-monospace,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--paper:#0d1526;--paper2:#111b30;--card:#14203a;--ink:#eaeef7;--ink2:#aab4cb;--ink3:#7d89a3;--navy:#0b3a85;--navy2:#071a3a;--blue:#7f9fe0;--copper:#ef8a4d;--copperSoft:#3a2416;--green:#5fcf9d;--greenSoft:#12301f;--red:#ee7d83;--redSoft:#3a1a1c;--amber:#e6b565;--amberSoft:#33270f;--line:rgba(234,238,247,.16)}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--serif);line-height:1.12;margin:0;letter-spacing:-.01em}h2{font-size:clamp(1.6rem,3vw,2.2rem)}h3{font-size:1.15rem}
+code,pre,.mono{font-family:var(--mono)}code{background:var(--paper2);padding:.08em .38em;border-radius:5px;font-size:.86em}
+.wrap{max-width:1100px;margin:0 auto;padding:0 18px}
+.hero{background:var(--navy2);color:#f1f4fb;border-bottom:6px solid var(--copper);padding:44px 0 40px}
+.hero .eyebrow{font:500 .76rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#f3b184}
+.hero h1{font-size:clamp(2rem,5vw,3.4rem);font-weight:800;margin:.3em 0 .2em;max-width:20ch}.hero h1 em{font-weight:500;color:#f3b184}
+.hero p{max-width:64ch;color:#c9d3ea;margin:.4em 0}
+section{padding:40px 0 8px;border-top:1px solid var(--line)}section:first-of-type{border-top:0}
+.k{font:500 .72rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--copper);margin-bottom:10px}
+.sub{color:var(--ink2);max-width:72ch}
+.grid{display:grid;gap:14px;margin-top:18px}.g3{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.card.rec{border:2px solid var(--green);background:linear-gradient(0deg,var(--card),var(--greenSoft) 220%)}
+.tag{display:inline-block;font:500 .68rem var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:99px;margin-bottom:8px}
+.tag.g{background:var(--greenSoft);color:var(--green)}.tag.r{background:var(--redSoft);color:var(--red)}.tag.a{background:var(--amberSoft);color:var(--amber)}.tag.n{background:var(--paper2);color:var(--ink2)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.fact{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.fact b{display:block;font:800 1.15rem var(--serif)}.fact span{font-size:.82rem;color:var(--ink2)}
+.callout{border-left:4px solid var(--red);background:var(--card);border-radius:0 14px 14px 0;padding:14px 18px;margin:18px 0}.callout.ok{border-color:var(--green)}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:var(--sans);fill:var(--ink)}svg .sm{font-size:10.5px;fill:var(--ink3)}svg .b{font-weight:700}
+svg .box{fill:var(--card);stroke:var(--line);stroke-width:1.5}svg .net{fill:none;stroke:var(--blue);stroke-width:1.5;stroke-dasharray:5 4}
+svg .db{fill:var(--copperSoft);stroke:var(--copper);stroke-width:1.8}svg .n8n{fill:var(--navy);stroke:none}svg .n8n text{fill:#fff}
+svg .ok{stroke:var(--green);stroke-width:2.2;fill:none}svg .bad{stroke:var(--red);stroke-width:2.2;fill:none;stroke-dasharray:6 4}
+svg .net-lbl{fill:var(--blue);font-size:10px;font-family:var(--mono)}
+.mini h3{margin-bottom:2px}.mini .what{font-size:.9rem;color:var(--ink2);min-height:3.2em}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:.9rem}
+th,td{padding:10px 12px;text-align:center;border-bottom:1px solid var(--line)}th{font:500 .7rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);background:var(--paper2)}
+td:first-child,th:first-child{text-align:left}tr:last-child td{border-bottom:0}
+.s0{background:var(--redSoft);color:var(--red)}.s1{background:var(--amberSoft);color:var(--amber)}.s2{background:var(--greenSoft);color:var(--green)}
+.scroll{overflow-x:auto}
+.bar{display:grid;grid-template-columns:minmax(120px,230px) 1fr 44px;gap:10px;align-items:center;margin:8px 0;font-size:.92rem}
+.bar .t{height:20px;background:var(--paper2);border-radius:6px;overflow:hidden}.bar .f{height:100%;border-radius:6px;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+pre{background:#0b1426;color:#d8e2f7;border-radius:12px;padding:14px 16px;overflow:auto;font-size:.8rem;line-height:1.55}
+ol.steps{padding-left:1.2em}ol.steps li{margin:.5em 0}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0}summary{cursor:pointer;font-weight:600}
+footer{padding:26px 0 56px;color:var(--ink3);font-size:.85rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Asistente comercial ROMEZ · decisión de base de datos</div>
+  <h1>¿Dónde guarda el asistente el estado de cada chat? <em>Cinco opciones.</em></h1>
+  <p>Tu n8n del servidor <b>72.60.15.125</b> usa SQLite y no tiene Postgres propio. El asistente necesita una tabla chica (<code>romez_chats</code>, una fila por chat). Acá ves cómo son los Postgres que ya tenés, cómo quedaría cada alternativa y cuál recomiendo.</p>
+</div></header>
+
+<main class="wrap">
+
+<section>
+  <div class="k">01 · Lo que ya hay</div>
+  <h2>Cómo están corridos <i>tienda-silva, tienda-fox y avc-vencimientos</i></h2>
+  <p class="sub">Los tres son el mismo molde, creado el 28/9 sin archivo de compose. Esto es lo que se ve desde afuera (no entré a ninguna base).</p>
+  <div class="facts">
+    <div class="fact"><b>postgres:16-alpine</b><span>misma imagen</span></div>
+    <div class="fact"><b>unless-stopped</b><span>reinicio automático</span></div>
+    <div class="fact"><b>512 MB</b><span>límite de memoria</span></div>
+    <div class="fact"><b>bridge</b><span>red por defecto de Docker</span></div>
+    <div class="fact"><b>volumen propio</b><span>p. ej. <code>tienda-fox-data</code></span></div>
+    <div class="fact"><b style="color:var(--red)">0.0.0.0:5544x</b><span>puerto publicado a todo internet</span></div>
+  </div>
+  <div class="callout"><b>Ojo:</b> <code>ufw</code> está inactivo y el firewall de Docker (<code>DOCKER-USER</code>) solo bloquea 3 IP sueltas. Con eso, los puertos <b>55440, 55441 y 55442</b> responden desde internet: protegidos únicamente por la contraseña de cada base. Conviene cerrarlos aparte (por ejemplo publicando en <code>127.0.0.1</code>), pero eso no lo toco sin que lo pidas.</div>
+</section>
+
+<section>
+  <div class="k">02 · Las opciones</div>
+  <h2>Cómo quedaría cada una</h2>
+  <p class="sub">Líneas verdes: conexión permitida. Línea roja punteada: acceso desde internet. El recuadro azul punteado es la red de Docker <code>n8n_default</code>, donde ya vive tu n8n.</p>
+
+  <div class="grid g3" id="opts"></div>
+</section>
+
+<section>
+  <div class="k">03 · Comparación</div>
+  <h2>Puntaje por criterio</h2>
+  <p class="sub">0 = malo, 1 = regular, 2 = bueno. <b>Es mi valoración</b>, no una medición; sirve para comparar entre sí, no como verdad absoluta.</p>
+  <div class="scroll"><table id="matrix"></table></div>
+  <div id="totals" style="margin-top:18px"></div>
+</section>
+
+<section>
+  <div class="k">04 · Mi recomendación</div>
+  <h2>Opción 2: «como los demás», pero en la red de n8n y sin puerto</h2>
+  <p class="sub">Mismo molde que tus otras bases (imagen, reinicio, 512 MB, volumen propio, <code>docker run</code>), con dos diferencias: se une a <code>n8n_default</code> y <b>no publica ningún puerto</b>. n8n lo encuentra por nombre y nadie más lo ve. Es lo que haría, paso a paso:</p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Qué hace cada paso</h3>
+      <ol class="steps">
+        <li>Crea el volumen <code>romez_asistente_pgdata</code> (los datos viven ahí).</li>
+        <li>Genera una contraseña aleatoria y la guarda en <code>/root/romez-asistente-pg.env</code> con permiso 600. <b>No se muestra en el chat.</b></li>
+        <li>Levanta <code>romez-asistente-pg</code> con límite de 512 MB, reinicio automático y chequeo de salud.</li>
+        <li>Crea la tabla <code>romez_chats</code> ejecutando <code>romez_chats.sql</code> dentro del contenedor.</li>
+        <li>Prueba desde el contenedor de n8n que llega a <code>romez-asistente-pg:5432</code> y que una consulta responde.</li>
+        <li>Te doy los datos para la credencial <code>Postgres ROMEZ</code>; la contraseña la leés vos con un comando.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Datos de la credencial en n8n</h3>
+      <table style="font-size:.88rem"><tbody>
+        <tr><td>Host</td><td class="mono" style="text-align:left">romez-asistente-pg</td></tr>
+        <tr><td>Puerto</td><td class="mono" style="text-align:left">5432</td></tr>
+        <tr><td>Base</td><td class="mono" style="text-align:left">romez_asistente</td></tr>
+        <tr><td>Usuario</td><td class="mono" style="text-align:left">romez_asistente</td></tr>
+        <tr><td>Contraseña</td><td style="text-align:left">la que queda en el servidor (no se imprime)</td></tr>
+        <tr><td>SSL</td><td style="text-align:left">Disable (red interna de Docker)</td></tr>
+      </tbody></table>
+      <p class="sub" style="margin-top:12px"><b>Deshacer:</b> <code>docker rm -f romez-asistente-pg &amp;&amp; docker volume rm romez_asistente_pgdata</code>. No afecta a nada más.</p>
+    </div>
+  </div>
+  <details><summary>Ver los comandos exactos</summary>
+<pre># en el servidor (72.60.15.125)
+docker volume create romez_asistente_pgdata
+PGPASS=$(openssl rand -hex 24)
+umask 077 &amp;&amp; printf 'POSTGRES_PASSWORD=%s\n' "$PGPASS" &gt; /root/romez-asistente-pg.env
+
+docker run -d --name romez-asistente-pg \
+  --restart unless-stopped --memory 512m \
+  --network n8n_default \
+  -e POSTGRES_DB=romez_asistente -e POSTGRES_USER=romez_asistente \
+  -e POSTGRES_PASSWORD="$PGPASS" \
+  -v romez_asistente_pgdata:/var/lib/postgresql/data \
+  --health-cmd "pg_isready -U romez_asistente -d romez_asistente" --health-interval 10s \
+  postgres:16-alpine
+
+docker exec -i romez-asistente-pg psql -U romez_asistente -d romez_asistente &lt; romez_chats.sql</pre></details>
+  <div class="callout ok"><b>Respaldo:</b> el estado de los chats se reconstruye solo con el uso (son fichas de conversación), así que no es crítico. Si querés, se puede sumar un <code>pg_dump</code> nocturno, pero no lo incluyo por defecto.</div>
+</section>
+
+<section>
+  <div class="k">05 · Antes de decidir</div>
+  <h2>Qué cambia si elegís otra</h2>
+  <div class="grid g2">
+    <div class="card"><span class="tag r">Opción 1 · literal</span><h3>Copiar exactamente a los demás</h3><p class="sub">Anda, pero publica un puerto Postgres a todo internet y n8n tendría que conectarse por la IP del servidor. Sumaría una cuarta base expuesta. No la recomiendo.</p></div>
+    <div class="card"><span class="tag a">Opción 3 · puerto en el gateway</span><h3>Publicar solo en 172.18.0.1</h3><p class="sub">Es lo que ya hace wppia (<code>172.18.0.1:3720</code>). Seguro, pero si el servidor reinicia y esa IP todavía no existe, el contenedor puede no arrancar a la primera. La opción 2 evita ese problema.</p></div>
+    <div class="card"><span class="tag a">Opción 4 · reutilizar</span><h3><code>consultoria-digital-postgres-1</code></h3><p class="sub">Habría que conectar un contenedor ajeno a la red de n8n y crear ahí una base y un usuario. Un mantenimiento de esa app corta al asistente y viceversa. Además no pude ver su red ni su usuario.</p></div>
+    <div class="card"><span class="tag n">Opción 5 · sin instalar</span><h3>Volver a Data Table</h3><p class="sub">Cero cambios en el servidor, pero el estado queda dentro de n8n (SQLite) y se pierde la juntada atómica de ráfagas: con mensajes muy seguidos podría contestar dos veces.</p></div>
+  </div>
+</section>
+
+</main>
+<footer><div class="wrap">Preparado el 1/11/2026 a partir de una lectura de solo lectura del servidor. No se instaló ni cambió nada. Las valoraciones del punto 3 son criterio propio.</div></footer>
+
+<script>
+const OPTS = [
+  {id:1, name:'Como los demás (literal)', what:'docker run en la red bridge, puerto publicado en 0.0.0.0.', tag:['r','Expuesta a internet'], net:false, port:'public'},
+  {id:2, name:'Como los demás + red de n8n', what:'docker run unido a n8n_default, sin publicar ningún puerto.', tag:['g','Recomendada'], net:true, port:'none', rec:true},
+  {id:3, name:'Puerto solo en 172.18.0.1', what:'Bridge por defecto; puerto publicado únicamente en el gateway de n8n.', tag:['a','Segura, arranque frágil'], net:false, port:'gw'},
+  {id:4, name:'Reutilizar consultoria-digital-postgres-1', what:'Se conecta ese contenedor a n8n_default y se crea una base nueva.', tag:['a','Toca algo ajeno'], net:true, port:'shared'},
+  {id:5, name:'Data Table (sin instalar)', what:'El estado queda en el SQLite de n8n. No se toca el servidor.', tag:['n','Sin cambios'], net:true, port:'sqlite'}
+];
+const SC = { // seguridad, aislamiento, simplicidad, robustez al reiniciar, no toca nada ajeno, ráfagas atómicas
+  1:[0,2,2,2,2,2], 2:[2,2,2,2,2,2], 3:[2,2,1,1,2,2], 4:[1,0,1,1,0,2], 5:[2,2,2,2,2,0]
+};
+const CR = ['Seguridad','Aislamiento','Simplicidad','Robusta al reiniciar','No toca nada ajeno','Ráfagas sin duplicar'];
+
+function diagram(o){
+  const dbLabel = o.port==='sqlite' ? 'SQLite de n8n' : (o.port==='shared' ? 'consultoria-digital-postgres' : 'romez-asistente-pg');
+  const inNet = o.net;
+  let s = `<svg viewBox="0 0 300 190" role="img" aria-label="Diagrama de la opción ${o.id}">`;
+  s += `<rect class="net" x="8" y="40" width="${inNet?284:150}" height="${inNet?110:110}" rx="12"/><text class="net-lbl" x="16" y="56">n8n_default</text>`;
+  s += `<g class="n8n"><rect class="n8n" x="24" y="70" width="86" height="50" rx="10"/><text class="b" x="67" y="93" text-anchor="middle" font-size="13">n8n</text><text x="67" y="108" text-anchor="middle" font-size="9.5">SQLite · 2.1.4</text></g>`;
+  if(o.port==='sqlite'){
+    s += `<rect class="db" x="160" y="70" width="118" height="50" rx="10"/><text class="b" x="219" y="92" text-anchor="middle" font-size="11">${dbLabel}</text><text class="sm" x="219" y="107" text-anchor="middle">tabla interna</text>`;
+    s += `<path class="ok" d="M110 95H160"/>`;
+  } else if(inNet){
+    s += `<rect class="db" x="160" y="70" width="122" height="50" rx="10"/><text class="b" x="221" y="91" text-anchor="middle" font-size="${o.port==='shared'?9.5:11.5}">${dbLabel}</text><text class="sm" x="221" y="106" text-anchor="middle">${o.port==='shared'?'+ base nueva':'por nombre :5432'}</text>`;
+    s += `<path class="ok" d="M110 95H160"/>`;
+  } else {
+    s += `<rect class="db" x="192" y="70" width="98" height="50" rx="10"/><text class="b" x="241" y="91" text-anchor="middle" font-size="11">romez-asistente-pg</text><text class="sm" x="241" y="106" text-anchor="middle">red bridge</text>`;
+    s += `<path class="ok" d="M110 95H192"/><text class="sm" x="151" y="88" text-anchor="middle">${o.port==='gw'?'172.18.0.1':'IP:55450'}</text>`;
+  }
+  if(o.port==='public'){ s += `<text class="b" x="150" y="20" text-anchor="middle" font-size="11" style="fill:var(--red)">Internet</text><path class="bad" d="M170 26V68"/><text class="sm" x="176" y="52" style="fill:var(--red)">0.0.0.0</text>`; }
+  if(o.port==='gw'){ s += `<text class="sm" x="241" y="140" text-anchor="middle">solo el gateway lo ve</text>`; }
+  if(o.port==='none'){ s += `<text class="sm" x="221" y="140" text-anchor="middle">sin puertos publicados</text>`; }
+  if(o.port==='shared'){ s += `<text class="sm" x="221" y="140" text-anchor="middle">comparte servidor con otra app</text>`; }
+  if(o.port==='sqlite'){ s += `<text class="sm" x="219" y="140" text-anchor="middle">nada que instalar</text>`; }
+  return s + '</svg>';
+}
+document.getElementById('opts').innerHTML = OPTS.map(o=>`<div class="card mini ${o.rec?'rec':''}"><span class="tag ${o.tag[0]}">${o.tag[1]}</span><h3>Opción ${o.id} · ${o.name}</h3><p class="what">${o.what}</p>${diagram(o)}</div>`).join('');
+
+const cls = v=>'s'+v, sym=['✕','~','✓'];
+document.getElementById('matrix').innerHTML =
+ `<thead><tr><th>Criterio</th>${OPTS.map(o=>`<th>Opción ${o.id}</th>`).join('')}</tr></thead><tbody>`+
+ CR.map((c,i)=>`<tr><td>${c}</td>${OPTS.map(o=>`<td class="${cls(SC[o.id][i])}">${sym[SC[o.id][i]]}</td>`).join('')}</tr>`).join('')+'</tbody>';
+const max = CR.length*2, color={1:'var(--red)',2:'var(--green)',3:'var(--amber)',4:'var(--amber)',5:'var(--blue)'};
+document.getElementById('totals').innerHTML = OPTS.map(o=>{const t=SC[o.id].reduce((a,b)=>a+b,0);return `<div class="bar"><span>Opción ${o.id} · ${o.name.length>26?o.name.slice(0,24)+'…':o.name}</span><div class="t"><div class="f" data-w="${t/max*100}" style="background:${color[o.id]}"></div></div><b class="mono">${t}/${max}</b></div>`}).join('');
+requestAnimationFrame(()=>setTimeout(()=>document.querySelectorAll('.f').forEach(f=>f.style.width=f.dataset.w+'%'),60));
+</script>
+</body>
+</html>
