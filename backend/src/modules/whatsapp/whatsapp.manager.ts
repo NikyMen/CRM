@@ -2596,6 +2596,13 @@ export class WhatsAppManager {
       return null
     }
 
+    // Sólo un entrante en vivo y todavía no guardado hace sonar la notificación (no historial ni reenvíos).
+    const notifyInbound = !fromMe && !chat.isGroup && Boolean(options?.ensureTicket)
+      && !(await prisma.whatsAppMessage.findUnique({
+        where: { workspaceId_remoteJid_messageId: { workspaceId, remoteJid, messageId } },
+        select: { id: true },
+      }))
+
     const persisted = await prisma.whatsAppMessage.upsert({
       where: {
         workspaceId_remoteJid_messageId: {
@@ -2719,6 +2726,7 @@ export class WhatsAppManager {
 
     whatsAppRealtime.publish(workspaceId, { type: 'message.updated', jid: remoteJid })
     whatsAppRealtime.publish(workspaceId, { type: 'kanban.updated', jid: remoteJid })
+    if (notifyInbound) whatsAppRealtime.publish(workspaceId, { type: 'message.received', line: 'tickets' })
 
     return persistedWithMedia
   }

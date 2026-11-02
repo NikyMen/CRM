@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ImagePlus, Key, LayoutGrid, Loader2, RefreshCcw, Save, Settings,
+  AlertTriangle, Check, ImagePlus, Key, LayoutGrid, Loader2, Palette, RefreshCcw, Save, Settings,
   Shield, SlidersHorizontal, Smartphone, Unplug, Webhook, Wifi, WifiOff,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,8 +20,9 @@ import { PillNav } from '@/components/react-bits/PillNav'
 import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleState } from '@/lib/modules'
 import { useWorkspaceModules, WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
 import { brand } from '@/lib/brand'
+import { BrandingSettingsPanel } from '@/components/romez/BrandingSettingsPanel'
 
-type SettingsTab = 'profile' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
+type SettingsTab = 'profile' | 'branding' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
 const PREVIEW_SIZE = 224
 const OUTPUT_SIZE = 512
@@ -35,6 +36,7 @@ const TAB_ITEMS: {
   module?: ModuleKey
 }[] = [
   { id: 'profile', label: 'Perfil', icon: Settings },
+  { id: 'branding', label: 'Marca', icon: Palette, adminOnly: true },
   { id: 'modules', label: 'Módulos', icon: LayoutGrid, adminOnly: true },
   { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, adminOnly: true, module: 'customer-service' },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, adminOnly: true, module: 'integrations' },
@@ -582,6 +584,7 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && <AvatarSettingsPanel />}
+      {canManageSettings && activeTab === 'branding' && <BrandingSettingsPanel />}
       {canManageSettings && activeTab === 'modules' && <ModulesSettingsPanel />}
       {canManageSettings && activeTab === 'whatsapp' && <WhatsAppSettingsPanel />}
       {canManageSettings && activeTab === 'webhooks' && <WebhooksPage />}
@@ -590,7 +593,7 @@ export default function SettingsPage() {
         <div className="mx-auto mt-6 max-w-5xl px-6">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
             <Shield size={16} className="mr-2 inline" />
-            Módulos, Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
+            Marca, Módulos, Webhooks, API Keys y Equipo solo estan disponibles para owner/admin.
           </div>
         </div>
       )}

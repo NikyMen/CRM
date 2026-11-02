@@ -72,6 +72,17 @@ api.interceptors.response.use(
 )
 
 // Auth
+export type BrandingSnapshot = { name: string | null; tagline: string | null; logo: string | null; logoDark: string | null; favicon: string | null }
+export type BrandingAssetKind = 'logo' | 'logo-dark' | 'favicon'
+
+// Marca editable desde Configuración. GET es público: el login la usa antes de iniciar sesión.
+export const brandingApi = {
+  get: () => api.get<BrandingSnapshot>('/branding'),
+  update: (data: { name?: string | null; tagline?: string | null }) => api.patch<BrandingSnapshot>('/branding', data),
+  uploadAsset: (kind: BrandingAssetKind, dataUrl: string) => api.put<BrandingSnapshot>(`/branding/assets/${kind}`, { dataUrl }),
+  removeAsset: (kind: BrandingAssetKind) => api.delete<BrandingSnapshot>(`/branding/assets/${kind}`),
+}
+
 export const authApi = {
   register: (data: {
     email: string

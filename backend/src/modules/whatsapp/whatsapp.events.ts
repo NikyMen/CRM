@@ -13,8 +13,11 @@ export type WhatsAppRealtimeEvent = {
     | 'ticket.updated'
     | 'collection.updated'
     | 'checklist.updated'
+    | 'message.received'
   at: string
   jid?: string
+  /** Sólo en `message.received`: de qué número entró el mensaje. */
+  line?: 'tickets' | 'collections' | 'commercial'
 }
 
 class WhatsAppRealtimeHub {
