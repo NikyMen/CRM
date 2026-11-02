@@ -84,6 +84,11 @@ export class ClientService {
     ]
 
     if (filters.search) {
+      const responsibleSearch: Prisma.UserWhereInput[] = [
+        { firstName: { contains: filters.search, mode: 'insensitive' } },
+        { lastName: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+      ]
       conditions.push({
         OR: [
           { name: { contains: filters.search, mode: 'insensitive' } },
@@ -92,22 +97,15 @@ export class ClientService {
           { ruc: { contains: normalizeRuc(filters.search) ?? filters.search } },
           { email: { contains: filters.search, mode: 'insensitive' } },
           { phone: { contains: filters.search } },
-          {
-            owner: {
-              is: {
-                OR: [
-                  { firstName: { contains: filters.search, mode: 'insensitive' } },
-                  { lastName: { contains: filters.search, mode: 'insensitive' } },
-                  { email: { contains: filters.search, mode: 'insensitive' } },
-                ],
-              },
-            },
-          },
+          { owner: { is: { OR: responsibleSearch } } },
+          { assignments: { some: { user: { OR: responsibleSearch } } } },
         ],
       })
     }
     if (filters.status) conditions.push({ status: filters.status })
-    if (filters.ownerId) conditions.push({ ownerId: filters.ownerId })
+    if (filters.ownerId) {
+      conditions.push({ OR: [{ ownerId: filters.ownerId }, { assignments: { some: { userId: filters.ownerId } } }] })
+    }
     if (filters.hasDebt !== undefined) {
       conditions.push(filters.hasDebt
         ? { receivables: { some: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] }, ...visibleReceivableWhere() } } }
@@ -467,7 +465,17 @@ export class ClientService {
     if (ownerId) await ensureWorkspaceUser(ctx.workspaceId, ownerId)
     if (input.assignments && !canManageAllClients(ctx)) throw new ForbiddenError('Solo owner o admin pueden administrar colaboradores')
     if (input.assignments) {
-      await Promise.all(input.assignments.map((assignment) => ensureWorkspaceUser(ctx.workspaceId, assignment.userId)))
+      const seen = new Set<string>()
+      input = {
+        ...input,
+        assignments: input.assignments.filter((assignment) => {
+          const key = `${assignment.userId}:${assignment.area?.trim().toUpperCase() || 'GENERAL'}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        }),
+      }
+      await Promise.all(input.assignments!.map((assignment) => ensureWorkspaceUser(ctx.workspaceId, assignment.userId)))
     }
     const ruc = normalizeRuc(input.ruc)
     if (ruc) {

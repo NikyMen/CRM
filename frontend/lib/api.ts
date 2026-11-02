@@ -267,7 +267,7 @@ export const clientsApi = {
 
   summary: (id: string) => api.get<ClientSummary>(`/clients/${id}/summary`),
 
-  create: (data: Partial<Client> & { name: string; contactName?: string; contactPhone?: string; referenceNotes?: string }) => api.post<Client>('/clients', data),
+  create: (data: Partial<Omit<Client, 'assignments'>> & { name: string; assignments?: Array<{ userId: string; area?: string }>; contactName?: string; contactPhone?: string; referenceNotes?: string }) => api.post<Client>('/clients', data),
 
   update: (id: string, data: Partial<Omit<Client, 'assignments'>> & {
     assignments?: Array<{ userId: string; area?: string }>
