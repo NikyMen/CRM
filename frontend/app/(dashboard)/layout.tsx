@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
 import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Bell, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Bell, Bot, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },
   { href: '/daily-reports', label: 'Planilla diaria', icon: ClipboardCheck, roles: ['owner', 'admin', 'member'], module: 'daily-reports' },
   { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
+  { href: '/asistente', label: 'Asistente IA', icon: Bot, roles: ['owner', 'admin'] },
   { href: '/balances', label: 'Saldos', icon: Scale, module: 'collections' },
   { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign, module: 'collections' },
   { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets', aliases: ['/customer-service'] },

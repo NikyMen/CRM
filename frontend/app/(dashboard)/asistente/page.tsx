@@ -25,8 +25,8 @@ const TABS: { key: Tab; label: string; editsSettings?: boolean }[] = [
 ]
 
 /**
- * Panel del asistente comercial de WhatsApp. Módulo oculto: no figura en el menú ni en
- * Configuración → Módulos; se entra por /asistente y sólo owner y admin.
+ * Panel del asistente comercial de WhatsApp. Figura en el menú como «Asistente IA» sólo para owner y admin, no en
+ * Configuración → Módulos; se entra por /asistente.
  */
 export default function AssistantPage() {
   const queryClient = useQueryClient()
