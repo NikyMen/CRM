@@ -16,6 +16,7 @@ import { reconcilePendingTicketState } from '../tickets/ticket.reconcile'
 import { whatsAppRealtime } from './whatsapp.events'
 import { COMMERCIAL_LEAD_SOURCE } from '../deals/commercial-lead'
 import { ME_SENDER, mergeReaction, readReactionMessage } from './whatsapp.reactions'
+import { groupContactsSafeToMerge } from './whatsapp.contact-merge'
 
 const prisma = db as any
 
@@ -2120,23 +2121,28 @@ export class WhatsAppManager {
       byPhone.set(phone, [...(byPhone.get(phone) ?? []), contact])
     }
 
-    for (const group of byPhone.values()) {
-      if (group.length < 2) continue
-      if (!group.some((contact) =>
-        contact.source === 'WHATSAPP' ||
-        contact.tags.includes('whatsapp') ||
-        contact.whatsappChats.length > 0
-      )) continue
+    for (const phoneGroup of byPhone.values()) {
+      if (phoneGroup.length < 2) continue
 
-      const winner = this.chooseCanonicalWhatsappContact(group)
-      if (!winner) continue
+      // Un teléfono compartido por clientes distintos no se fusiona: el contacto
+      // perdedor perdía su cliente y los tickets caían en el cliente equivocado.
+      for (const group of groupContactsSafeToMerge(phoneGroup)) {
+        if (!group.some((contact) =>
+          contact.source === 'WHATSAPP' ||
+          contact.tags.includes('whatsapp') ||
+          contact.whatsappChats.length > 0
+        )) continue
 
-      for (const loser of group) {
-        if (loser.id === winner.id) continue
-        await this.mergeContactAlias(workspaceId, winner, loser)
+        const winner = this.chooseCanonicalWhatsappContact(group)
+        if (!winner) continue
+
+        for (const loser of group) {
+          if (loser.id === winner.id) continue
+          await this.mergeContactAlias(workspaceId, winner, loser)
+        }
+
+        await this.mergeDuplicateContactChats(workspaceId, winner.id)
       }
-
-      await this.mergeDuplicateContactChats(workspaceId, winner.id)
     }
   }
 
