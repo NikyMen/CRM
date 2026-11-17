@@ -46,7 +46,17 @@ if (!parts.length && !bloques.length && !closing) {
   parts.push(descartados.length ? 'Permítame un momento, le paso con el Lic. José Rojas para confirmarle ese dato 🙏' : SIN_IA);
 }
 
-const textos = [...parts, ...bloques.map((k) => ficha.bloques[k]), ...(closing ? [closing] : [])];
+// Una sola pregunta por turno. El modelo a veces pregunta en reply_parts y repite la misma
+// pregunta en closing (caso Eduardo de Sotto: "¿a qué rubro…?" + "¿Cuál es el rubro…?").
+// Si ya hay una pregunta en los mensajes, o si se deriva a una persona, el cierre-pregunta sobra.
+const esPregunta = (t) => /\?\s*$/.test(clean(t)) || /¿[^?]*\?/.test(clean(t));
+if (closing && esPregunta(closing) && (parts.some(esPregunta) || needsHuman)) closing = '';
+
+// Red final: nunca dos mensajes iguales (ignorando mayúsculas, tildes, signos y espacios).
+const firma = (t) => clean(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const vistos = new Set();
+const textos = [...parts, ...bloques.map((k) => ficha.bloques[k]), ...(closing ? [closing] : [])]
+  .filter((t) => { const f = firma(t); if (vistos.has(f)) return false; vistos.add(f); return true; });
 const to = '+' + ctx.phone;
 const mensajes = textos.map((text) => ({ to, text }));
 
@@ -86,6 +96,17 @@ const aviso = needsHuman
     ].filter(Boolean).join('\n')
   : '';
 
+// Número del equipo en formato internacional. Un número local paraguayo (0981…/981…) se
+// completa con 595: "+0981…" no existe y WhatsApp descarta el aviso sin dar error.
+function avisoTo(v) {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('00')) d = d.slice(2);
+  else if (d.startsWith('0') && d.length === 10) d = '595' + d.slice(1);
+  else if (d.startsWith('9') && d.length === 9) d = '595' + d;
+  return '+' + d;
+}
+
 const crmSync = cfg.crmActivo === true && Boolean(lead.nombre || e.name);
 const crm = crmSync ? {
   firstName: String(lead.nombre || e.name).slice(0, 80),
@@ -103,7 +124,7 @@ return [{
     estado: JSON.stringify(e),
     handoff: needsHuman,
     aviso,
-    avisoTo: cfg.notificarA ? '+' + String(cfg.notificarA).replace(/\D/g, '') : '',
+    avisoTo: avisoTo(cfg.notificarA),
     crmSync,
     crm,
     meta: { fallback, descartados, bloques, stage: e.stage },

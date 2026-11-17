@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CalendarClock, CheckCheck, MessageCircle, Search, Settings, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
-import { collectionsWhatsAppApi, commercialWhatsAppApi, type LineWhatsAppApi } from '@/lib/api'
+import { collectionsWhatsAppApi, commercialWhatsAppApi, dealsApi, type LineWhatsAppApi } from '@/lib/api'
 import { formatDateTime, fullName, getErrorMessage } from '@/lib/format'
 import type { CollectionWhatsAppChat, CollectionWhatsAppMessage, WhatsAppLinkSession } from '@/types'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
@@ -190,6 +190,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     <header className="flex items-center gap-3 border-b border-[var(--line-soft)] px-4 py-3">
       <button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={16} /></button>
       <div className="min-w-0 flex-1">{!chat ? <p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">Chat</p> : chat.company ? <><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat.company.name}</p><div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-semibold text-[var(--ink-secondary)]" /></div></> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-base font-extrabold text-[var(--ink-primary)]" />}<p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
+      {line.key === COMMERCIAL_WHATSAPP.key ? <LeadStageSelect line={line} chatId={chatId} /> : null}
       {line.promises && canWrite && chat ? <button type="button" className="btn-secondary" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
       {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}
       {onDelete ? <button type="button" className="btn-danger" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={15} /></button> : null}
@@ -208,6 +209,41 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     />
     <PaymentPromiseDialog target={promiseTarget} onClose={() => setPromiseTarget(null)} />
   </>
+}
+
+/**
+ * Etapa del lead en el tablero de Gestión comercial, cambiable desde el chat. El asistente de
+ * WhatsApp la lee para saber en qué punto está el cliente; si una persona la cambia, el
+ * asistente no la vuelve atrás.
+ */
+function LeadStageSelect({ line, chatId }: { line: WhatsAppLineConfig; chatId: string }) {
+  const queryClient = useQueryClient()
+  const leadKey = [`${line.key}-lead`, chatId]
+  const leadQuery = useQuery({ queryKey: leadKey, queryFn: () => line.api.getLead(chatId).then((response) => response.data.lead), refetchInterval: 30_000 })
+  const move = useMutation({
+    mutationFn: ({ dealId, stageId }: { dealId: string; stageId: string }) => dealsApi.move(dealId, stageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: leadKey })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+    },
+  })
+  const lead = leadQuery.data
+  if (!lead) return null
+  const current = lead.stages.find((stage) => stage.id === lead.stageId)
+  return <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--ink-tertiary)]" title={`Etapa del lead #${lead.leadNumber} en Gestión comercial`}>
+    <span className="hidden lg:inline">Etapa</span>
+    <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: current?.color }} />
+    <select
+      className="ctrl-input h-9 max-w-[11rem] py-1 text-xs font-semibold"
+      value={lead.stageId}
+      disabled={!lead.canMove || move.isPending}
+      onChange={(event) => move.mutate({ dealId: lead.id, stageId: event.target.value })}
+      aria-label="Cambiar la etapa del lead"
+    >
+      {lead.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name.trim()}{stage.isWon ? ' ✓' : stage.isLost ? ' ✗' : ''}</option>)}
+    </select>
+    {move.isError ? <span className="font-semibold text-[var(--danger)]">{getErrorMessage(move.error)}</span> : null}
+  </label>
 }
 
 function Bubble({ line, message, onReact }: { line: WhatsAppLineConfig; message: CollectionWhatsAppMessage; onReact?: (emoji: string) => Promise<unknown> }) {

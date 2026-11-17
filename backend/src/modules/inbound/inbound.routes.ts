@@ -6,6 +6,13 @@ import { db } from '../../core/database'
 import { config } from '../../core/config'
 import { UnauthorizedError, ActivityType } from '../../types'
 import type { EventBus } from '../../core/event-bus'
+import { DealService } from '../deals/deal.service'
+import {
+  BOT_STAGES,
+  findCommercialLeadByPhone,
+  lastStageChange,
+  resolveBotStageMove,
+} from '../deals/commercial-lead-stage'
 import {
   assertInboundChannelAllowed,
   createValidatedInboundActivity,
@@ -33,6 +40,46 @@ export async function inboundRoutes(
   options: { eventBus: EventBus }
 ) {
   const contactService = new ContactService(options.eventBus)
+  const dealService = new DealService(options.eventBus)
+
+  // ─── GET /inbound/commercial-leads/stage?phone= ─────────────────
+  // El asistente de WhatsApp lee en qué etapa del tablero está el cliente (y si la puso
+  // una persona) para no contradecir al equipo.
+  app.get('/commercial-leads/stage', async (req, reply) => {
+    const { workspaceId } = await requireApiKey(req)
+    const { phone } = z.object({ phone: z.string().trim().min(6).max(40) }).parse(req.query)
+    const lead = await findCommercialLeadByPhone(workspaceId, phone)
+    if (!lead || !lead.stage) return reply.send({ found: false })
+    const change = await lastStageChange(workspaceId, lead.id)
+    return reply.send({
+      found: true,
+      dealId: lead.id,
+      leadNumber: lead.leadNumber,
+      stage: lead.stage.name,
+      isWon: lead.stage.isWon,
+      isLost: lead.stage.isLost,
+      stageEnteredAt: lead.stageEnteredAt,
+      changedByPerson: change?.byPerson ?? false,
+      changedBy: change?.by ?? null,
+    })
+  })
+
+  // ─── POST /inbound/commercial-leads/stage ───────────────────────
+  // El asistente informa la etapa de la charla; el lead avanza en el tablero sólo si
+  // corresponde (reglas en deals/commercial-lead-stage.ts).
+  app.post('/commercial-leads/stage', async (req, reply) => {
+    const { workspaceId } = await requireApiKey(req)
+    const body = z.object({
+      phone: z.string().trim().min(6).max(40),
+      botStage: z.enum(BOT_STAGES),
+    }).parse(req.body)
+    const lead = await findCommercialLeadByPhone(workspaceId, body.phone)
+    if (!lead || !lead.stage) return reply.send({ moved: false, reason: 'sin_lead' })
+    const target = resolveBotStageMove(lead.stage, lead.pipeline.stages, body.botStage)
+    if (!target) return reply.send({ moved: false, reason: 'sin_cambio', stage: lead.stage.name })
+    await dealService.move({ workspaceId, userId: '', role: 'admin' }, lead.id, { stageId: target.id })
+    return reply.send({ moved: true, from: lead.stage.name, stage: target.name })
+  })
 
   // ─── POST /inbound/contacts ────────────────────────────────────
   // Crear o actualizar contacto desde n8n

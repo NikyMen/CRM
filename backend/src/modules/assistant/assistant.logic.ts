@@ -1,4 +1,5 @@
 import { ValidationError } from '../../types'
+import { normalizeCollectionPhone } from '../collections-whatsapp/collection-whatsapp.phone'
 
 /** Marcador de precio dentro del texto de un servicio. */
 export const PRICE_TOKEN = '{{precio}}'
@@ -20,16 +21,20 @@ export function renderServiceBody(body: string, amount: string | null) {
   return body.split(PRICE_TOKEN).join(formatGuaranies(amount))
 }
 
-/** Teléfonos como los escribe una persona → sólo dígitos, 9 a 15, sin repetidos. */
+/**
+ * Teléfonos como los escribe una persona → formato internacional sin "+", sin repetidos.
+ * Un número local paraguayo (0981…, 981…) se completa con 595: sin eso WhatsApp
+ * recibe "+0981…", que no existe, y el aviso de derivación se pierde sin error.
+ */
 export function normalizePhoneList(values: string[]) {
   const seen = new Set<string>()
   for (const raw of values) {
-    const digits = raw.replace(/\D/g, '')
-    if (!digits) continue
-    if (digits.length < 9 || digits.length > 15) {
-      throw new ValidationError(`El teléfono "${raw.trim()}" no es válido: usá entre 9 y 15 dígitos, con código de país.`)
+    if (!raw.replace(/\D/g, '')) continue
+    const phone = normalizeCollectionPhone(raw)
+    if (!phone || phone.length > 15) {
+      throw new ValidationError(`El teléfono "${raw.trim()}" no es válido: usá el formato 595981123456 (o 0981123456).`)
     }
-    seen.add(digits)
+    seen.add(phone)
   }
   return [...seen]
 }

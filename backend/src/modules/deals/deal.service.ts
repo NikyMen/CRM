@@ -415,7 +415,9 @@ export class DealService {
     dealId: string,
     dto: MoveDealDto
   ): Promise<Deal> {
-    const { workspaceId, userId } = ctx
+    const { workspaceId } = ctx
+    // Sin usuario = lo movió el asistente de WhatsApp (API key): la actividad queda sin autor.
+    const userId = ctx.userId || undefined
     if (ctx.role === 'viewer') {
       throw new ForbiddenError('El rol viewer solo puede consultar oportunidades')
     }

@@ -500,7 +500,19 @@ function lineWhatsAppApi(prefix: string) {
     react: (chatId: string, messageId: string, emoji: string) => api.put<CollectionWhatsAppMessage>(`${prefix}/chats/${chatId}/messages/${encodeURIComponent(messageId)}/reaction`, { emoji }),
     startForClient: (companyId: string) => api.post<CollectionWhatsAppChat>(`${prefix}/start`, { companyId }),
     getMedia: (messageId: string) => api.get<Blob>(`${prefix}/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
+    /** Lead del tablero vinculado al chat (sólo la línea comercial). */
+    getLead: (chatId: string) => api.get<{ lead: ChatLead | null }>(`${prefix}/chats/${chatId}/lead`),
   }
+}
+
+/** Lead del tablero de Gestión comercial visto desde su chat: etapa actual y columnas del embudo. */
+export type ChatLead = {
+  id: string
+  leadNumber: string
+  title: string
+  stageId: string
+  stages: { id: string; name: string; position: number; color: string; isWon: boolean; isLost: boolean }[]
+  canMove: boolean
 }
 
 export type LineWhatsAppApi = ReturnType<typeof lineWhatsAppApi>

@@ -11,6 +11,8 @@ import { sendWhatsAppMedia } from '../whatsapp/whatsapp.media-reply'
 import { decodeOutboundFile, outboundFileSchema } from '../whatsapp/whatsapp.outbound-file'
 import { reactionSchema } from '../whatsapp/whatsapp.reactions'
 import { collectionWhatsAppManager, commercialWhatsAppManager, type CollectionWhatsAppManager } from './collection-whatsapp.manager'
+import { findCommercialLeadByChat } from '../deals/commercial-lead-stage'
+import { dealVisibilityWhere } from '../deals/deal-access'
 
 const sendSchema = z.object({
   text: z.string().trim().max(4096).optional(),
@@ -55,6 +57,26 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
       const ctx = req.user as WorkspaceContext
       return reply.send(await manager.listMessages(ctx.workspaceId, req.params.id))
     })
+
+    // Lead del tablero vinculado al chat comercial: etapa actual y columnas, para cambiarla
+    // desde el chat (el cambio en sí usa PATCH /deals/:id/move, con sus permisos).
+    if (module === 'commercial') {
+      app.get<{ Params: { id: string } }>('/chats/:id/lead', async (req, reply) => {
+        const ctx = req.user as WorkspaceContext
+        const lead = await findCommercialLeadByChat(ctx.workspaceId, req.params.id, dealVisibilityWhere(ctx))
+        if (!lead) return reply.send({ lead: null })
+        return reply.send({
+          lead: {
+            id: lead.id,
+            leadNumber: lead.leadNumber,
+            title: lead.title,
+            stageId: lead.stageId,
+            stages: lead.pipeline.stages,
+            canMove: ctx.role !== 'viewer',
+          },
+        })
+      })
+    }
 
     app.post<{ Params: { id: string } }>('/chats/:id/read', async (req, reply) => {
       const ctx = req.user as WorkspaceContext

@@ -4,6 +4,10 @@ const ficha = $('Ficha de servicios').first().json;
 const u = $('¿Último mensaje?').first().json;
 const e = u.e ?? {};
 
+// Etapa del lead en el tablero del CRM (si crmEtapasActivo y el CRM respondió).
+let tablero = null;
+try { const t = $('CRM: etapa del lead').first().json; if (t && t.found) tablero = t; } catch { tablero = null; }
+
 const now = $now.setZone(cfg.zonaHoraria || 'America/Asuncion');
 const hhmm = now.toFormat('HH:mm');
 const dias = String(cfg.atencionDias ?? '1,2,3,4,5').split(',').map((d) => Number(d.trim()));
@@ -24,6 +28,9 @@ const lines = [
   '=== DATOS YA CONOCIDOS DE ESTA PERSONA ===',
   `Nombre en WhatsApp: ${u.name || 'no informado'}`,
   `Etapa actual: ${e.stage || 'NUEVO'}`,
+  tablero ? `Etapa en el tablero del equipo (CRM): ${tablero.stage}${tablero.changedByPerson ? ` (la puso ${tablero.changedBy || 'una persona del equipo'}: respetala y no la contradigas)` : ''}` : '',
+  tablero?.isWon ? 'El equipo ya lo marcó como cliente ganado: no le vuelvas a vender la constitución; ayudalo y, si pide algo del trámite, derivá.' : '',
+  tablero?.isLost ? 'El equipo lo marcó como no concretado: respondé con amabilidad lo que pregunte, sin insistir con la venta.' : '',
   `Mensajes del cliente hasta ahora: ${e.inCount || 1}`,
   `Datos del interesado: ${JSON.stringify(e.lead ?? {})}`,
   e.ubicacion ? 'Ya compartió su ubicación GPS.' : '',

@@ -65,6 +65,9 @@ test('los servicios iniciales se renderizan con los precios que usa el equipo', 
 
 test('normalizePhoneList deja sólo dígitos, sin repetidos, y rechaza números inválidos', () => {
   assert.deepEqual(normalizePhoneList(['+595 981 123-456', '595981123456', '  ']), ['595981123456'])
+  // Formato local paraguayo: sin el 595 el aviso de derivación iba a "+0994…" y no llegaba.
+  assert.deepEqual(normalizePhoneList(['0994282147']), ['595994282147'])
+  assert.deepEqual(normalizePhoneList(['0994 282 147', '994282147', '+595994282147']), ['595994282147'])
   assert.throws(() => normalizePhoneList(['1234']), ValidationError)
   assert.throws(() => normalizePhoneList(['1'.repeat(16)]), ValidationError)
 })

@@ -205,6 +205,16 @@ t('parseo: derivación pausa el chat, avisa al equipo y la etapa pasa a DERIVADO
   const e = JSON.parse(p.estado)
   assert.strictEqual(p.handoff, true); assert.strictEqual(e.stage, 'DERIVADO'); assert.ok(e.pausedUntil > Date.now()); assert.match(p.aviso, /Pide cotización de SA/); assert.strictEqual(p.avisoTo, '+595981000000')
 })
+t('parseo: aviso de derivación a un número paraguayo cargado sin 595 → se completa', () => {
+  const out = JSON.stringify({ needs_human: true, human_reason: 'SA', reply_parts: ['Le escribe el Lic. Rojas.'], blocks: [] })
+  for (const [n, esperado] of [['0994282147', '+595994282147'], ['994282147', '+595994282147'], ['+595 994 282147', '+595994282147']]) {
+    const p = run('Parsear respuesta IA', {
+      input: item({ output: out }),
+      nodes: { Config: item({ ...CFG, notificarA: n }), 'Ficha de servicios': item(fichaOut), 'Armar contexto IA': item(ctxOut), '¿Último mensaje?': item(ult) },
+    })[0].json
+    assert.strictEqual(p.avisoTo, esperado, n)
+  }
+})
 t('parseo: salida inválida o error del modelo → mensaje seguro y derivación', () => {
   for (const out of ['esto no es json', null, '']) { const p = parse(out); assert.strictEqual(p.handoff, true); assert.strictEqual(p.meta.fallback, true); assert.ok(p.mensajes.length >= 1) }
 })

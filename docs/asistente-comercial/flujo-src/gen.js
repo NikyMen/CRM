@@ -86,12 +86,14 @@ const cfg = add({
         cfgField('atencionDesde', '08:00'),
         cfgField('atencionHasta', '18:00'),
         cfgField('atencionDias', '1,2,3,4,5'),
-        cfgField('seguimientoActivo', false, 'boolean'),
-        cfgField('seguimientoHoras', 22, 'number'),
+        cfgField('seguimientoActivo', true, 'boolean'),
+        cfgField('seguimientoHoras', 24, 'number'),
         cfgField('seguimientoDesde', '08:30'),
         cfgField('seguimientoHasta', '18:00'),
         cfgField('crmActivo', false, 'boolean'),
         cfgField('crmConfigActivo', false, 'boolean'),
+        // Etapas del tablero: el asistente lee la etapa del lead en el CRM y le informa la de la charla.
+        cfgField('crmEtapasActivo', false, 'boolean'),
         cfgField('crmUrl', 'https://romez.consultoriadigital.io/api/v1'),
       ],
     },
@@ -237,7 +239,23 @@ const mem = add({
   type: '@n8n/n8n-nodes-langchain.memoryBufferWindow', typeVersion: 1.3, position: [5120, 480], name: 'Memoria del chat',
 })
 link(ifUlt.name, ficha.name, 0)
-link(ficha.name, ctx.name)
+// Etapa del lead en el tablero del CRM (la puede haber cambiado una persona desde el chat).
+const ifEtapa = ifNode('¿Leer etapa del CRM?', "={{ $('Config').first().json.crmEtapasActivo === true }}", [4560, 400])
+const leerEtapa = add({
+  parameters: {
+    method: 'GET', url: "={{ $('Config').first().json.crmUrl }}/inbound/commercial-leads/stage",
+    authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+    sendQuery: true, queryParameters: { parameters: [{ name: 'phone', value: "={{ $('¿Último mensaje?').first().json.phone }}" }] },
+    options: { timeout: 5000 },
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [4560, 560], name: 'CRM: etapa del lead',
+  credentials: { httpHeaderAuth: { name: 'ROMEZ CRM X-API-Key' } }, onError: 'continueRegularOutput', alwaysOutputData: true,
+  notes: 'GET /inbound/commercial-leads/stage. Si falla, el asistente sigue sin ese dato.', notesInFlow: true,
+})
+link(ficha.name, ifEtapa.name)
+link(ifEtapa.name, leerEtapa.name, 0)
+link(ifEtapa.name, ctx.name, 1)
+link(leerEtapa.name, ctx.name)
 link(ctx.name, agent.name)
 link(llm.name, agent.name, 0, 'ai_languageModel')
 link(mem.name, agent.name, 0, 'ai_memory')
@@ -295,6 +313,21 @@ const crm = add({
 link(parsear.name, ifCrm.name)
 link(ifCrm.name, crm.name, 0)
 
+// Informa al CRM la etapa de la charla: el lead avanza en el tablero solo si corresponde
+// (solo hacia adelante y sin tocar ganados/perdidos; reglas en el backend).
+const ifMover = ifNode('¿Informar etapa al CRM?', "={{ $('Config').first().json.crmEtapasActivo === true }}", [5460, 760])
+const mover = add({
+  parameters: {
+    method: 'POST', url: "={{ $('Config').first().json.crmUrl }}/inbound/commercial-leads/stage",
+    authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+    sendBody: true, specifyBody: 'json', jsonBody: '={{ ({ phone: $json.phone, botStage: $json.meta.stage }) }}', options: { timeout: 10000 },
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [5700, 740], name: 'CRM: mover etapa del lead',
+  credentials: { httpHeaderAuth: { name: 'ROMEZ CRM X-API-Key' } }, onError: 'continueRegularOutput',
+})
+link(parsear.name, ifMover.name)
+link(ifMover.name, mover.name, 0)
+
 // ---------- seguimientos ----------
 const leerTodos = pgGetAll('Leer todos los chats', [1080, 760])
 const segui = codeNode('Seguimientos pendientes', 'seguimientos.js', [1320, 760])
@@ -328,7 +361,7 @@ sticky('### 3 · Audios\nwppia descifra → se baja el archivo → Whisper trans
 sticky('### 4 · Anti-ráfaga\nEspera `esperaSegundos` y responde solo al último mensaje, con todo el texto junto. Evita 3 respuestas a 3 mensajes seguidos.', [3200, 80], 760, 90, 5)
 sticky('### 5 · IA con bloques\nEl modelo NO escribe precios: elige bloques de la **Ficha de servicios**. Cualquier cifra suelta se descarta antes de enviar.', [4400, 80], 840, 90, 2)
 sticky('### 6 · Derivación\nSi `needs_human`: se avisa a `notificarA`, el chat queda pausado `pausaHoras` y la persona continúa.', [5420, 380], 560, 90, 3)
-sticky('### 7 · Seguimiento\nUn solo recordatorio a quien recibió el presupuesto y no respondió (apagado por defecto: `seguimientoActivo`).', [1040, 880], 760, 90, 5)
+sticky('### 7 · Seguimiento\nUn solo recordatorio a las 24 h a quien no respondió (recibió costos o quedó en la primera pregunta).', [1040, 880], 760, 90, 5)
 
 const wf = {
   name: 'ROMEZ - Asistente comercial WhatsApp',
