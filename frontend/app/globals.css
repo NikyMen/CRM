@@ -248,3 +248,44 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
   --viz-seq-4: #6da7ec;
   --viz-seq-5: #9ec5f4;
 }
+
+/* Asistente IA: tono más amable dentro de la marca. Radios amplios, sombras suaves y un acento que se lee en oscuro
+   (--brand-navy no cambia en modo oscuro, así que acá se usa --ast-accent). */
+.assistant-ui {
+  --radius-card: 1.5rem;
+  --radius-button: .875rem;
+  --ast-accent: var(--brand-navy);
+  --ast-accent-2: var(--brand-blue);
+  --ast-on-accent: #ffffff;
+  --ast-accent-soft: var(--brand-paper);
+  --ast-offhours: #d9792f;
+  --ast-offhours-soft: #fdf0e4;
+  --ast-track: #edf1f7;
+  --ast-card-shadow: 0 1px 2px rgba(8, 35, 78, .04), 0 14px 34px -22px rgba(8, 35, 78, .22);
+  --ast-float-shadow: 0 22px 48px -18px rgba(8, 35, 78, .38), 0 2px 6px rgba(8, 35, 78, .08);
+  --ast-hero:
+    radial-gradient(120% 150% at 100% 0%, rgba(54, 92, 171, .20) 0%, transparent 55%),
+    radial-gradient(80% 120% at 0% 100%, rgba(36, 122, 87, .10) 0%, transparent 60%),
+    linear-gradient(135deg, #fbfcfe 0%, #eef3fb 100%);
+}
+.dark .assistant-ui {
+  --ast-accent: var(--brand-blue);
+  --ast-accent-2: #8fa6cc;
+  --ast-on-accent: #10213d;
+  --ast-offhours: #f0a36b;
+  --ast-offhours-soft: rgba(240, 163, 107, .14);
+  --ast-track: rgba(255, 255, 255, .06);
+  --ast-card-shadow: 0 1px 2px rgba(0, 0, 0, .22), 0 18px 38px -22px rgba(0, 0, 0, .65);
+  --ast-float-shadow: 0 22px 48px -16px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+  --ast-hero:
+    radial-gradient(120% 150% at 100% 0%, rgba(174, 190, 216, .16) 0%, transparent 55%),
+    radial-gradient(80% 120% at 0% 100%, rgba(111, 195, 158, .09) 0%, transparent 60%),
+    linear-gradient(135deg, #2d3137 0%, #26292e 100%);
+}
+@layer components {
+  .ast-card { background: var(--paper); border: 1px solid var(--line-soft); border-radius: 1.5rem; box-shadow: var(--ast-card-shadow); }
+  .ast-rise { animation: astRise .45s cubic-bezier(.2, .7, .2, 1) both; }
+  .ast-pulse { animation: astPulse 2.4s ease-out infinite; }
+}
+@keyframes astRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes astPulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 10px transparent; } }
