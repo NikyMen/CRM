@@ -46,7 +46,15 @@ export function TaskForm({ initial, initialClientName, members, saving, error, o
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-form-title"
-        onSubmit={(event) => { event.preventDefault(); if (form.title.trim()) onSave({ ...form, title: form.title.trim(), description: form.description.trim() }) }}
+        onSubmit={(event) => { event.preventDefault(); if (form.title.trim()) onSave({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          priority: form.priority,
+          status: form.status,
+          assignedToUserId: form.assignedToUserId,
+          companyId: form.companyId,
+          dueDate: form.dueDate,
+        }) }}
       >
         <header className="flex items-start justify-between gap-4 px-6 pt-6 sm:px-7">
           <div className="flex items-start gap-3.5">
