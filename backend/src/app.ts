@@ -46,6 +46,7 @@ import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { brandingRoutes } from './modules/branding/branding.routes'
 import { quickReplyRoutes } from './modules/quick-replies/quick-reply.routes'
+import { taskRoutes } from './modules/tasks/task.routes'
 import { assistantInboundRoutes, assistantRoutes } from './modules/assistant/assistant.routes'
 import { collectionWhatsAppRoutes, commercialWhatsAppRoutes } from './modules/collections-whatsapp/collection-whatsapp.routes'
 import { collectionWhatsAppManager, commercialWhatsAppManager } from './modules/collections-whatsapp/collection-whatsapp.manager'
@@ -198,6 +199,7 @@ export async function buildApp() {
   }
   await app.register(ticketRoutes, { prefix: `${API}/tickets`, eventBus })
   await app.register(quickReplyRoutes, { prefix: `${API}/quick-replies` })
+  await app.register(taskRoutes, { prefix: `${API}/tasks` })
   await app.register(assistantRoutes, { prefix: `${API}/assistant` })
   await app.register(assistantInboundRoutes, { prefix: `${API}/inbound/assistant` })
   await app.register(customerServiceRoutes, { prefix: `${API}/customer-service` })
