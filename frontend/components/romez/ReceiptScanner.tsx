@@ -180,16 +180,16 @@ export function ReceiptScanner({ onDetected }: ReceiptScannerProps) {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Escanear comprobante">
           <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--paper)] sm:rounded-2xl">
             <header className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
-              <p className="flex items-center gap-2 text-sm font-extrabold text-[var(--ink-primary)]"><ScanLine size={16} /> Escanear comprobante</p>
+              <p className="flex items-center gap-2 text-sm font-bold text-[var(--ink-primary)]"><ScanLine size={16} /> Escanear comprobante</p>
               <button type="button" className="btn-secondary !min-h-8 !px-2" onClick={close} aria-label="Cerrar escáner"><X size={14} /></button>
             </header>
 
             <div className="flex-1 overflow-y-auto p-4">
               {stage === 'camera' ? (
                 <div className="space-y-3">
-                  <div className="relative overflow-hidden rounded-xl border border-[var(--line)] bg-black">
+                  <div className="relative overflow-hidden rounded-2xl border border-[var(--line)] bg-black">
                     <video ref={videoRef} className="block h-full w-full max-h-[50vh] object-contain" playsInline muted />
-                    <span className="pointer-events-none absolute inset-x-6 top-1/2 h-20 -translate-y-1/2 rounded-lg border-2 border-dashed border-white/70" />
+                    <span className="pointer-events-none absolute inset-x-6 top-1/2 h-20 -translate-y-1/2 rounded-xl border-2 border-dashed border-white/70" />
                   </div>
                   <p className="text-[11px] font-semibold text-[var(--ink-tertiary)]">Encuadrá el número del comprobante dentro del recuadro y tocá Capturar.</p>
                 </div>
@@ -197,7 +197,7 @@ export function ReceiptScanner({ onDetected }: ReceiptScannerProps) {
 
               {stage === 'working' ? (
                 <div className="space-y-3 py-6 text-center">
-                  {preview ? <img src={preview} alt="Comprobante capturado" className="mx-auto max-h-56 rounded-lg border border-[var(--line)]" /> : null}
+                  {preview ? <img src={preview} alt="Comprobante capturado" className="mx-auto max-h-56 rounded-xl border border-[var(--line)]" /> : null}
                   <p className="text-sm font-bold text-[var(--ink-primary)]">Leyendo números… {progress}%</p>
                   <div className="mx-auto h-1.5 w-48 overflow-hidden rounded-full bg-[var(--line)]">
                     <div className="h-full bg-[var(--brand-blue)] transition-[width]" style={{ width: `${Math.max(4, progress)}%` }} />
@@ -207,7 +207,7 @@ export function ReceiptScanner({ onDetected }: ReceiptScannerProps) {
 
               {stage === 'review' ? (
                 <div className="space-y-3">
-                  {preview ? <img src={preview} alt="Comprobante capturado" className="mx-auto max-h-48 rounded-lg border border-[var(--line)]" /> : null}
+                  {preview ? <img src={preview} alt="Comprobante capturado" className="mx-auto max-h-48 rounded-xl border border-[var(--line)]" /> : null}
                   {candidates.length ? (
                     <div className="space-y-2">
                       <p className="text-[11px] font-bold text-[var(--ink-secondary)]">Números detectados — tocá el correcto</p>
@@ -217,7 +217,7 @@ export function ReceiptScanner({ onDetected }: ReceiptScannerProps) {
                             key={candidate}
                             type="button"
                             className={clsx(
-                              'rounded-lg border px-3 py-2 text-left font-mono text-sm font-bold tabular-nums text-[var(--ink-primary)]',
+                              'rounded-xl border px-3 py-2 text-left font-mono text-sm font-bold tabular-nums text-[var(--ink-primary)]',
                               index === 0 ? 'border-[var(--brand-blue)] bg-[var(--brand-paper)]' : 'border-[var(--line-soft)] bg-[var(--paper-soft)]',
                             )}
                             onClick={() => { onDetected(candidate); close() }}
@@ -229,7 +229,7 @@ export function ReceiptScanner({ onDetected }: ReceiptScannerProps) {
                     </div>
                   ) : null}
                   {rawText ? (
-                    <details className="rounded-lg border border-[var(--line-soft)] bg-[var(--paper-soft)] px-3 py-2">
+                    <details className="rounded-xl border border-[var(--line-soft)] bg-[var(--paper-soft)] px-3 py-2">
                       <summary className="cursor-pointer text-[11px] font-bold text-[var(--ink-secondary)]">Ver texto leído</summary>
                       <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[11px] text-[var(--ink-tertiary)]">{rawText}</pre>
                     </details>

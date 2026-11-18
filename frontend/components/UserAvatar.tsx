@@ -11,8 +11,8 @@ export const DEFAULT_AVATARS = [
 ] as const
 
 const SIZE_CLASSES = {
-  sm: 'h-9 w-9 text-xs rounded-lg',
-  md: 'h-11 w-11 text-sm rounded-xl',
+  sm: 'h-9 w-9 text-xs rounded-xl',
+  md: 'h-11 w-11 text-sm rounded-2xl',
   lg: 'h-16 w-16 text-lg rounded-2xl',
   xl: 'h-24 w-24 text-2xl rounded-3xl',
 } as const
@@ -66,7 +66,7 @@ export function UserAvatar({
   return (
     <div
       className={clsx(
-        'flex shrink-0 items-center justify-center bg-gradient-to-br font-extrabold text-white shadow-sm',
+        'flex shrink-0 items-center justify-center bg-gradient-to-br font-bold text-white shadow-sm',
         preset.classes,
         SIZE_CLASSES[size],
         className

@@ -19,24 +19,28 @@ export function PageHeader({
   backHref?: string
 }) {
   return (
-    <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] pb-5 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        {backHref ? (
-          <Link href={backHref} className="mb-3 inline-flex items-center gap-2 text-xs font-bold text-[var(--ink-tertiary)] hover:text-[var(--brand-blue)]">
-            <ArrowLeft size={14} /> Volver
-          </Link>
-        ) : null}
-        {eyebrow ? <p className="section-label">{eyebrow}</p> : null}
-        <h1 className="page-title mt-1">{title}</h1>
-        {description ? <p className="page-subtitle max-w-3xl">{description}</p> : null}
+    <header className="ast-rise relative overflow-hidden rounded-[2rem] border border-[var(--line-soft)] px-6 py-7 shadow-[var(--ast-card-shadow)] sm:px-9 sm:py-8" style={{ background: 'var(--ast-hero)' }}>
+      <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-[var(--line-soft)]" />
+      <div aria-hidden className="pointer-events-none absolute -right-6 -top-10 h-44 w-44 rounded-full border border-[var(--line-soft)]" />
+      <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0 max-w-3xl">
+          {backHref ? (
+            <Link href={backHref} className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ink-secondary)] shadow-sm hover:text-[var(--ast-accent)]">
+              <ArrowLeft size={13} /> Volver
+            </Link>
+          ) : null}
+          {eyebrow ? <p className={clsx('inline-flex items-center rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ast-accent)] shadow-sm', backHref && 'ml-2')}>{eyebrow}</p> : null}
+          <h1 className={clsx('page-title', eyebrow || backHref ? 'mt-4' : '')}>{title}</h1>
+          {description ? <p className="page-subtitle max-w-2xl">{description}</p> : null}
+        </div>
+        {action ? <div className="relative flex shrink-0 flex-wrap gap-2">{action}</div> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
     </header>
   )
 }
 
 export function PageFrame({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={clsx('mx-auto w-full max-w-[1480px] space-y-6 px-4 py-5 sm:px-6 sm:py-7', className)}>{children}</div>
+  return <div className={clsx('mx-auto w-full max-w-[1480px] space-y-7 px-4 py-5 sm:px-6 sm:py-7', className)}>{children}</div>
 }
 
 export function LoadingState({ label = 'Cargando información…' }: { label?: string }) {
@@ -95,7 +99,7 @@ export function ClientIdentityStrip({ client, account, pending, compact = false 
       <div className="client-identity__name">
         <span className="client-identity__mark">{client.name.slice(0, 2).toUpperCase()}</span>
         <div className="min-w-0">
-          <p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{client.name}</p>
+          <p className="truncate font-display text-base font-bold text-[var(--ink-primary)]">{client.name}</p>
           <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">RUC {client.ruc ? `${client.ruc}${client.dv ? `-${client.dv}` : ''}` : 'sin registrar'}</p>
         </div>
       </div>
@@ -118,10 +122,10 @@ function IdentityDatum({ label, value, numeric, tone }: { label: string; value: 
 export function SectionPanel({ title, description, action, children, className }: { title: string; description?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={clsx('paper-panel', className)}>
-      <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <h2 className="font-display text-sm font-extrabold text-[var(--ink-primary)]">{title}</h2>
-          {description ? <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{description}</p> : null}
+          <h2 className="font-display text-base font-semibold tracking-[-0.01em] text-[var(--ink-primary)]">{title}</h2>
+          {description ? <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-tertiary)]">{description}</p> : null}
         </div>
         {action}
       </div>

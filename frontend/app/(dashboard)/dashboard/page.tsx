@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import clsx from 'clsx'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ArrowRight, BadgeDollarSign, BriefcaseBusiness, CalendarCheck2, CheckCircle2, Headphones, Ticket } from 'lucide-react'
 import { auth } from '@/lib/auth'
@@ -31,9 +32,9 @@ export default function DashboardPage() {
       <PageHeader eyebrow="Mesa de trabajo" title={`Buen día, ${user?.firstName || 'equipo'}`} description="Lo que requiere atención ahora, ordenado por impacto operativo." />
 
       {(collectionsQuery.isLoading || serviceQuery.isLoading) && !collections && !service ? <LoadingState label="Preparando prioridades…" /> : (
-        <section className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)]">
-          <div className="flex flex-col border-b border-[var(--line-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="section-label">Prioridades de hoy</p><h2 className="mt-1 font-display text-base font-extrabold text-[var(--ink-primary)]">Cola operativa</h2></div><p className="mt-2 text-xs text-[var(--ink-tertiary)] sm:mt-0">Actualización automática de WhatsApp cada 15 segundos</p></div>
-          <div className="grid divide-y divide-[var(--line-soft)] md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+        <section className="ast-card overflow-hidden">
+          <div className="flex flex-col px-5 pt-5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:pt-6"><div><p className="section-label">Prioridades de hoy</p><h2 className="mt-1 font-display text-base font-bold text-[var(--ink-primary)]">Cola operativa</h2></div><p className="mt-2 text-xs text-[var(--ink-tertiary)] sm:mt-0">Actualización automática de WhatsApp cada 15 segundos</p></div>
+          <div className="grid gap-3 p-5 sm:px-7 sm:pb-7 md:grid-cols-2 xl:grid-cols-4">
             <PriorityLink href="/tickets" icon={Ticket} label="Tickets sin responsable" value={service?.unassigned ?? 0} action={(service?.unassigned ?? 0) > 0 ? 'Asignar ahora' : 'Bandeja despejada'} urgent={(service?.unassigned ?? 0) > 0} />
             <PriorityLink href="/collections" icon={BadgeDollarSign} label="Cuentas vencidas" value={collections?.overdueCount ?? 0} action="Revisar cobranzas" urgent={(collections?.overdueCount ?? 0) > 0} />
             <PriorityLink href="/clients" icon={CalendarCheck2} label="Checklist pendientes" value={checklistPending} action="Revisar legajos" urgent={checklistPending > 0} />
@@ -61,5 +62,5 @@ export default function DashboardPage() {
   )
 }
 
-function PriorityLink({ href, icon: Icon, label, value, action, urgent }: { href: string; icon: typeof Ticket; label: string; value: string | number; action: string; urgent?: boolean }) { return <Link href={href} className="group p-5 hover:bg-[var(--paper-soft)]"><div className="flex items-center gap-2"><Icon size={16} className={urgent ? 'text-[var(--warning)]' : 'text-[var(--brand-blue)]'} /><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-tertiary)]">{label}</p></div><p className={urgent ? 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--warning)]' : 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]'}>{value}</p><p className="mt-3 flex items-center gap-1 text-xs font-bold text-[var(--brand-blue)]">{action} <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" /></p></Link> }
+function PriorityLink({ href, icon: Icon, label, value, action, urgent }: { href: string; icon: typeof Ticket; label: string; value: string | number; action: string; urgent?: boolean }) { return <Link href={href} className={clsx("group rounded-2xl p-5 transition-colors", urgent ? "bg-[var(--warning-paper)] hover:brightness-[.98]" : "bg-[var(--paper-soft)] hover:bg-[var(--paper-inset)]")}><div className="flex items-center gap-2"><Icon size={16} className={urgent ? 'text-[var(--warning)]' : 'text-[var(--brand-blue)]'} /><p className="text-xs font-medium text-[var(--ink-tertiary)]">{label}</p></div><p className={urgent ? 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--warning)]' : 'mt-3 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]'}>{value}</p><p className="mt-3 flex items-center gap-1 text-xs font-bold text-[var(--brand-blue)]">{action} <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" /></p></Link> }
 function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) { return <div className="flex items-center gap-3 px-5 py-3.5">{ok ? <CheckCircle2 size={16} className="text-[var(--success)]" /> : <AlertTriangle size={16} className="text-[var(--warning)]" />}<p className="flex-1 text-xs font-bold text-[var(--ink-primary)]">{label}</p><StatusPill tone={ok ? 'success' : 'warning'}>{detail}</StatusPill></div> }

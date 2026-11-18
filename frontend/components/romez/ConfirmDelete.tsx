@@ -57,7 +57,7 @@ function ConfirmDeleteDialog({ options, close }: { options: ConfirmOptions; clos
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--danger-paper)] text-[var(--danger)]"><AlertTriangle size={20} /></span>
         <div className="min-w-0">
-          <h2 id="confirm-delete-title" className="font-display text-base font-extrabold text-[var(--ink-primary)]">{options.title ?? '¿Estás seguro que querés eliminar?'}</h2>
+          <h2 id="confirm-delete-title" className="font-display text-base font-bold text-[var(--ink-primary)]">{options.title ?? '¿Estás seguro que querés eliminar?'}</h2>
           <p id="confirm-delete-message" className="mt-2 text-sm text-[var(--ink-secondary)]">{options.message}</p>
         </div>
       </div>

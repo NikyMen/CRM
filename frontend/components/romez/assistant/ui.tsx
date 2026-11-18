@@ -18,7 +18,7 @@ const TONE_CHIP: Record<Tone, string> = {
 
 /** Cuadradito redondeado con un ícono, del color del tono. */
 export function IconChip({ icon: Icon, tone = 'neutral', size = 'md' }: { icon: LucideIcon; tone?: Tone; size?: 'sm' | 'md' | 'lg' }) {
-  const box = { sm: 'h-8 w-8 rounded-xl', md: 'h-10 w-10 rounded-2xl', lg: 'h-12 w-12 rounded-2xl' }[size]
+  const box = { sm: 'h-8 w-8 rounded-2xl', md: 'h-10 w-10 rounded-2xl', lg: 'h-12 w-12 rounded-2xl' }[size]
   return (
     <span className={clsx('grid shrink-0 place-items-center', box, TONE_CHIP[tone])} aria-hidden>
       <Icon size={size === 'sm' ? 15 : size === 'lg' ? 22 : 18} strokeWidth={2.1} />
@@ -115,7 +115,7 @@ export function Kpi({ label, value, hint, tone = 'neutral', icon }: { label: str
 /** Burbuja estilo WhatsApp: muestra el texto exacto que recibiría el cliente. */
 export function Bubble({ text, muted }: { text: string; muted?: boolean }) {
   return (
-    <div className="rounded-2xl rounded-tl-md bg-[#e7f3ec] px-3.5 py-3 shadow-sm ring-1 ring-black/5">
+    <div className="rounded-2xl rounded-tl-lg bg-[#e7f3ec] px-3.5 py-3 shadow-sm ring-1 ring-black/5">
       <p className={clsx('whitespace-pre-wrap break-words text-[13px] leading-relaxed', muted ? 'italic text-[#5d6b63]' : 'text-[#1b2b22]')}>{text}</p>
     </div>
   )

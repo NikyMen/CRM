@@ -51,7 +51,7 @@ export default function ApiKeysPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">API Keys</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">API Keys</h1>
           <p className="text-slate-500 font-medium mt-1">
             Gestioná tokens de acceso para integraciones externas
           </p>
@@ -67,17 +67,17 @@ export default function ApiKeysPage() {
 
       {/* Alerta — nueva key recién creada */}
       {newKey && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-8 shadow-sm animate-slide-up">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 shadow-sm animate-slide-up">
           <p className="text-amber-800 text-sm font-bold mb-3 flex items-center gap-2">
             <span className="bg-amber-100 p-1 rounded">⚠️</span> Importante: Copiá esta key ahora. Por seguridad, no se volverá a mostrar.
           </p>
-          <div className="flex items-center gap-3 bg-white border border-amber-200/60 rounded-xl p-2 pl-4">
+          <div className="flex items-center gap-3 bg-white border border-amber-200/60 rounded-2xl p-2 pl-4">
             <code className="text-emerald-600 font-bold text-sm flex-1 break-all font-mono tracking-tight">
               {newKey}
             </code>
             <button
               onClick={() => copyToClipboard(newKey, 'new')}
-              className="text-slate-400 hover:text-primary-600 bg-slate-50 hover:bg-primary-50 px-3 py-2 rounded-lg transition-colors shrink-0 border border-slate-200 hover:border-primary-200 flex items-center gap-2 font-bold text-xs"
+              className="text-slate-400 hover:text-primary-600 bg-slate-50 hover:bg-primary-50 px-3 py-2 rounded-xl transition-colors shrink-0 border border-slate-200 hover:border-primary-200 flex items-center gap-2 font-bold text-xs"
             >
               {copiedId === 'new' ? (
                 <><Check size={16} className="text-emerald-500" /> Copiada</>
@@ -106,7 +106,7 @@ export default function ApiKeysPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nombre identificador (ej: n8n producción) *"
-              className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 font-medium placeholder-slate-400 transition-all"
+              className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 font-medium placeholder-slate-400 transition-all"
               autoFocus
             />
             <div className="flex gap-3">
@@ -150,15 +150,15 @@ export default function ApiKeysPage() {
               className="interactive-card p-5 flex items-center gap-5"
             >
               {/* Ícono */}
-              <div className="w-12 h-12 bg-primary-50 border border-primary-100 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-12 h-12 bg-primary-50 border border-primary-100 rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
                 <Key size={20} className="text-primary-500" strokeWidth={2.5}/>
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-slate-900 text-base font-extrabold tracking-tight">{apiKey.name}</p>
+                <p className="text-slate-900 text-base font-bold tracking-tight">{apiKey.name}</p>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <code className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1 rounded-md tracking-wider">
+                  <code className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg">
                     {visibleId === apiKey.id
                       ? apiKey.keyPrefix + '••••••••••••••••'
                       : apiKey.keyPrefix + '••••'
@@ -168,7 +168,7 @@ export default function ApiKeysPage() {
                     onClick={() =>
                       setVisibleId(visibleId === apiKey.id ? null : apiKey.id)
                     }
-                    className="p-1 px-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-md transition-colors flex items-center justify-center"
+                    className="p-1 px-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors flex items-center justify-center"
                     title={visibleId === apiKey.id ? 'Ocultar resto del token' : 'Revelar logitud del token'}
                   >
                     {visibleId === apiKey.id
@@ -182,7 +182,7 @@ export default function ApiKeysPage() {
                     Generada el {new Date(apiKey.createdAt).toLocaleDateString()}
                     </p>
                     {apiKey.lastUsedAt && (
-                        <p className="text-xs font-medium text-primary-600 bg-primary-50 px-2.5 py-0.5 rounded-md border border-primary-100">
+                        <p className="text-xs font-medium text-primary-600 bg-primary-50 px-2.5 py-0.5 rounded-lg border border-primary-100">
                         Último uso: {new Date(apiKey.lastUsedAt).toLocaleDateString()}
                         </p>
                     )}
@@ -208,13 +208,13 @@ className="btn-danger !min-h-0 shrink-0 !p-2"
 
       {/* Explicación de uso */}
       <div className="mt-12 bg-slate-50 border border-slate-200 rounded-2xl p-6">
-        <h3 className="text-slate-900 text-sm font-bold mb-4 uppercase tracking-widest flex items-center gap-2">
+        <h3 className="text-slate-900 text-sm font-bold mb-4 flex items-center gap-2">
             <Key size={16} className="text-primary-500" strokeWidth={2.5}/> Cómo autenticar consultas API
         </h3>
         <p className="text-slate-600 text-sm font-medium mb-3">
           Deberás incluir un encabezado HTTP personalizado en cada petición que hagas al sistema:
         </p>
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm text-sm">
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm text-sm">
             <span className="font-bold text-slate-400">Header:</span> <code className="font-bold text-slate-900">X-API-Key</code>
             <br />
             <span className="font-bold text-slate-400">Value:</span> <code className="font-bold text-primary-600">tu_clave_segura_aqui</code>

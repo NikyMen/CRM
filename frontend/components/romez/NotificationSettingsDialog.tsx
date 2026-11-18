@@ -47,11 +47,11 @@ export function NotificationSettingsDialog({ onClose }: { onClose: () => void })
           <div className="flex items-center gap-2.5">
             <Bell size={18} className="text-[var(--brand-blue)]" />
             <div>
-              <h2 id="notification-settings-title" className="font-display text-sm font-extrabold">Notificaciones</h2>
+              <h2 id="notification-settings-title" className="font-display text-sm font-bold">Notificaciones</h2>
               <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">Se guardan en este navegador. Cada número suena distinto.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={18} /></button>
         </div>
 
         <div className="space-y-5 p-5">
@@ -66,8 +66,8 @@ export function NotificationSettingsDialog({ onClose }: { onClose: () => void })
           </label>
 
           <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Por número de WhatsApp</p>
-            <div className="divide-y divide-[var(--line-soft)] rounded-lg border border-[var(--line)]">
+            <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">Por número de WhatsApp</p>
+            <div className="divide-y divide-[var(--line-soft)] rounded-xl border border-[var(--line)]">
               {NOTIFICATION_LINES.map((line) => (
                 <div key={line.key} className="flex items-center gap-3 px-3 py-2.5">
                   <input id={`notify-${line.key}`} type="checkbox" className="h-4 w-4 accent-[var(--brand-blue)]" checked={prefs.lines[line.key]} onChange={() => toggleLine(line.key)} />
@@ -78,7 +78,7 @@ export function NotificationSettingsDialog({ onClose }: { onClose: () => void })
             </div>
           </div>
 
-          <div className="rounded-lg border border-[var(--line)] p-3">
+          <div className="rounded-xl border border-[var(--line)] p-3">
             <label className="flex items-center justify-between gap-3">
               <span><span className="block text-sm font-bold text-[var(--ink-primary)]">Aviso del navegador</span><span className="block text-xs text-[var(--ink-tertiary)]">Muestra una notificación cuando la pestaña está en segundo plano.</span></span>
               <input type="checkbox" className="h-4 w-4 accent-[var(--brand-blue)]" checked={prefs.desktop && permission === 'granted'} disabled={permission === 'unsupported'} onChange={toggleDesktop} />

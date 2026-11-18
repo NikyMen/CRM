@@ -120,17 +120,17 @@ export function ChatMedia({ messageType, mimeType, fileName, sizeBytes, duration
   }
 
   const muted = outgoing ? 'text-white/75' : 'text-[var(--ink-tertiary)]'
-  const frame = clsx('relative overflow-hidden rounded-md', outgoing ? 'bg-black/15' : 'bg-[var(--paper-soft)]')
+  const frame = clsx('relative overflow-hidden rounded-lg', outgoing ? 'bg-black/15' : 'bg-[var(--paper-soft)]')
 
   if (!canAccess) {
-    return <div ref={ref} className={clsx('mt-2 flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-bold', outgoing ? 'border-white/20 bg-white/10' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}><Lock size={14} className="shrink-0" /><span className="truncate">{label} · {deniedLabel}</span></div>
+    return <div ref={ref} className={clsx('mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold', outgoing ? 'border-white/20 bg-white/10' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}><Lock size={14} className="shrink-0" /><span className="truncate">{label} · {deniedLabel}</span></div>
   }
 
   if (kind === 'document') {
     const meta = [mimeType?.split('/')[1]?.split(';')[0]?.toUpperCase(), formatBytes(sizeBytes)].filter(Boolean).join(' · ')
     return <div ref={ref} className="mt-2">
-      <button type="button" onClick={download} disabled={state === 'loading'} className={clsx('flex w-full min-w-56 max-w-sm items-center gap-3 rounded-md border px-3 py-2.5 text-left', outgoing ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[var(--line)] bg-[var(--paper-soft)] hover:bg-[var(--paper)]')}>
-        <span className={clsx('grid h-10 w-10 shrink-0 place-items-center rounded-md', outgoing ? 'bg-white/15' : 'bg-[var(--brand-paper)] text-[var(--brand-navy)] dark:text-[var(--brand-blue)]')}><FileText size={20} /></span>
+      <button type="button" onClick={download} disabled={state === 'loading'} className={clsx('flex w-full min-w-56 max-w-sm items-center gap-3 rounded-lg border px-3 py-2.5 text-left', outgoing ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[var(--line)] bg-[var(--paper-soft)] hover:bg-[var(--paper)]')}>
+        <span className={clsx('grid h-10 w-10 shrink-0 place-items-center rounded-lg', outgoing ? 'bg-white/15' : 'bg-[var(--brand-paper)] text-[var(--ast-accent)] dark:text-[var(--brand-blue)]')}><FileText size={20} /></span>
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{label}</span>{meta ? <span className={clsx('block text-[10px] font-semibold', muted)}>{meta}</span> : null}</span>
         {state === 'loading' ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <Download size={16} className="shrink-0" />}
       </button>
@@ -148,8 +148,8 @@ export function ChatMedia({ messageType, mimeType, fileName, sizeBytes, duration
     {url ? (
       kind === 'image'
         // eslint-disable-next-line @next/next/no-img-element -- blob: local autenticado, next/image no aporta nada acá.
-        ? <button type="button" onClick={() => setViewerOpen(true)} className="block overflow-hidden rounded-md" aria-label={`Ampliar ${label}`}><img src={url} alt={label} className="block max-h-80 w-auto max-w-full cursor-zoom-in object-contain sm:max-w-sm" /></button>
-        : <video controls playsInline preload="metadata" src={url} className="block max-h-80 w-full max-w-sm rounded-md bg-black" />
+        ? <button type="button" onClick={() => setViewerOpen(true)} className="block overflow-hidden rounded-lg" aria-label={`Ampliar ${label}`}><img src={url} alt={label} className="block max-h-80 w-auto max-w-full cursor-zoom-in object-contain sm:max-w-sm" /></button>
+        : <video controls playsInline preload="metadata" src={url} className="block max-h-80 w-full max-w-sm rounded-lg bg-black" />
     ) : (
       <div className={clsx(frame, 'grid h-48 w-64 max-w-full place-items-center')}>
         {state === 'error' ? <MediaError error={error} retry={fetchUrl} outgoing={outgoing} /> : <div className={clsx('flex flex-col items-center gap-2 text-xs font-bold', muted)}>{kind === 'image' ? <ImageIcon size={26} /> : <Play size={26} />}<span className="inline-flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> Cargando {kind === 'image' ? 'imagen' : 'video'}…</span></div>}
@@ -178,8 +178,8 @@ function MediaViewer({ url, label, onDownload, onClose }: { url: string; label: 
     <div className="fixed inset-0 z-[80] flex flex-col bg-black/90" role="dialog" aria-modal="true" aria-label={label} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="flex items-center gap-3 px-4 py-3 text-white">
         <p className="min-w-0 flex-1 truncate text-sm font-bold">{label}</p>
-        <button type="button" onClick={onDownload} className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-bold hover:bg-white/10"><Download size={14} /> Descargar</button>
-        <button type="button" onClick={onClose} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="Cerrar"><X size={20} /></button>
+        <button type="button" onClick={onDownload} className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 px-3 py-1.5 text-xs font-bold hover:bg-white/10"><Download size={14} /> Descargar</button>
+        <button type="button" onClick={onClose} className="rounded-xl p-1.5 hover:bg-white/10" aria-label="Cerrar"><X size={20} /></button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
         {/* eslint-disable-next-line @next/next/no-img-element -- blob: local autenticado */}

@@ -146,7 +146,7 @@ export function ClientPicker({
         <div
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--paper)] p-1.5 shadow-[0_18px_40px_-22px_rgba(15,23,42,.45)]"
+          className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-80 overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-1.5 shadow-[0_18px_40px_-22px_rgba(15,23,42,.45)]"
         >
           {clientsQuery.isLoading ? (
             <p className="px-3 py-4 text-xs font-semibold text-[var(--ink-tertiary)]">Buscando clientes…</p>
@@ -161,13 +161,13 @@ export function ClientPicker({
                   onMouseEnter={() => setHighlight(index)}
                   onClick={() => select(client)}
                   className={clsx(
-                    'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left',
+                    'flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left',
                     index === highlight
                       ? 'border-[var(--brand-blue)] bg-[var(--brand-paper)]'
                       : 'border-[var(--line-soft)] bg-[var(--paper-soft)] hover:border-[var(--line-strong)]',
                   )}
                 >
-                  <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-[var(--brand-navy)] text-[10px] font-extrabold text-white">
+                  <span className="grid h-8 w-8 flex-none place-items-center rounded-xl bg-[var(--brand-navy)] text-[10px] font-bold text-white">
                     {initials(client.name)}
                   </span>
                   <span className="min-w-0 flex-1">

@@ -106,7 +106,7 @@ function EventItem({ event, showTitle }: { event: TaskEvent; showTitle: boolean 
         {changes.length ? (
           <dl className="mt-3 space-y-2">
             {changes.map((change) => (
-              <div key={change.field} className="rounded-xl bg-[var(--paper-soft)] px-3 py-2 text-[13px]">
+              <div key={change.field} className="rounded-2xl bg-[var(--paper-soft)] px-3 py-2 text-[13px]">
                 <dt className="text-xs font-semibold text-[var(--ink-tertiary)]">{change.label}</dt>
                 <dd className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                   {event.type !== 'created' ? (

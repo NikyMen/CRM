@@ -86,8 +86,8 @@ export default function BalancesPage() {
       </div>
     </SectionPanel> : null}
 
-    {balancesQuery.data?.totals.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{balancesQuery.data.totals.map((total) => <div key={total.currency} className="rounded-lg border border-[var(--line)] bg-[var(--paper)] p-4">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Saldo pendiente · {total.currency}</p>
+    {balancesQuery.data?.totals.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{balancesQuery.data.totals.map((total) => <div key={total.currency} className="rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4">
+      <p className="text-xs font-medium text-[var(--ink-muted)]">Saldo pendiente · {total.currency}</p>
       <p className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]">{formatMoney(total.outstanding, total.currency)}</p>
       <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{total.clients} {total.clients === 1 ? 'cliente' : 'clientes'} · vencido <span className="font-semibold text-[var(--danger)]">{formatMoney(total.overdue, total.currency)}</span></p>
     </div>)}</div> : null}
@@ -102,7 +102,7 @@ export default function BalancesPage() {
           return <Fragment key={key}>
             <tr className="cursor-pointer hover:bg-[var(--paper-soft)]" onClick={(event) => { if (!(event.target as HTMLElement).closest('a, button')) setExpanded(open ? null : key) }}>
               <td className="w-8 text-[var(--ink-tertiary)]">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
-              <td>{item.company && !item.company.isArchived ? <Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${item.company.id}`}>{item.company.name}</Link> : <p className="font-bold text-[var(--ink-primary)]">{item.company?.name ?? '—'}</p>}{item.company?.isArchived ? <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--danger)]">Cliente eliminado</p> : item.company?.ruc ? <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">RUC {item.company.ruc}{item.company.dv ? `-${item.company.dv}` : ''}</p> : null}</td>
+              <td>{item.company && !item.company.isArchived ? <Link className="font-bold text-[var(--ink-primary)] hover:text-[var(--brand-blue)]" href={`/clients/${item.company.id}`}>{item.company.name}</Link> : <p className="font-bold text-[var(--ink-primary)]">{item.company?.name ?? '—'}</p>}{item.company?.isArchived ? <p className="mt-0.5 text-xs font-medium text-[var(--danger)]">Cliente eliminado</p> : item.company?.ruc ? <p className="mt-0.5 text-[11px] text-[var(--ink-tertiary)]">RUC {item.company.ruc}{item.company.dv ? `-${item.company.dv}` : ''}</p> : null}</td>
               <td className="text-right tabular-nums">{item.openCount}</td>
               <td>{item.oldestDueDate ? formatDate(item.oldestDueDate, NUMERIC_DATE) : '—'}</td>
               <td className="text-right font-mono tabular-nums">{formatMoney(item.amount, item.currency)}</td>

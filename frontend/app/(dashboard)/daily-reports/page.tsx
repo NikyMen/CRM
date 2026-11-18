@@ -143,8 +143,8 @@ function DayNavigator({ date, today, onChange }: { date: string; today: string; 
   return (
     <section className="paper-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{date === today ? 'Hoy' : 'Día seleccionado'}</p>
-        <p className="mt-1 font-display text-lg font-extrabold text-[var(--ink-primary)]">{valid ? longDate(date) : '—'}</p>
+        <p className="text-xs font-medium text-[var(--ink-muted)]">{date === today ? 'Hoy' : 'Día seleccionado'}</p>
+        <p className="mt-1 font-display text-lg font-bold text-[var(--ink-primary)]">{valid ? longDate(date) : '—'}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn-secondary" disabled={!valid} onClick={() => onChange(shiftDate(date, -1))} aria-label="Día anterior">
@@ -265,11 +265,11 @@ function MyReport({ date }: { date: string }) {
       action={<StatusPill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</StatusPill>}
     >
       <div className="space-y-3 p-4 sm:p-5">
-        <div className="hidden grid-cols-[92px_minmax(0,1.4fr)_minmax(0,1fr)_96px_40px] gap-2 px-1 text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)] lg:grid">
+        <div className="hidden grid-cols-[92px_minmax(0,1.4fr)_minmax(0,1fr)_96px_40px] gap-2 px-1 text-xs font-medium text-[var(--ink-muted)] lg:grid">
           <span>Estado</span><span>Tarea</span><span>Cliente (opcional)</span><span>Minutos</span><span />
         </div>
         {tasks.map((task, index) => (
-          <div key={task.key} className="grid gap-2 rounded-lg border border-[var(--line-soft)] p-2 lg:grid-cols-[92px_minmax(0,1.4fr)_minmax(0,1fr)_96px_40px] lg:border-0 lg:p-0">
+          <div key={task.key} className="grid gap-2 rounded-xl border border-[var(--line-soft)] p-2 lg:grid-cols-[92px_minmax(0,1.4fr)_minmax(0,1fr)_96px_40px] lg:border-0 lg:p-0">
             <button
               type="button"
               className={clsx('btn-secondary justify-center', task.isDone ? 'text-[var(--success)]' : 'text-[var(--warning)]')}
@@ -399,7 +399,7 @@ function TeamSummary({ date }: { date: string }) {
 
   return (
     <>
-      <section className="grid overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-3 xl:grid-cols-6">
+      <section className="grid gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
         <Metric label="Enviaron" value={`${totals.submitted} de ${totals.members}`} tone={totals.submitted === totals.members && totals.members > 0 ? 'success' : undefined} />
         <Metric label="En borrador" value={String(totals.draft)} tone={totals.draft ? 'warning' : undefined} />
         <Metric label="Sin cargar" value={String(totals.missing)} tone={totals.missing ? 'danger' : undefined} />
@@ -510,7 +510,7 @@ function ReportDetail({ report }: { report: DailyReport }) {
       ) : null}
       {report.notes ? (
         <div className="border-t border-[var(--line-soft)] px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Observaciones</p>
+          <p className="text-xs font-medium text-[var(--ink-muted)]">Observaciones</p>
           <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink-primary)]">{report.notes}</p>
         </div>
       ) : null}
@@ -520,8 +520,8 @@ function ReportDetail({ report }: { report: DailyReport }) {
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'warning' | 'danger' }) {
   return (
-    <div className="bg-[var(--paper)] p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p>
+    <div className="ast-card p-5">
+      <p className="text-xs font-medium text-[var(--ink-muted)]">{label}</p>
       <p className={clsx('mt-2 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]', tone === 'success' && 'text-[var(--success)]', tone === 'warning' && 'text-[var(--warning)]', tone === 'danger' && 'text-[var(--danger)]')}>{value}</p>
     </div>
   )
@@ -530,7 +530,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 function Datum({ label, value, tone }: { label: string; value: string; tone?: 'warning' }) {
   return (
     <div>
-      <dt className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</dt>
+      <dt className="text-xs font-medium text-[var(--ink-muted)]">{label}</dt>
       <dd className={clsx('mt-1 font-mono font-bold tabular-nums text-[var(--ink-primary)]', tone === 'warning' && 'text-[var(--warning)]')}>{value}</dd>
     </div>
   )

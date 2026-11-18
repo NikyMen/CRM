@@ -11,11 +11,11 @@ export default function ChannelsPage() {
       <section className="interactive-card w-full overflow-hidden">
         <div className="grid gap-6 bg-[linear-gradient(135deg,_rgba(236,253,245,0.92),_rgba(255,255,255,0.98))] p-6 dark:bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.94))] md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-400/30 dark:bg-slate-900/40 dark:text-emerald-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-slate-900/40 dark:text-emerald-200">
               <QrCode size={14} />
               Solo QR
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
               WhatsApp se conecta desde WhatsApp
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
@@ -31,7 +31,7 @@ export default function ChannelsPage() {
         <div className="grid gap-4 p-6 md:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/45">
             <QrCode className="text-emerald-600 dark:text-emerald-300" size={24} />
-            <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Vinculacion por QR</h2>
+            <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">Vinculacion por QR</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Genera el QR en WhatsApp y escanealo desde WhatsApp, en Dispositivos vinculados.
             </p>
@@ -39,7 +39,7 @@ export default function ChannelsPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/45">
             <WhatsAppLogo className="text-sky-600 dark:text-sky-300" size={24} />
-            <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-50">Operacion en WhatsApp</h2>
+            <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">Operacion en WhatsApp</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Una vez conectado, ahí mismo ves conversaciones, mensajes y envío desde {brand.name}.
             </p>

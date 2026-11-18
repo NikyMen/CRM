@@ -87,7 +87,7 @@ export default function WebhooksPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Webhooks</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Webhooks</h1>
           <p className="text-slate-500 font-medium mt-1">
             Notificaciones automáticas a sistemas externos
           </p>
@@ -111,25 +111,25 @@ export default function WebhooksPage() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Nombre del webhook (ej: n8n contactos) *"
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
             />
 
             <input
               value={form.url}
               onChange={(e) => setForm({ ...form, url: e.target.value })}
               placeholder="https://tu-servidor.com/webhook *"
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
             />
 
             <input
               value={form.secret}
               onChange={(e) => setForm({ ...form, secret: e.target.value })}
               placeholder="Secret (opcional — para verificar firma HMAC)"
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
             />
 
             <div>
-              <p className="text-slate-600 text-xs font-bold mb-3 uppercase tracking-wider">Eventos a escuchar:</p>
+              <p className="text-slate-600 text-xs font-bold mb-3">Eventos a escuchar:</p>
               <div className="flex flex-wrap gap-2">
                 {EVENT_OPTIONS.map((event) => (
                   <button
@@ -201,7 +201,7 @@ export default function WebhooksPage() {
                     </span>
                     <button
                       onClick={() => copyToClipboard(wh.url, wh.id)}
-                      className="text-slate-400 hover:text-primary-600 transition-colors shrink-0 p-1 hover:bg-primary-50 rounded-md"
+                      className="text-slate-400 hover:text-primary-600 transition-colors shrink-0 p-1 hover:bg-primary-50 rounded-lg"
                       title="Copiar URL"
                     >
                       {copiedId === wh.id
@@ -216,7 +216,7 @@ export default function WebhooksPage() {
                     {wh.events.map((event: string) => (
                       <span
                         key={event}
-                        className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md border border-slate-200"
+                        className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200"
                       >
                         {EVENT_LABELS[event] ?? event}
                       </span>
@@ -224,7 +224,7 @@ export default function WebhooksPage() {
                   </div>
 
                   {/* Stats */}
-                  <div className="flex items-center gap-5 mt-2 bg-slate-50 px-3 py-2 rounded-lg inline-flex border border-slate-100">
+                  <div className="flex items-center gap-5 mt-2 bg-slate-50 px-3 py-2 rounded-xl inline-flex border border-slate-100">
                     <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                       {wh.successCount} exitosos

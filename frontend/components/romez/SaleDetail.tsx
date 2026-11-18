@@ -25,7 +25,7 @@ export const SALE_STATUS_TONE: Record<SaleStatus, 'warning' | 'success' | 'dange
 export function Total({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div>
-      <dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt>
+      <dt className="text-xs font-medium text-[var(--ink-muted)]">{label}</dt>
       <dd className={clsx('mt-1 font-mono tabular-nums', strong ? 'text-lg font-bold text-[var(--ink-primary)]' : 'text-[var(--ink-secondary)]')}>{value}</dd>
     </div>
   )
@@ -44,13 +44,13 @@ export function SaleDetail({ sale, onClose }: { sale: Sale; onClose: () => void 
       <div className="paper-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-[var(--line-soft)] px-5 py-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Factura N° {String(sale.number).padStart(5, '0')}</p>
-            <h2 className="mt-1 font-display text-base font-extrabold text-[var(--ink-primary)]">{sale.company?.name ?? 'Sin cliente'}</h2>
+            <p className="text-xs font-medium text-[var(--ink-muted)]">Factura N° {String(sale.number).padStart(5, '0')}</p>
+            <h2 className="mt-1 font-display text-base font-bold text-[var(--ink-primary)]">{sale.company?.name ?? 'Sin cliente'}</h2>
             <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{formatDate(sale.soldAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}{sale.company?.ruc ? ` · RUC ${sale.company.ruc}` : ''}{sale.reference ? ` · ${sale.reference}` : ''}</p>
           </div>
           <div className="flex items-center gap-2">
             <StatusPill tone={SALE_STATUS_TONE[sale.status]}>{SALE_STATUS_LABEL[sale.status]}</StatusPill>
-            <button type="button" onClick={onClose} className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={17} /></button>
+            <button type="button" onClick={onClose} className="rounded-xl p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar"><X size={17} /></button>
           </div>
         </div>
         <div className="overflow-x-auto">

@@ -21,6 +21,7 @@ import { MODULE_DEFINITIONS, normalizeModuleState, type ModuleKey, type ModuleSt
 import { useWorkspaceModules, WORKSPACE_MODULES_KEY } from '@/lib/useWorkspaceModules'
 import { brand } from '@/lib/brand'
 import { BrandingSettingsPanel } from '@/components/romez/BrandingSettingsPanel'
+import { PageHeader } from '@/components/romez/OperationalUI'
 
 type SettingsTab = 'profile' | 'branding' | 'modules' | 'whatsapp' | 'webhooks' | 'api-keys'
 
@@ -194,7 +195,7 @@ function AvatarSettingsPanel() {
   return (
     <div className="mx-auto max-w-5xl p-6 animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Avatar del usuario</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Avatar del usuario</h1>
         <p className="mt-1 font-medium text-slate-500">
           Elegi un avatar base o subi una imagen y ajustala antes de guardarla.
         </p>
@@ -211,7 +212,7 @@ function AvatarSettingsPanel() {
               email={user?.email}
               size="xl"
             />
-            <h2 className="mt-4 text-lg font-extrabold text-slate-900">
+            <h2 className="mt-4 text-lg font-bold text-slate-900">
               {user?.firstName ?? 'Usuario'} {user?.lastName ?? ''}
             </h2>
             <p className="text-sm font-medium text-slate-500">{user?.email}</p>
@@ -228,12 +229,12 @@ function AvatarSettingsPanel() {
           </button>
 
           {message && (
-            <p className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+            <p className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
               <Check size={16} /> {message}
             </p>
           )}
           {error && (
-            <p className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+            <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
               {error}
             </p>
           )}
@@ -259,7 +260,7 @@ function AvatarSettingsPanel() {
                     setError('')
                   }}
                   className={clsx(
-                    'flex flex-col items-center gap-2 rounded-xl border p-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50',
+                    'flex flex-col items-center gap-2 rounded-2xl border p-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50',
                     selectedAvatar === avatar.value
                       ? 'border-primary-300 bg-primary-50 text-primary-700'
                       : 'border-slate-200 bg-white'
@@ -432,18 +433,18 @@ function WhatsAppSettingsPanel() {
   const error = sessionQuery.error || connect.error || disconnect.error
 
   return <div className="mx-auto max-w-5xl space-y-6 p-6">
-    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">WhatsApp de {brand.shortName}</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
+    <div><p className="section-label">Canal compartido</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ink-primary)]">WhatsApp de {brand.shortName}</h2><p className="mt-1 text-sm text-[var(--ink-tertiary)]">Una única sesión alimenta la bandeja de tickets de todo el estudio.</p></div>
 
     <section className="paper-panel overflow-hidden">
-      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-lg border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-extrabold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm(`¿Desconectar el WhatsApp compartido de ${brand.shortName}?`)) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
+      <header className="flex flex-col gap-4 border-b border-[var(--line-soft)] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={clsx('grid h-11 w-11 place-items-center rounded-xl border', isConnected ? 'border-[var(--success-line)] bg-[var(--success-paper)] text-[var(--success)]' : 'border-[var(--line)] bg-[var(--paper-soft)] text-[var(--ink-tertiary)]')}>{isConnected ? <Wifi size={20} /> : <WifiOff size={20} />}</span><div><p className="text-sm font-bold text-[var(--ink-primary)]">{WHATSAPP_STATUS[session?.status ?? 'DISCONNECTED']}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{session?.pushName || session?.phoneNumber || 'Sin número vinculado'}</p></div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={!runtimeReady || busy} onClick={() => connect.mutate()}>{connect.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}{isConnected ? 'Reanudar sesión' : session?.qrCode ? 'Actualizar QR' : 'Generar QR'}</button><button type="button" className="btn-secondary" disabled={!session || busy || (!session.hasActiveSocket && !session.authAvailable)} onClick={() => { if (window.confirm(`¿Desconectar el WhatsApp compartido de ${brand.shortName}?`)) disconnect.mutate() }}>{disconnect.isPending ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}Desconectar</button></div></header>
 
       {!runtimeReady ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p><strong>El servidor de WhatsApp no está disponible.</strong> Revisá que el proceso persistente y Baileys estén instalados antes de vincular el número.</p></div> : null}
       {error || session?.lastError ? <div className="flex gap-3 border-b border-[var(--danger-line)] bg-[var(--danger-paper)] p-4 text-sm text-[var(--danger)]"><AlertTriangle size={18} className="shrink-0" /><p>{session?.lastError || getErrorMessage(error, 'No pudimos consultar la sesión.')}</p></div> : null}
 
       <div className="grid lg:grid-cols-[360px_1fr]">
         <div className="border-b border-[var(--line-soft)] p-5 lg:border-b-0 lg:border-r">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">Vinculación por QR</p>
-          {qrImageUrl ? <><div className="mt-4 grid place-items-center rounded-lg border border-[var(--line)] bg-white p-4"><NextImage unoptimized src={qrImageUrl} alt="Código QR para vincular WhatsApp" width={280} height={280} className="h-auto w-full max-w-[280px]" /></div><p className="mt-3 text-xs leading-5 text-[var(--ink-tertiary)]">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular dispositivo. El código se actualiza automáticamente mientras espera.</p></> : <div className="mt-4 grid min-h-64 place-items-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--paper-soft)] p-6 text-center"><div><Smartphone size={30} className="mx-auto text-[var(--brand-blue)]" /><p className="mt-3 text-sm font-bold text-[var(--ink-primary)]">{isConnected ? 'Número vinculado' : 'Todavía no hay un QR activo'}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{isConnected ? 'Los mensajes entrantes se convierten en tickets.' : 'Generá un código para conectar el único número del estudio.'}</p></div></div>}
+          <p className="text-xs font-medium text-[var(--ink-muted)]">Vinculación por QR</p>
+          {qrImageUrl ? <><div className="mt-4 grid place-items-center rounded-xl border border-[var(--line)] bg-white p-4"><NextImage unoptimized src={qrImageUrl} alt="Código QR para vincular WhatsApp" width={280} height={280} className="h-auto w-full max-w-[280px]" /></div><p className="mt-3 text-xs leading-5 text-[var(--ink-tertiary)]">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular dispositivo. El código se actualiza automáticamente mientras espera.</p></> : <div className="mt-4 grid min-h-64 place-items-center rounded-xl border border-dashed border-[var(--line)] bg-[var(--paper-soft)] p-6 text-center"><div><Smartphone size={30} className="mx-auto text-[var(--brand-blue)]" /><p className="mt-3 text-sm font-bold text-[var(--ink-primary)]">{isConnected ? 'Número vinculado' : 'Todavía no hay un QR activo'}</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{isConnected ? 'Los mensajes entrantes se convierten en tickets.' : 'Generá un código para conectar el único número del estudio.'}</p></div></div>}
         </div>
         <dl className="grid content-start sm:grid-cols-2">
           <SessionDatum label="Número" value={session?.phoneNumber || 'Sin vincular'} />
@@ -485,7 +486,7 @@ function ModulesSettingsPanel() {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6">
       <div>
         <p className="section-label">Espacio de trabajo</p>
-        <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">Módulos visibles</h2>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Módulos visibles</h2>
         <p className="mt-1 text-sm text-[var(--ink-tertiary)]">
           Apagá lo que el estudio no usa. El módulo desaparece del menú para todo el equipo; los datos quedan guardados.
         </p>
@@ -508,7 +509,7 @@ function ModulesSettingsPanel() {
           return (
             <div key={definition.key} className="flex items-center justify-between gap-4 p-5">
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-[var(--ink-primary)]">{definition.label}</p>
+                <p className="text-sm font-bold text-[var(--ink-primary)]">{definition.label}</p>
                 <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{definition.description}</p>
               </div>
               <button
@@ -534,7 +535,7 @@ function ModulesSettingsPanel() {
 }
 
 function SessionDatum({ label, value }: { label: string; value: string }) {
-  return <div className="border-b border-[var(--line-soft)] p-5 odd:sm:border-r"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-muted)]">{label}</dt><dd className="mt-2 text-sm font-bold text-[var(--ink-primary)]">{value}</dd></div>
+  return <div className="border-b border-[var(--line-soft)] p-5 odd:sm:border-r"><dt className="text-xs font-medium text-[var(--ink-muted)]">{label}</dt><dd className="mt-2 text-sm font-bold text-[var(--ink-primary)]">{value}</dd></div>
 }
 
 export default function SettingsPage() {
@@ -568,16 +569,11 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-full">
-      <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[var(--background)]/90 px-4 py-3 backdrop-blur-xl md:top-0">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Configuración</h1>
-              <p className="mt-0.5 text-sm font-medium text-slate-500">Perfil, integraciones y acceso del espacio de trabajo.</p>
-            </div>
-          </div>
+      <div className="px-4 pt-5 sm:px-6 sm:pt-7">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6">
+          <PageHeader eyebrow="Espacio de trabajo" title="Configuración" description="Perfil, integraciones y acceso del espacio de trabajo." />
 
-          <div className="min-w-0 overflow-x-auto pb-0.5">
+          <div className="-mx-4 min-w-0 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             <PillNav items={visibleTabs} active={activeTab} onChange={setActiveTab} />
           </div>
         </div>

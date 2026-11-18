@@ -48,7 +48,7 @@ function DraftFields({ draft, onChange }: { draft: Draft; onChange: (patch: Part
         </Field>
       </div>
       <div className="space-y-2">
-        <p className="text-xs font-extrabold uppercase tracking-wide text-[var(--ink-secondary)]">Vista previa en WhatsApp</p>
+        <p className="text-xs font-semibold text-[var(--ink-secondary)]">Vista previa en WhatsApp</p>
         {preview !== null ? <Bubble text={preview} /> : <Bubble muted text={`Falta cargar el precio para armar el mensaje (el texto usa ${PRICE_TOKEN}).`} />}
         <p className="text-xs font-medium text-[var(--ink-tertiary)]">{preview?.length ?? 0} caracteres. WhatsApp admite hasta 4.096 por mensaje.</p>
       </div>
@@ -80,11 +80,11 @@ function ServiceCard({ service, first, last, busy, onMove }: { service: Assistan
   })
 
   return (
-    <article className={clsx('rounded-xl border bg-[var(--paper)]', draft.active ? 'border-[var(--line)]' : 'border-dashed border-[var(--line)] opacity-80')}>
+    <article className={clsx('rounded-2xl border bg-[var(--paper)]', draft.active ? 'border-[var(--line)]' : 'border-dashed border-[var(--line)] opacity-80')}>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line-soft)] px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <code className="rounded-md bg-[var(--brand-paper)] px-2 py-1 text-xs font-extrabold text-[var(--brand-navy)]">{service.code}</code>
-          <h3 className="truncate font-display text-sm font-extrabold text-[var(--ink-primary)]">{draft.title || 'Sin título'}</h3>
+          <code className="rounded-lg bg-[var(--brand-paper)] px-2 py-1 text-xs font-bold text-[var(--ast-accent)]">{service.code}</code>
+          <h3 className="truncate font-display text-sm font-bold text-[var(--ink-primary)]">{draft.title || 'Sin título'}</h3>
           {dirty ? <StatusPill tone="warning">Sin guardar</StatusPill> : null}
         </div>
         <div className="flex items-center gap-2">
@@ -133,8 +133,8 @@ function NewServiceForm({ onDone }: { onDone: () => void }) {
   })
 
   return (
-    <article className="rounded-xl border-2 border-dashed border-[var(--brand-blue)] bg-[var(--brand-paper)]/40 p-4">
-      <h3 className="mb-4 font-display text-sm font-extrabold text-[var(--ink-primary)]">Nuevo servicio</h3>
+    <article className="rounded-2xl border-2 border-dashed border-[var(--brand-blue)] bg-[var(--brand-paper)]/40 p-4">
+      <h3 className="mb-4 font-display text-sm font-bold text-[var(--ink-primary)]">Nuevo servicio</h3>
       <div className="mb-4 max-w-sm">
         <Field label="Código" hint="Identificador que usa el flujo de n8n. No se puede cambiar después.">
           <input className="ctrl-input font-mono" value={code} maxLength={40} placeholder="ALTA_RUC" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} />
@@ -204,7 +204,7 @@ export function AssistantServices() {
       {services.isLoading ? <LoadingState label="Cargando servicios…" /> : null}
       {services.isError ? <ErrorState message={getErrorMessage(services.error)} retry={() => services.refetch()} /> : null}
       {!services.isLoading && !services.isError && !list.length ? (
-        <p className="rounded-xl border border-dashed border-[var(--line)] p-6 text-center text-sm font-medium text-[var(--ink-tertiary)]">No hay servicios cargados. Usá «Restaurar iniciales» o «Agregar servicio».</p>
+        <p className="rounded-2xl border border-dashed border-[var(--line)] p-6 text-center text-sm font-medium text-[var(--ink-tertiary)]">No hay servicios cargados. Usá «Restaurar iniciales» o «Agregar servicio».</p>
       ) : null}
       <div className="space-y-4">
         {list.map((service, index) => (

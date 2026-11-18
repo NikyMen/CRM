@@ -59,11 +59,11 @@ function PaymentPromiseDialogContent({ target, onClose }: { target: PromiseTarge
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]"><CalendarClock size={18} /></span>
           <div className="min-w-0">
-            <h2 id="promise-dialog-title" className="font-display text-lg font-extrabold text-[var(--ink-primary)]">Agendar promesa de pago</h2>
+            <h2 id="promise-dialog-title" className="font-display text-lg font-bold text-[var(--ink-primary)]">Agendar promesa de pago</h2>
             <p className="truncate text-xs text-[var(--ink-tertiary)]">Ese día te aparece en Cobranzas y en la campanita para volver a escribirle.</p>
           </div>
         </div>
-        <button type="button" className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" disabled={save.isPending} onClick={onClose}><X size={18} /></button>
+        <button type="button" className="rounded-xl p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" disabled={save.isPending} onClick={onClose}><X size={18} /></button>
       </header>
 
       <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">

@@ -31,7 +31,7 @@ export function AssistantConnection() {
       <Panel title="Cómo toma n8n esta configuración" description="El flujo de WhatsApp consulta esta dirección en cada mensaje. Si el CRM no responde, usa los valores que trae cargados.">
         <div className="space-y-4">
           <div>
-            <p className="mb-1.5 text-xs font-extrabold uppercase tracking-wide text-[var(--ink-secondary)]">Dirección de lectura</p>
+            <p className="mb-1.5 text-xs font-semibold text-[var(--ink-secondary)]">Dirección de lectura</p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input readOnly className="ctrl-input font-mono !text-[13px]" value={configUrl} onFocus={(event) => event.currentTarget.select()} aria-label="Dirección de lectura de la configuración" />
               <button type="button" className="btn-secondary shrink-0" onClick={copy}>{copied ? <><Check size={15} /> Copiada</> : <><Copy size={15} /> Copiar</>}</button>
@@ -65,9 +65,9 @@ export function AssistantConnection() {
               ))}
             </dl>
             <p className="text-sm font-semibold text-[var(--ink-secondary)]">{Object.keys(preview.data.bloques).length} servicios activos: {Object.keys(preview.data.bloques).join(', ') || 'ninguno'}</p>
-            <details className="rounded-lg border border-[var(--line)] bg-[var(--paper-soft)] p-3">
+            <details className="rounded-xl border border-[var(--line)] bg-[var(--paper-soft)] p-3">
               <summary className="cursor-pointer text-sm font-bold text-[var(--ink-primary)]">Ver el JSON completo</summary>
-              <pre className="mt-3 max-h-[420px] overflow-auto rounded-lg bg-[#0b1426] p-4 text-xs leading-relaxed text-[#d8e2f7]">{JSON.stringify(preview.data, null, 2)}</pre>
+              <pre className="mt-3 max-h-[420px] overflow-auto rounded-xl bg-[#0b1426] p-4 text-xs leading-relaxed text-[#d8e2f7]">{JSON.stringify(preview.data, null, 2)}</pre>
             </details>
           </div>
         ) : null}

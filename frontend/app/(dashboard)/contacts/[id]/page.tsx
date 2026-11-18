@@ -183,12 +183,12 @@ export default function ContactDetailPage() {
       <div className="bg-white px-6 py-5 border-b border-slate-200 flex items-center gap-4 shrink-0 shadow-sm z-10 animate-fade-in relative">
         <button
           onClick={() => router.push('/contacts')}
-          className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors border border-transparent hover:border-primary-100"
+          className="w-10 h-10 flex items-center justify-center rounded-2xl text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors border border-transparent hover:border-primary-100"
         >
           <ArrowLeft size={20} strokeWidth={2.5}/>
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-primary-50 to-primary-100 border border-primary-200 flex items-center justify-center text-primary-600 font-extrabold text-lg shrink-0 shadow-sm relative overflow-hidden">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary-50 to-primary-100 border border-primary-200 flex items-center justify-center text-primary-600 font-bold text-lg shrink-0 shadow-sm relative overflow-hidden">
              {contact.avatar ? (
                <img
                  src={contact.avatar}
@@ -200,19 +200,19 @@ export default function ContactDetailPage() {
              )}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
               {contact.firstName} {contact.lastName}
             </h1>
             <div className="flex items-center gap-3 mt-1">
               <span className={clsx(
-                'text-[10px] font-bold px-2.5 py-0.5 rounded-md border tracking-widest uppercase',
+                'text-[10px] font-bold px-2.5 py-0.5 rounded-lg border',
                 STATUS_COLORS[contact.status] ?? 'bg-slate-50 text-slate-500 border-slate-200'
               )}>
                 {contact.status}
               </span>
-              <span className="text-[11px] text-slate-400 font-bold tracking-widest uppercase flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5">
                 Score: <span className={clsx(
-                  'text-sm font-black',
+                  'text-sm font-bold',
                   contact.score >= 70 ? 'text-emerald-500' :
                   contact.score >= 40 ? 'text-amber-500' : 'text-slate-400'
                 )}>{contact.score}</span>
@@ -232,21 +232,21 @@ export default function ContactDetailPage() {
       <div className="flex flex-1 overflow-hidden animate-slide-up bg-slate-50/50">
         {/* Panel izquierdo — info del contacto */}
         <div className="w-80 bg-white border-r border-slate-200 p-6 overflow-y-auto shrink-0 z-0">
-          <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+          <h3 className="text-[11px] font-bold text-slate-400 mb-4">
             Detalles del Contacto
           </h3>
 
           <div className="space-y-4">
             {contact.email && (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
                    <Mail size={14} strokeWidth={2.5}/>
                 </div>
                 <span className="text-sm font-semibold text-slate-700 truncate">{contact.email}</span>
               </div>
             )}
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
+              <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
                  <Phone size={14} strokeWidth={2.5}/>
               </div>
               <span className="text-sm font-semibold text-slate-700">
@@ -255,12 +255,12 @@ export default function ContactDetailPage() {
             </div>
             {contact.tags.length > 0 && (
               <div className="flex items-start gap-3 mt-1">
-                <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm">
                    <Tag size={14} strokeWidth={2.5}/>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {contact.tags.map((tag) => (
-                    <span key={tag} className="text-[10px] bg-slate-100 border border-slate-200 font-bold text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                    <span key={tag} className="text-[10px] bg-slate-100 border border-slate-200 font-bold text-slate-500 px-2 py-0.5 rounded-lg">
                       {tag}
                     </span>
                   ))}
@@ -271,7 +271,7 @@ export default function ContactDetailPage() {
 
           {editingContact && (
             <div className="mt-8 border-t border-slate-100 pt-6">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+              <h3 className="text-[11px] font-bold text-slate-400 mb-4">
                 Editar datos
               </h3>
               <div className="space-y-3">
@@ -333,14 +333,14 @@ export default function ContactDetailPage() {
           )}
 
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+            <h3 className="text-[11px] font-bold text-slate-400 mb-3">
               Fuente de Adquisición
             </h3>
-            <span className="text-sm font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 inline-block">{contact.source}</span>
+            <span className="text-sm font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 inline-block">{contact.source}</span>
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+            <h3 className="text-[11px] font-bold text-slate-400 mb-3">
               Fecha de Registro
             </h3>
             <span className="text-sm font-semibold text-slate-700">
@@ -358,7 +358,7 @@ export default function ContactDetailPage() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={clsx(
-                  'px-5 py-4 text-sm font-bold uppercase tracking-wider transition-all border-b-[3px] -mb-[1px]',
+                  'px-5 py-4 text-sm font-bold transition-all border-b-[3px] -mb-[1px]',
                   tab === t
                     ? 'text-primary-600 border-primary-600'
                     : 'text-slate-400 border-transparent hover:text-slate-600 hover:border-slate-300'
@@ -377,7 +377,7 @@ export default function ContactDetailPage() {
               {tab === 'actividades' && (
                 <div>
                   <div className="flex items-center justify-between mb-6">
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+                    <p className="text-sm font-bold text-slate-400">
                       {activities?.length ?? 0} {activities?.length === 1 ? 'Actividad Registrada' : 'Actividades Registradas'}
                     </p>
                     <button
@@ -395,7 +395,7 @@ export default function ContactDetailPage() {
                         <select
                           value={activityForm.type}
                           onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer appearance-none"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 transition-all cursor-pointer appearance-none"
                         >
                           {['CALL', 'EMAIL', 'MEETING', 'TASK', 'NOTE', 'OTHER'].map((t) => (
                             <option key={t} value={t}>{t}</option>
@@ -405,14 +405,14 @@ export default function ContactDetailPage() {
                           value={activityForm.title}
                           onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
                           placeholder="Título de la tarea *"
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all"
                         />
                         <textarea
                           value={activityForm.description}
                           onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
                           placeholder="Descripción (opcional)"
                           rows={3}
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all resize-none"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-primary-500/30 focus:border-primary-500 placeholder-slate-400 font-medium transition-all resize-none"
                         />
                       </div>
                       <div className="flex gap-3 mt-5 pt-5 border-t border-slate-100">
@@ -451,7 +451,7 @@ export default function ContactDetailPage() {
                             key={activity.id}
                             className="interactive-card p-5 flex items-start gap-4 transition-all"
                           >
-                            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-transparent', color, color.replace('bg-', 'border-').replace('50', '200'))}>
+                            <div className={clsx('w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-transparent', color, color.replace('bg-', 'border-').replace('50', '200'))}>
                               <Icon size={18} strokeWidth={2.5}/>
                             </div>
                             <div className="flex-1 min-w-0 pt-0.5">
@@ -459,7 +459,7 @@ export default function ContactDetailPage() {
                               {activity.description && (
                                 <p className="text-slate-500 text-sm font-medium mt-1 leading-relaxed">{activity.description}</p>
                               )}
-                              <p className="text-slate-400 text-[11px] font-bold tracking-wider mt-3 uppercase">
+                              <p className="text-slate-400 text-[11px] font-bold mt-3">
                                 {new Date(activity.createdAt).toLocaleDateString()} a las {new Date(activity.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </p>
                             </div>
@@ -489,13 +489,13 @@ export default function ContactDetailPage() {
                       onChange={(e) => setNoteContent(e.target.value)}
                       placeholder="Escribí una nota privada sobre este contacto..."
                       rows={3}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-amber-500/30 focus:border-amber-400 placeholder-slate-400 font-medium transition-all resize-none"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-[3px] focus:ring-amber-500/30 focus:border-amber-400 placeholder-slate-400 font-medium transition-all resize-none"
                     />
                     <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
                       <button
                         onClick={() => createNote.mutate()}
                         disabled={!noteContent.trim() || createNote.isPending}
-                        className="bg-amber-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-md hover:bg-amber-600 hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
+                        className="bg-amber-500 text-white font-bold px-6 py-2.5 rounded-2xl shadow-md hover:bg-amber-600 hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 text-sm"
                       >
                         {createNote.isPending && <Loader2 size={16} className="animate-spin" />}
                         Guardar Nota
@@ -517,7 +517,7 @@ export default function ContactDetailPage() {
                           key={note.id}
                           className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative"
                         >
-                          <div className="absolute top-0 right-8 w-8 h-3 bg-amber-200/60 rounded-b-md"></div>
+                          <div className="absolute top-0 right-8 w-8 h-3 bg-amber-200/60 rounded-b-lg"></div>
                           <div className="flex items-start justify-between gap-4 mt-1">
                             <p className="text-slate-700 font-medium text-sm whitespace-pre-wrap flex-1 leading-relaxed">
                               {note.content}
@@ -531,7 +531,7 @@ export default function ContactDetailPage() {
                               <Trash2 size={16} strokeWidth={2.5}/>
                             </button>
                           </div>
-                          <p className="text-slate-400 text-[11px] font-bold tracking-wider mt-4 uppercase flex items-center gap-1.5">
+                          <p className="text-slate-400 text-[11px] font-bold mt-4 flex items-center gap-1.5">
                             <Clock size={12} strokeWidth={3}/>
                             {new Date(note.createdAt).toLocaleDateString()} a las {new Date(note.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </p>

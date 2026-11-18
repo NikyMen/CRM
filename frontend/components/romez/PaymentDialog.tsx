@@ -89,11 +89,11 @@ function PaymentDialogContent({ target, onClose }: { target: PaymentTarget; onCl
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]"><HandCoins size={18} /></span>
           <div className="min-w-0">
-            <h2 id="payment-dialog-title" className="font-display text-lg font-extrabold text-[var(--ink-primary)]">Cobrar</h2>
+            <h2 id="payment-dialog-title" className="font-display text-lg font-bold text-[var(--ink-primary)]">Cobrar</h2>
             {receivable ? <p className="truncate text-xs text-[var(--ink-tertiary)]">{receivable.description}</p> : null}
           </div>
         </div>
-        <button type="button" className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" disabled={save.isPending} onClick={onClose}><X size={18} /></button>
+        <button type="button" className="rounded-xl p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" disabled={save.isPending} onClick={onClose}><X size={18} /></button>
       </header>
 
       <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
@@ -111,7 +111,7 @@ function PaymentDialogContent({ target, onClose }: { target: PaymentTarget; onCl
 
         <div className="sm:col-span-2">
           <span className="mb-1.5 block text-[11px] font-bold text-[var(--ink-secondary)]">Comprobante del cobro</span>
-          <div className={clsx('flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between', missingReceipt ? 'border-[var(--warning-line)]' : 'border-[var(--line)]')}>
+          <div className={clsx('flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between', missingReceipt ? 'border-[var(--warning-line)]' : 'border-[var(--line)]')}>
             {receiptFile ? <div className="flex min-w-0 items-center gap-2"><Paperclip size={15} className="shrink-0 text-[var(--brand-blue)]" /><span className="truncate text-sm font-semibold text-[var(--ink-primary)]">{receiptFile.name}</span><button type="button" className="btn-secondary !min-h-7 !px-2 text-xs" onClick={() => setReceiptFile(null)}>Quitar</button></div>
               : <label className={clsx('btn-secondary w-fit', noReceipt ? 'pointer-events-none opacity-50' : 'cursor-pointer')}><Upload size={14} /> Subir comprobante<input type="file" className="sr-only" disabled={noReceipt} accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) { setReceiptFile(selected); setNoReceipt(false) } event.target.value = '' }} /></label>}
             <label className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]"><input type="checkbox" checked={noReceipt} onChange={(event) => { setNoReceipt(event.target.checked); if (event.target.checked) setReceiptFile(null) }} /> No subo comprobante</label>

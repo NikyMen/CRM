@@ -64,10 +64,10 @@ export function ChatIdentityPanel({ chat, compact = false }: { chat: WhatsAppCha
     : 'Sin asignar'
 
   return (
-    <aside className={compact ? 'identity-line rounded-xl p-3' : 'identity-line w-full shrink-0 rounded-2xl p-4 lg:w-56'}>
-      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--ink-tertiary)]">Identidad del lead</p>
+    <aside className={compact ? 'identity-line rounded-2xl p-3' : 'identity-line w-full shrink-0 rounded-2xl p-4 lg:w-56'}>
+      <p className="mb-3 text-xs font-medium text-[var(--ink-tertiary)]">Identidad del lead</p>
       <div className="space-y-2.5 text-xs">
-        <p className="flex items-center gap-2 font-extrabold text-[var(--ink-primary)]"><Hash size={14} /> {chat.leadNumber ?? 'Sin lead'}</p>
+        <p className="flex items-center gap-2 font-bold text-[var(--ink-primary)]"><Hash size={14} /> {chat.leadNumber ?? 'Sin lead'}</p>
         <p className="flex items-center gap-2 font-bold text-[var(--ink-secondary)]"><Phone size={14} /> {chat.phoneNumber || 'Teléfono pendiente'}</p>
         <p className="flex items-start gap-2 break-all font-bold text-[var(--ink-secondary)]"><AtSign size={14} className="mt-0.5 shrink-0" /> {chat.lidJid || (chat.jid.endsWith('@lid') ? chat.jid : 'LID pendiente')}</p>
         <p className="flex items-center gap-2 font-bold text-[var(--ink-secondary)]"><UserRoundCheck size={14} /> {assigneeName}</p>
@@ -91,7 +91,7 @@ export function ChatIdentityPanel({ chat, compact = false }: { chat: WhatsAppCha
       ) : (
         <button
           type="button"
-          className="mt-4 w-full rounded-xl bg-[var(--accent)] px-3 py-2 text-xs font-black text-[var(--accent-contrast)] disabled:opacity-50"
+          className="mt-4 w-full rounded-2xl bg-[var(--accent)] px-3 py-2 text-xs font-bold text-[var(--accent-contrast)] disabled:opacity-50"
           onClick={() => assignment.mutate(isMine ? null : user?.userId ?? null)}
           disabled={assignment.isPending || (!!chat.assignedToUserId && !isMine)}
         >
@@ -101,9 +101,9 @@ export function ChatIdentityPanel({ chat, compact = false }: { chat: WhatsAppCha
 
       {isOwner && !chat.phoneNumber && !compact && (
         <div className="mt-4 border-t border-[var(--panel-border)] pt-4">
-          <label className="text-[10px] font-black uppercase tracking-wider text-[var(--ink-tertiary)]">Teléfono manual</label>
+          <label className="text-xs font-mediumr text-[var(--ink-tertiary)]">Teléfono manual</label>
           <input className="ctrl-input mt-2 w-full text-xs" inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="54911..." />
-          <button type="button" className="mt-2 text-xs font-black text-[var(--accent-text)]" onClick={() => identity.mutate()} disabled={identity.isPending || phone.replace(/\D/g, '').length < 8}>Guardar teléfono</button>
+          <button type="button" className="mt-2 text-xs font-bold text-[var(--accent-text)]" onClick={() => identity.mutate()} disabled={identity.isPending || phone.replace(/\D/g, '').length < 8}>Guardar teléfono</button>
         </div>
       )}
     </aside>

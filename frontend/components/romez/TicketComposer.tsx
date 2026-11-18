@@ -128,10 +128,10 @@ export function TicketComposer({ canReply, placeholder, hint, canManage, current
     <div className="relative border-t border-[var(--line)] bg-[var(--paper)] p-3 sm:p-4">
       {showPicker ? <QuickReplyPicker items={matches} filtering={Boolean(term)} loading={quickRepliesQuery.isLoading} error={quickRepliesQuery.error} slashMode={slash !== null} search={pickerSearch} setSearch={setPickerSearch} highlight={highlight} pick={applyQuickReply} close={() => { closePicker(); if (slash !== null) setDraft('') }} canManage={canManage} currentUserId={currentUserId} /> : null}
       {file ? (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--paper-soft)] px-3 py-2">
+        <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--paper-soft)] px-3 py-2">
           <FileText size={16} className="shrink-0 text-[var(--brand-blue)]" />
           <p className="min-w-0 flex-1 truncate text-xs font-bold text-[var(--ink-primary)]">{file.name} <span className="font-semibold text-[var(--ink-muted)]">· {formatBytes(file.size)}</span></p>
-          <button type="button" disabled={sending} onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = '' }} className="rounded-md p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" aria-label="Quitar archivo"><X size={14} /></button>
+          <button type="button" disabled={sending} onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = '' }} className="rounded-lg p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" aria-label="Quitar archivo"><X size={14} /></button>
         </div>
       ) : null}
       <div className="flex items-end gap-2">
@@ -173,12 +173,12 @@ function QuickReplyPicker({ items, filtering, loading, error, slashMode, search,
   const startEdit = (item: QuickReply | 'new') => { setEditing(item); setForm(item === 'new' ? EMPTY_FORM : { shortcut: item.shortcut, title: item.title, body: item.body }); save.reset() }
 
   return (
-    <div className="absolute bottom-full left-3 right-3 z-20 mb-2 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] shadow-xl sm:left-4 sm:right-4" role="dialog" aria-label="Respuestas rápidas">
+    <div className="absolute bottom-full left-3 right-3 z-20 mb-2 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] shadow-xl sm:left-4 sm:right-4" role="dialog" aria-label="Respuestas rápidas">
       <div className="flex items-center gap-2 border-b border-[var(--line-soft)] px-3 py-2.5">
         <Zap size={15} className="text-[var(--brand-blue)]" />
-        <p className="flex-1 text-xs font-extrabold text-[var(--ink-primary)]">Respuestas rápidas</p>
-        {!editing ? <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-[var(--brand-blue)] hover:bg-[var(--paper-soft)]" onClick={() => startEdit('new')}><Plus size={13} /> Nueva</button> : null}
-        <button type="button" className="rounded-md p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" onClick={close} aria-label="Cerrar respuestas rápidas"><X size={15} /></button>
+        <p className="flex-1 text-xs font-bold text-[var(--ink-primary)]">Respuestas rápidas</p>
+        {!editing ? <button type="button" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-[var(--brand-blue)] hover:bg-[var(--paper-soft)]" onClick={() => startEdit('new')}><Plus size={13} /> Nueva</button> : null}
+        <button type="button" className="rounded-lg p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" onClick={close} aria-label="Cerrar respuestas rápidas"><X size={15} /></button>
       </div>
       {editing ? (
         <div className="space-y-2 p-3">
@@ -203,8 +203,8 @@ function QuickReplyPicker({ items, filtering, loading, error, slashMode, search,
                   <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-[var(--ink-tertiary)]">{item.body}</p>
                 </button>
                 {canEdit(item) ? <div className="flex shrink-0 gap-1 opacity-70 group-hover:opacity-100">
-                  <button type="button" className="rounded-md p-1.5 text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" onClick={() => startEdit(item)} aria-label={`Editar /${item.shortcut}`}><Pencil size={13} /></button>
-                  <button type="button" className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--paper)]" disabled={remove.isPending} onClick={() => { if (window.confirm(`¿Eliminar la respuesta rápida /${item.shortcut}?`)) remove.mutate(item.id) }} aria-label={`Eliminar /${item.shortcut}`}><Trash2 size={13} /></button>
+                  <button type="button" className="rounded-lg p-1.5 text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" onClick={() => startEdit(item)} aria-label={`Editar /${item.shortcut}`}><Pencil size={13} /></button>
+                  <button type="button" className="rounded-lg p-1.5 text-[var(--danger)] hover:bg-[var(--paper)]" disabled={remove.isPending} onClick={() => { if (window.confirm(`¿Eliminar la respuesta rápida /${item.shortcut}?`)) remove.mutate(item.id) }} aria-label={`Eliminar /${item.shortcut}`}><Trash2 size={13} /></button>
                 </div> : null}
               </div>
             )) : <div className="p-4 text-center"><p className="text-xs font-semibold text-[var(--ink-secondary)]">{filtering ? 'No hay respuestas con ese atajo.' : 'Todavía no hay respuestas rápidas.'}</p><button type="button" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[var(--brand-blue)]" onClick={() => startEdit('new')}><Plus size={13} /> Crear una</button></div>}

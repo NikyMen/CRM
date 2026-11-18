@@ -122,7 +122,7 @@ export default function InternalChatPage() {
         action={<button type="button" className="btn-secondary lg:hidden" onClick={() => setShowMobileMembers(true)}><UserRoundPlus size={16} /> Nuevo privado</button>}
       />
 
-      <div className="grid min-h-[650px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] lg:h-[calc(100vh-180px)] lg:min-h-0 lg:grid-cols-[minmax(270px,320px)_minmax(390px,1fr)_minmax(240px,280px)]">
+      <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] lg:h-[calc(100vh-180px)] lg:min-h-0 lg:grid-cols-[minmax(270px,320px)_minmax(390px,1fr)_minmax(240px,280px)]">
         <ConversationList
           conversations={conversations}
           selectedId={selectedId}
@@ -209,9 +209,9 @@ function ConversationList({ conversations, selectedId, loading, error, hidden, o
         {loading ? <LoadingState label="Cargando conversaciones…" /> : error ? <ErrorState message={getErrorMessage(error)} retry={retry} /> : conversations.length ? conversations.map((conversation) => (
           <button type="button" key={conversation.id} onClick={() => onSelect(conversation.id)} className={clsx('block w-full border-b border-[var(--line-soft)] px-4 py-3.5 text-left', selectedId === conversation.id ? 'bg-[var(--brand-paper)]' : 'hover:bg-[var(--paper-soft)]')}>
             <div className="flex items-start gap-3">
-              {conversation.type === 'GENERAL' ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--brand-navy)] text-white"><Hash size={17} /></span> : <UserAvatar avatar={conversation.otherParticipant?.avatar} firstName={conversation.otherParticipant?.firstName} lastName={conversation.otherParticipant?.lastName} email={conversation.otherParticipant?.email} size="sm" className="h-10 w-10" />}
+              {conversation.type === 'GENERAL' ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--brand-navy)] text-white"><Hash size={17} /></span> : <UserAvatar avatar={conversation.otherParticipant?.avatar} firstName={conversation.otherParticipant?.firstName} lastName={conversation.otherParticipant?.lastName} email={conversation.otherParticipant?.email} size="sm" className="h-10 w-10" />}
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2"><p className="truncate text-sm font-extrabold text-[var(--ink-primary)]">{conversationName(conversation)}</p>{conversation.unreadCount ? <span className="ml-auto min-w-5 rounded-full bg-[var(--brand-navy)] px-1.5 py-0.5 text-center text-[10px] font-extrabold text-white">{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</span> : null}</div>
+                <div className="flex items-center gap-2"><p className="truncate text-sm font-bold text-[var(--ink-primary)]">{conversationName(conversation)}</p>{conversation.unreadCount ? <span className="ml-auto min-w-5 rounded-full bg-[var(--brand-navy)] px-1.5 py-0.5 text-center text-[10px] font-bold text-white">{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</span> : null}</div>
                 <p className="mt-1 truncate text-xs text-[var(--ink-tertiary)]">{conversation.lastMessage ? `${conversation.lastMessage.sender.firstName}: ${conversation.lastMessage.body}` : conversation.type === 'GENERAL' ? `${conversation.participantCount} miembros` : 'Conversación privada'}</p>
                 {conversation.lastMessageAt ? <p className="mt-1.5 text-[10px] font-semibold text-[var(--ink-muted)]">{formatDateTime(conversation.lastMessageAt)}</p> : null}
               </div>
@@ -226,9 +226,9 @@ function ConversationList({ conversations, selectedId, loading, error, hidden, o
 function ConversationHeader({ conversation, onBack, onOpenMembers }: { conversation: InternalChatConversation; onBack: () => void; onOpenMembers: () => void }) {
   return (
     <header className="flex items-center gap-3 border-b border-[var(--line-soft)] px-3 py-3 sm:px-4">
-      <button type="button" onClick={onBack} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] lg:hidden" aria-label="Volver a conversaciones"><ArrowLeft size={16} /></button>
-      {conversation.type === 'GENERAL' ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--brand-navy)] text-white"><UsersRound size={17} /></span> : <UserAvatar avatar={conversation.otherParticipant?.avatar} firstName={conversation.otherParticipant?.firstName} lastName={conversation.otherParticipant?.lastName} email={conversation.otherParticipant?.email} size="sm" className="h-10 w-10" />}
-      <div className="min-w-0 flex-1"><h2 className="truncate font-display text-sm font-extrabold text-[var(--ink-primary)]">{conversationName(conversation)}</h2><p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-tertiary)]">{conversation.type === 'GENERAL' ? `${conversation.participantCount} miembros del equipo` : 'Mensaje privado interno'}</p></div>
+      <button type="button" onClick={onBack} className="rounded-xl border border-[var(--line)] p-2 text-[var(--ink-secondary)] lg:hidden" aria-label="Volver a conversaciones"><ArrowLeft size={16} /></button>
+      {conversation.type === 'GENERAL' ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--brand-navy)] text-white"><UsersRound size={17} /></span> : <UserAvatar avatar={conversation.otherParticipant?.avatar} firstName={conversation.otherParticipant?.firstName} lastName={conversation.otherParticipant?.lastName} email={conversation.otherParticipant?.email} size="sm" className="h-10 w-10" />}
+      <div className="min-w-0 flex-1"><h2 className="truncate font-display text-sm font-bold text-[var(--ink-primary)]">{conversationName(conversation)}</h2><p className="mt-0.5 text-xs font-medium text-[var(--ink-tertiary)]">{conversation.type === 'GENERAL' ? `${conversation.participantCount} miembros del equipo` : 'Mensaje privado interno'}</p></div>
       <button type="button" className="btn-secondary px-3 lg:hidden" onClick={onOpenMembers}><UserRoundPlus size={15} /><span className="hidden sm:inline">Nuevo privado</span></button>
     </header>
   )
@@ -238,14 +238,14 @@ function MemberDirectory({ members, totalMembers, search, setSearch, loading, er
   return (
     <aside className={clsx('min-h-0 flex-col border-l border-[var(--line)]', visibleOnMobile ? 'flex' : 'hidden lg:flex')}>
       <div className="border-b border-[var(--line-soft)] p-4">
-        <div className="flex items-center justify-between"><div><p className="section-label">Equipo</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{totalMembers} miembros</p></div><button type="button" onClick={close} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] lg:hidden" aria-label="Cerrar miembros"><X size={16} /></button></div>
+        <div className="flex items-center justify-between"><div><p className="section-label">Equipo</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{totalMembers} miembros</p></div><button type="button" onClick={close} className="rounded-xl border border-[var(--line)] p-2 text-[var(--ink-secondary)] lg:hidden" aria-label="Cerrar miembros"><X size={16} /></button></div>
         <label className="relative mt-3 block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input pl-9" placeholder="Buscar miembro…" /></label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {loading ? <LoadingState label="Cargando equipo…" /> : error ? <ErrorState message={getErrorMessage(error)} retry={retry} /> : members.length ? members.map((member) => (
-          <button type="button" key={member.id} disabled={Boolean(creatingUserId)} onClick={() => startDirect(member.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-[var(--paper-soft)] disabled:opacity-60">
+          <button type="button" key={member.id} disabled={Boolean(creatingUserId)} onClick={() => startDirect(member.id)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--paper-soft)] disabled:opacity-60">
             <UserAvatar avatar={member.avatar} firstName={member.firstName} lastName={member.lastName} email={member.email} size="sm" />
-            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[var(--ink-primary)]">{fullName(member)}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--ink-tertiary)]">{ROLE_LABELS[member.role] ?? member.role}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-[var(--ink-primary)]">{fullName(member)}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--ink-tertiary)]">{ROLE_LABELS[member.role] ?? member.role}</span></span>
             {creatingUserId === member.id ? <Loader2 size={14} className="animate-spin text-[var(--brand-blue)]" /> : <LockKeyhole size={13} className="text-[var(--ink-muted)]" />}
           </button>
         )) : <EmptyState icon={UsersRound} title="Sin coincidencias" description="Probá con otro nombre o correo." />}
@@ -260,7 +260,7 @@ function MessageTimeline({ messages, currentUserId }: { messages: InternalChatMe
     const previousDate = index > 0 ? formatDate(messages[index - 1].createdAt, { weekday: 'short', day: '2-digit', month: 'short' }) : ''
     const showDate = date !== previousDate
     const mine = message.senderId === currentUserId
-    return <div key={message.id}>{showDate ? <div className="mb-3 flex justify-center"><span className="rounded-full border border-[var(--line)] bg-[var(--paper-soft)] px-3 py-1 text-[10px] font-bold capitalize text-[var(--ink-tertiary)]">{date}</span></div> : null}<div className={clsx('flex gap-2', mine ? 'justify-end' : 'justify-start')}><div className={clsx('max-w-[86%] rounded-lg border px-3 py-2.5 sm:max-w-[72%]', mine ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--chat-outgoing-text)]' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}><div className={clsx('flex items-center justify-between gap-4 text-[10px] font-bold', mine ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}><span>{mine ? 'Vos' : fullName(message.sender)}</span><time>{new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</time></div><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p></div></div></div>
+    return <div key={message.id}>{showDate ? <div className="mb-3 flex justify-center"><span className="rounded-full border border-[var(--line)] bg-[var(--paper-soft)] px-3 py-1 text-[10px] font-bold capitalize text-[var(--ink-tertiary)]">{date}</span></div> : null}<div className={clsx('flex gap-2', mine ? 'justify-end' : 'justify-start')}><div className={clsx('max-w-[86%] rounded-xl border px-3 py-2.5 sm:max-w-[72%]', mine ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--chat-outgoing-text)]' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}><div className={clsx('flex items-center justify-between gap-4 text-[10px] font-bold', mine ? 'text-[var(--chat-outgoing-muted)]' : 'text-[var(--ink-tertiary)]')}><span>{mine ? 'Vos' : fullName(message.sender)}</span><time>{new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</time></div><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p></div></div></div>
   })}</div>
 }
 

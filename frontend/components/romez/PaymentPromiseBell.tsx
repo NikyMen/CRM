@@ -55,13 +55,13 @@ export function PaymentPromiseBell() {
   const label = due ? `Recordatorios de pago: ${due} para hoy o vencidos` : 'Recordatorios de pago'
 
   return <div ref={ref} className="relative">
-    <button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="dialog" aria-expanded={open} aria-label={label} title={label} className="relative grid h-10 w-10 place-items-center rounded-lg border border-transparent text-[var(--ink-secondary)] hover:border-[var(--line)] hover:bg-[var(--paper-soft)]">
+    <button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="dialog" aria-expanded={open} aria-label={label} title={label} className="relative grid h-10 w-10 place-items-center rounded-xl border border-transparent text-[var(--ink-secondary)] hover:border-[var(--line)] hover:bg-[var(--paper-soft)]">
       <Bell size={19} />
-      {due ? <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full border-2 border-[var(--paper)] bg-[var(--danger)] px-1 text-[10px] font-extrabold leading-4 text-white">{due > 99 ? '99+' : due}</span> : null}
+      {due ? <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full border-2 border-[var(--paper)] bg-[var(--danger)] px-1 text-[10px] font-bold leading-4 text-white">{due > 99 ? '99+' : due}</span> : null}
     </button>
-    {open ? <div role="dialog" aria-label="Recordatorios de pago" className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,360px)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] shadow-lg">
+    {open ? <div role="dialog" aria-label="Recordatorios de pago" className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] shadow-lg">
       <div className="border-b border-[var(--line)] px-4 py-3">
-        <p className="text-sm font-extrabold text-[var(--ink-primary)]">Recordatorios de pago</p>
+        <p className="text-sm font-bold text-[var(--ink-primary)]">Recordatorios de pago</p>
         <p className="text-xs text-[var(--ink-tertiary)]">{counts ? `${counts.today} para hoy · ${counts.overdue} vencidos · ${counts.upcoming} próximos` : 'Promesas de pago asignadas a vos.'}</p>
       </div>
       <div className="max-h-[360px] overflow-y-auto">

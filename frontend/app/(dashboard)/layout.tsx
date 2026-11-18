@@ -49,7 +49,7 @@ function DisabledModuleNotice({ canManage }: { canManage: boolean }) {
           {canManage ? ' Podés volver a activarlo desde Configuración.' : ' Pedile a un administrador que lo active.'}
         </p>
         {canManage ? (
-          <Link href="/settings?tab=modules" className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[var(--brand-navy)] px-4 text-sm font-bold text-white">
+          <Link href="/settings?tab=modules" className="mt-5 inline-flex min-h-10 items-center justify-center rounded-xl bg-[var(--brand-navy)] px-4 text-sm font-bold text-white">
             Ir a Configuración
           </Link>
         ) : null}
@@ -80,7 +80,7 @@ function Navigation({ items, pathname, onNavigate, collapsed = false, badges }: 
         const active = item.exact ? pathname === item.href : paths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
         const badge = badges?.[item.href] ?? 0
         return (
-          <Link key={item.href} href={item.href} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} className={clsx('group relative flex min-h-11 items-center rounded-lg border text-[13px] font-bold', collapsed ? 'justify-center px-0' : 'gap-3 px-3', active ? 'border-white/18 bg-white text-[var(--brand-navy)]' : 'border-transparent text-white/66 hover:border-white/10 hover:bg-white/[0.055] hover:text-white')}>
+          <Link key={item.href} href={item.href} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} className={clsx('group relative flex min-h-11 items-center rounded-xl border text-[13px] font-bold', collapsed ? 'justify-center px-0' : 'gap-3 px-3', active ? 'nav-active border-white/18 bg-white text-[var(--brand-navy)]' : 'border-transparent text-white/66 hover:border-white/10 hover:bg-white/[0.055] hover:text-white')}>
             <Icon size={17} strokeWidth={active ? 2.5 : 2} />
             {!collapsed ? <span className="truncate">{item.label}</span> : null}
             {badge ? <span className={clsx('grid min-w-[18px] place-items-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-extrabold leading-4 text-white', collapsed ? 'absolute right-1.5 top-1.5' : 'ml-auto')} aria-label={`${badge} promesas de pago para hoy o vencidas`}>{badge > 99 ? '99+' : badge}</span> : null}
@@ -95,7 +95,7 @@ function Navigation({ items, pathname, onNavigate, collapsed = false, badges }: 
 function Sidebar({ items, pathname, onClose, collapsed = false, onToggle, badges }: { items: NavItem[]; pathname: string; onClose?: () => void; collapsed?: boolean; onToggle?: () => void; badges?: Record<string, number> }) {
   return (
     <div className="flex h-full flex-col border-r border-white/10 bg-[var(--sidebar-background)]">
-      <div className={clsx('relative flex min-h-[82px] items-center border-b border-white/10', collapsed ? 'justify-center px-2' : 'justify-between px-4')}><Brand collapsed={collapsed} />{onClose ? <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-white/8 hover:text-white md:hidden" aria-label="Cerrar menú"><X size={19} /></button> : null}{onToggle ? <button type="button" onClick={onToggle} className="absolute -right-[18px] z-10 hidden h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-[var(--sidebar-background)] text-white/85 shadow-md hover:bg-[var(--brand-navy)] hover:text-white md:flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'} title={collapsed ? 'Expandir menú' : 'Colapsar menú'}>{collapsed ? <ChevronRight size={19} /> : <ChevronLeft size={19} />}</button> : null}</div>
+      <div className={clsx('relative flex min-h-[82px] items-center border-b border-white/10', collapsed ? 'justify-center px-2' : 'justify-between px-4')}><Brand collapsed={collapsed} />{onClose ? <button type="button" onClick={onClose} className="rounded-xl p-2 text-white/70 hover:bg-white/8 hover:text-white md:hidden" aria-label="Cerrar menú"><X size={19} /></button> : null}{onToggle ? <button type="button" onClick={onToggle} className="absolute -right-[18px] z-10 hidden h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-[var(--sidebar-background)] text-white/85 shadow-md hover:bg-[var(--brand-navy)] hover:text-white md:flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'} title={collapsed ? 'Expandir menú' : 'Colapsar menú'}>{collapsed ? <ChevronRight size={19} /> : <ChevronLeft size={19} />}</button> : null}</div>
 
       <Navigation items={items} pathname={pathname} onNavigate={onClose} collapsed={collapsed} badges={badges} />
       {!collapsed ? <div className="flex flex-col items-center justify-center gap-1 border-t border-white/10 p-4"><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-white/48">Desarrollado por</span><Image src="/brand/logo-cd.webp" alt="Consultoría Digital" width={600} height={400} className="h-12 w-full max-w-[208px] object-cover" /></div> : null}
@@ -124,13 +124,13 @@ function UserMenu({ user, onLogout, showTeam = false }: { user: ReturnType<typeo
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} className="flex items-center gap-2.5 rounded-lg border border-transparent py-1 pl-1 pr-2 hover:border-[var(--line)] hover:bg-[var(--background)]">
+      <button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} className="flex items-center gap-2.5 rounded-xl border border-transparent py-1 pl-1 pr-2 hover:border-[var(--line)] hover:bg-[var(--background)]">
         <UserAvatar avatar={user?.avatar} firstName={user?.firstName} lastName={user?.lastName} email={user?.email} size="sm" />
         <div className="hidden min-w-0 text-left sm:block"><p className="max-w-[220px] truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
         <ChevronDown size={15} className={clsx('text-[var(--ink-tertiary)] transition-transform', open && 'rotate-180')} />
       </button>
       {open ? (
-        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] py-1 shadow-lg">
+        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] py-1 shadow-lg">
           <div className="border-b border-[var(--line)] px-4 py-3 sm:hidden"><p className="truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
           {showTeam ? <Link href="/team" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><UsersRound size={15} /> Equipo</Link> : null}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); setNotificationsOpen(true) }} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Bell size={15} /> Notificaciones</button>
@@ -206,7 +206,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="min-w-0 flex-1 overflow-x-hidden md:flex md:flex-col">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-4 md:px-6">
           <div className="flex items-center gap-3 md:hidden">
-            <button type="button" onClick={() => setMobileOpen(true)} className="rounded-lg border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
+            <button type="button" onClick={() => setMobileOpen(true)} className="rounded-xl border border-[var(--line)] p-2.5 text-[var(--ink-primary)]" aria-label="Abrir menú"><Menu size={19} /></button>
           </div>
           <TopbarSlot />
           <div className="flex shrink-0 items-center gap-2">{promisesEnabled ? <PaymentPromiseBell /> : null}<UserMenu user={user} onLogout={logout} showTeam={showTeam} /></div>

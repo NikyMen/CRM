@@ -39,7 +39,7 @@ export function PaymentPromisesBoard({ companyId, onNew, onWhatsApp }: { company
   const board = query.data
   const pendingCount = board ? board.overdue.length + board.today.length + board.upcoming.length : 0
 
-  const scopeToggle = companyId ? null : <div className="inline-flex rounded-lg border border-[var(--line)] p-0.5" role="group" aria-label="Qué promesas ver">{([['mine', 'Mías'], ['all', canManage ? 'De todo el equipo' : 'De mi cartera']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setScope(value)} className={clsx('rounded-md px-3 py-1.5 text-xs font-bold', scope === value ? 'bg-[var(--brand-blue)] text-white' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]')}>{label}</button>)}</div>
+  const scopeToggle = companyId ? null : <div className="inline-flex rounded-xl border border-[var(--line)] p-0.5" role="group" aria-label="Qué promesas ver">{([['mine', 'Mías'], ['all', canManage ? 'De todo el equipo' : 'De mi cartera']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setScope(value)} className={clsx('rounded-lg px-3 py-1.5 text-xs font-bold', scope === value ? 'bg-[var(--brand-blue)] text-white' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]')}>{label}</button>)}</div>
 
   return <SectionPanel title="Promesas de pago" description={companyId ? 'Lo que el cliente dijo que iba a pagar y cuándo.' : 'Cuando un cliente te dice "te pago el 28", agendalo y ese día te aparece acá y en la campanita.'} action={<div className="flex flex-wrap items-center gap-2">{scopeToggle}{onNew ? <button type="button" className="btn-secondary" onClick={onNew}><Plus size={14} /> Agendar promesa</button> : null}</div>}>
     {query.isLoading ? <LoadingState label="Cargando promesas…" /> : query.isError || !board ? <ErrorState message={getErrorMessage(query.error, 'No pudimos cargar las promesas de pago.')} retry={() => query.refetch()} /> : <div className="divide-y divide-[var(--line-soft)]">
@@ -49,7 +49,7 @@ export function PaymentPromisesBoard({ companyId, onNew, onWhatsApp }: { company
         return <section key={section.key} aria-labelledby={`promises-${section.key}`}>
           <header className={clsx('flex items-center gap-2 px-4 py-2.5', section.tone === 'danger' ? 'bg-[var(--danger-paper)]' : section.tone === 'brand' ? 'bg-[var(--brand-paper)]' : 'bg-[var(--paper-soft)]')}>
             {section.tone === 'danger' ? <AlertTriangle size={15} className="text-[var(--danger)]" /> : <CalendarDays size={15} className="text-[var(--brand-blue)]" />}
-            <h3 id={`promises-${section.key}`} className={clsx('text-xs font-extrabold uppercase tracking-wider', section.tone === 'danger' ? 'text-[var(--danger)]' : 'text-[var(--ink-primary)]')}>{section.title} · {items.length}</h3>
+            <h3 id={`promises-${section.key}`} className={clsx('text-xs font-semiboldr', section.tone === 'danger' ? 'text-[var(--danger)]' : 'text-[var(--ink-primary)]')}>{section.title} · {items.length}</h3>
             <p className="hidden truncate text-xs text-[var(--ink-tertiary)] sm:block">{section.description}</p>
           </header>
           <ul className="divide-y divide-[var(--line-soft)]">{items.map((promise) => <PromiseRow key={promise.id} promise={promise} today={board.date} showClient={!companyId} showAssignee={scope === 'all'} onWhatsApp={onWhatsApp} />)}</ul>
@@ -100,12 +100,12 @@ function PromiseRow({ promise, today, showClient, showAssignee, onWhatsApp }: { 
           <button type="button" className="btn-secondary !min-h-8 !px-2.5 text-xs text-[var(--success)]" disabled={update.isPending} onClick={() => action('FULFILLED')}><CheckCircle2 size={14} /> Pagó</button>
           {overdue ? <button type="button" className="btn-secondary !min-h-8 !px-2.5 text-xs text-[var(--danger)]" disabled={update.isPending} onClick={() => action('BROKEN')}><XCircle size={14} /> No pagó</button> : null}
           <button type="button" className="btn-secondary !min-h-8 !px-2.5 text-xs" disabled={update.isPending} onClick={() => setRescheduling((value) => !value)} aria-expanded={rescheduling}><CalendarClock size={14} /> Reprogramar</button>
-          <button type="button" className="!min-h-8 rounded-lg px-2 text-xs font-bold text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" disabled={update.isPending} onClick={() => action('CANCELLED')}>Cancelar</button>
+          <button type="button" className="!min-h-8 rounded-xl px-2 text-xs font-bold text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" disabled={update.isPending} onClick={() => action('CANCELLED')}>Cancelar</button>
         </> : null}
         {canEdit && !pending ? <button type="button" className="btn-secondary !min-h-8 !px-2.5 text-xs" disabled={update.isPending} onClick={() => action('PENDING')}><RotateCcw size={14} /> Reabrir</button> : null}
       </div>
     </div>
-    {rescheduling ? <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[var(--line)] bg-[var(--paper-soft)] p-3 sm:flex-row sm:items-start">
+    {rescheduling ? <div className="mt-3 flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--paper-soft)] p-3 sm:flex-row sm:items-start">
       <div className="sm:w-48"><DateField value={newDate} onChange={setNewDate} /></div>
       <div className="flex gap-2"><button type="button" className="btn-primary !min-h-10" disabled={!newDate || newDate < paraguayToday() || update.isPending} onClick={() => update.mutate({ promisedDate: newDate })}>{update.isPending ? 'Guardando…' : 'Guardar nueva fecha'}</button><button type="button" className="btn-secondary !min-h-10" onClick={() => setRescheduling(false)}>Cerrar</button></div>
       {newDate && newDate < paraguayToday() ? <p className="text-[11px] font-semibold text-[var(--danger)] sm:self-center">La fecha no puede ser anterior a hoy.</p> : null}

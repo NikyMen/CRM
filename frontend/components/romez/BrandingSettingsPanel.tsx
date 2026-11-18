@@ -72,7 +72,7 @@ export function BrandingSettingsPanel() {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6">
       <div>
         <p className="section-label">Espacio de trabajo</p>
-        <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--ink-primary)]">Marca</h2>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Marca</h2>
         <p className="mt-1 text-sm text-[var(--ink-tertiary)]">
           Nombre, subtítulo, logos y favicon que ve todo el equipo. Lo que dejes vacío usa el valor predeterminado de la instalación.
         </p>
@@ -111,10 +111,10 @@ export function BrandingSettingsPanel() {
           return (
             <div key={item.kind} className="paper-panel flex flex-col gap-3 p-5">
               <div>
-                <p className="text-sm font-extrabold text-[var(--ink-primary)]">{item.label}</p>
+                <p className="text-sm font-bold text-[var(--ink-primary)]">{item.label}</p>
                 <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{item.help} Hasta {item.maxKb} KB.</p>
               </div>
-              <div className={clsx('grid h-36 place-items-center rounded-xl border border-[var(--line)]', item.dark ? 'bg-[var(--sidebar-background)]' : 'bg-[var(--paper-soft)]')}>
+              <div className={clsx('grid h-36 place-items-center rounded-2xl border border-[var(--line)]', item.dark ? 'bg-[var(--sidebar-background)]' : 'bg-[var(--paper-soft)]')}>
                 {branding.ready ? <BrandImage src={current[item.kind]} alt={item.label} size={112} className={clsx('object-contain', item.kind === 'favicon' ? 'h-12 w-12' : 'h-28 w-28')} /> : <Loader2 size={18} className="animate-spin text-[var(--ink-tertiary)]" />}
               </div>
               <p className="text-[11px] font-bold text-[var(--ink-tertiary)]">{isCustom[item.kind] ? 'Imagen cargada desde Configuración' : 'Usando la imagen predeterminada'}</p>

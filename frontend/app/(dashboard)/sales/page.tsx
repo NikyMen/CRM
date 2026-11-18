@@ -186,7 +186,7 @@ export default function SalesPage() {
       {summaryQuery.isError ? (
         <ErrorState message={getErrorMessage(summaryQuery.error)} retry={() => summaryQuery.refetch()} />
       ) : (
-        <section className="grid overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           {(summaryQuery.data?.currencies ?? []).map((row) => (
             <SaleMetric key={row.currency} label={`Facturado ${row.currency}`} value={formatMoney(row.confirmedTotal, row.currency)} />
           ))}
@@ -374,8 +374,8 @@ export default function SalesPage() {
 
 function SaleMetric({ label, value, tone }: { label: string; value: string; tone?: 'warning' }) {
   return (
-    <div className="bg-[var(--paper)] p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p>
+    <div className="ast-card p-5">
+      <p className="text-xs font-medium text-[var(--ink-muted)]">{label}</p>
       <p className={clsx('mt-2 font-mono text-xl font-bold tabular-nums text-[var(--ink-primary)]', tone === 'warning' && 'text-[var(--warning)]')}>{value}</p>
     </div>
   )

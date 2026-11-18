@@ -48,7 +48,7 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em]',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em]',
         ok
           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200'
           : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200'
@@ -70,7 +70,7 @@ function MethodBadge({ method }: { method: string }) {
           ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-200'
           : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200'
 
-  return <span className={clsx('rounded-full px-2 py-1 text-[10px] font-black', color)}>{method}</span>
+  return <span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold', color)}>{method}</span>
 }
 
 function ConnectionCard({
@@ -94,13 +94,13 @@ function ConnectionCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[var(--brand-navy)] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-white">
+            <span className="rounded-full bg-[var(--brand-navy)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white">
               {connection.channel}
             </span>
             <StatusPill ok={connection.status === 'connected'} label={connection.status} />
             {connection.hasCredentials ? <StatusPill ok label="Token guardado" /> : <StatusPill ok={false} label="Sin token" />}
           </div>
-          <h3 className="mt-3 truncate text-base font-black text-slate-900 dark:text-slate-50">{connection.name}</h3>
+          <h3 className="mt-3 truncate text-base font-bold text-slate-900 dark:text-slate-50">{connection.name}</h3>
           <p className="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-slate-400">
             {connection.externalAccountLabel || connection.externalAccountId}
           </p>
@@ -151,7 +151,7 @@ function EndpointRow({ endpoint }: { endpoint: MetaApiEndpoint }) {
     <div className="grid gap-3 border-b border-[var(--panel-border)] px-4 py-3 last:border-b-0 lg:grid-cols-[84px_minmax(0,1fr)_180px] lg:items-center">
       <MethodBadge method={endpoint.method} />
       <div className="min-w-0">
-        <code className="block truncate rounded-lg bg-[var(--surface-1)] px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-100">
+        <code className="block truncate rounded-xl bg-[var(--surface-1)] px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-100">
           {endpoint.path}
         </code>
         <p className="mt-1 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">{endpoint.description}</p>
@@ -293,7 +293,7 @@ export default function MetaApiPage() {
               <AlertTriangle size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-50">Acceso restringido</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Acceso restringido</h1>
               <p className="mt-2 max-w-xl text-sm font-medium text-slate-600 dark:text-slate-300">
                 API Meta queda habilitado solo para owner y admin.
               </p>
@@ -309,11 +309,11 @@ export default function MetaApiPage() {
       <section className="interactive-card static-card overflow-hidden">
         <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--surface-1)] px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--surface-1)] px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200">
               <ShieldCheck size={14} />
               Oficial Graph API
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">API Meta</h1>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">API Meta</h1>
             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               Conectá cuentas oficiales de Meta por espacio de trabajo y usá webhooks y conversaciones sin mostrar secretos en pantalla.
             </p>
@@ -322,11 +322,11 @@ export default function MetaApiPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
             <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-1)] p-4">
               <p className="section-label">Graph API</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-slate-50">{status?.graphApiVersion ?? 'v23.0'}</p>
+              <p className="mt-2 text-xl font-bold text-slate-900 dark:text-slate-50">{status?.graphApiVersion ?? 'v23.0'}</p>
             </div>
             <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-1)] p-4">
               <p className="section-label">Conexiones</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-slate-50">{connections.length}</p>
+              <p className="mt-2 text-xl font-bold text-slate-900 dark:text-slate-50">{connections.length}</p>
             </div>
           </div>
         </div>
@@ -354,7 +354,7 @@ export default function MetaApiPage() {
           <div className="border-b border-[var(--panel-border)] p-5">
             <div className="flex items-center gap-2">
               <PlugZap size={18} className="text-primary-600" />
-              <h2 className="text-lg font-black text-slate-900 dark:text-slate-50">Nueva conexion</h2>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">Nueva conexion</h2>
             </div>
           </div>
 
@@ -374,7 +374,7 @@ export default function MetaApiPage() {
                     type="button"
                     onClick={() => setChannel(item.value)}
                     className={clsx(
-                      'rounded-xl border px-3 py-2 text-xs font-black transition',
+                      'rounded-2xl border px-3 py-2 text-xs font-bold transition',
                       channel === item.value
                         ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white'
                         : 'border-[var(--panel-border)] bg-[var(--surface-1)] text-slate-600 dark:text-slate-300'
@@ -426,7 +426,7 @@ export default function MetaApiPage() {
             <div>
               <div className="flex items-center gap-2">
                 <Wifi size={18} className="text-primary-600" />
-                <h2 className="text-lg font-black text-slate-900 dark:text-slate-50">Webhook oficial</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">Webhook oficial</h2>
               </div>
               <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                 Usar esta URL en Meta Developers para WhatsApp, Messenger e Instagram.
@@ -445,7 +445,7 @@ export default function MetaApiPage() {
           </div>
 
           <div className="p-5">
-            <code className="block overflow-x-auto rounded-xl border border-[var(--panel-border)] bg-[var(--surface-1)] p-3 text-xs font-bold text-slate-800 dark:text-slate-100">
+            <code className="block overflow-x-auto rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-1)] p-3 text-xs font-bold text-slate-800 dark:text-slate-100">
               {webhookUrl}
             </code>
             {status?.missing.length ? (
@@ -461,7 +461,7 @@ export default function MetaApiPage() {
         <div className="border-b border-[var(--panel-border)] p-5">
           <div className="flex items-center gap-2">
             <MessageCircle size={18} className="text-primary-600" />
-            <h2 className="text-lg font-black text-slate-900 dark:text-slate-50">Conexiones Meta</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">Conexiones Meta</h2>
           </div>
         </div>
 
@@ -491,7 +491,7 @@ export default function MetaApiPage() {
 
       <section className="interactive-card static-card overflow-hidden">
         <div className="border-b border-[var(--panel-border)] p-5">
-          <h2 className="text-lg font-black text-slate-900 dark:text-slate-50">Endpoints disponibles</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">Endpoints disponibles</h2>
         </div>
         <div>
           {groupedEndpoints.private.map((endpoint) => <EndpointRow key={`${endpoint.method}-${endpoint.path}`} endpoint={endpoint} />)}

@@ -108,12 +108,12 @@ function MoreStats({ children }: { children: React.ReactNode }) {
 }
 
 function Card({ title, subtitle, children, className }: { title: string; subtitle?: string; children: React.ReactNode; className?: string }) {
-  return <div className={clsx('paper-panel p-5', className)}><h3 className="font-display text-sm font-extrabold text-[var(--ink-primary)]">{title}</h3>{subtitle ? <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{subtitle}</p> : null}<div className="mt-4">{children}</div></div>
+  return <div className={clsx('paper-panel p-5', className)}><h3 className="font-display text-sm font-bold text-[var(--ink-primary)]">{title}</h3>{subtitle ? <p className="mt-1 text-xs text-[var(--ink-tertiary)]">{subtitle}</p> : null}<div className="mt-4">{children}</div></div>
 }
 
 function StatTile({ label, value, currency = 'PYG', plain, danger, children }: { label: string; value: number; currency?: string; plain?: boolean; danger?: boolean; children?: React.ReactNode }) {
   const animated = useCountUp(value)
-  return <div className="paper-panel p-5"><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">{label}</p><p className={clsx('mt-2 font-mono text-2xl font-bold tabular-nums', danger ? 'text-[var(--danger)]' : 'text-[var(--ink-primary)]')}>{plain ? Math.round(animated) : money(animated, currency)}</p><p className="mt-2 text-xs">{children}</p></div>
+  return <div className="paper-panel p-5"><p className="text-xs font-medium text-[var(--ink-muted)]">{label}</p><p className={clsx('mt-2 font-mono text-2xl font-bold tabular-nums', danger ? 'text-[var(--danger)]' : 'text-[var(--ink-primary)]')}>{plain ? Math.round(animated) : money(animated, currency)}</p><p className="mt-2 text-xs">{children}</p></div>
 }
 
 function RateTile({ rate, applied, billed, currency }: { rate: number; applied: number; billed: number; currency: string }) {
@@ -127,7 +127,7 @@ function RateTile({ rate, applied, billed, currency }: { rate: number; applied: 
       <circle cx="34" cy="34" r={radius} fill="none" stroke="var(--viz-track)" strokeWidth="8" />
       <circle cx="34" cy="34" r={radius} fill="none" stroke="var(--viz-collected)" strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} className="transition-[stroke-dashoffset] duration-1000 ease-out motion-reduce:transition-none" />
     </svg>
-    <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--ink-muted)]">Tasa de cobro</p><p className="mt-1 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]">{animated.toFixed(1).replace('.', ',')}%</p><p className="mt-1 truncate text-xs text-[var(--ink-tertiary)]">{money(applied, currency)} de {money(billed, currency)}</p></div>
+    <div className="min-w-0"><p className="text-xs font-medium text-[var(--ink-muted)]">Tasa de cobro</p><p className="mt-1 font-mono text-2xl font-bold tabular-nums text-[var(--ink-primary)]">{animated.toFixed(1).replace('.', ',')}%</p><p className="mt-1 truncate text-xs text-[var(--ink-tertiary)]">{money(applied, currency)} de {money(billed, currency)}</p></div>
   </div>
 }
 
@@ -151,12 +151,12 @@ function TrendChart({ data, className }: { data: CollectionInsights; className?:
       </div>
       <div className="relative flex gap-2">
       {data.months.map((item, index) => <div key={item.key} className="relative z-10 flex flex-1 flex-col items-center" onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} tabIndex={0} aria-label={`${monthLabel(item.key)}: facturado ${money(item.billed, data.currency)}, cobrado ${money(item.collected, data.currency)}`}>
-        <div className={clsx('flex h-52 w-full items-end justify-center gap-[2px] rounded-md transition-colors', hover === index && 'bg-[var(--viz-hover)]')}>
+        <div className={clsx('flex h-52 w-full items-end justify-center gap-[2px] rounded-lg transition-colors', hover === index && 'bg-[var(--viz-hover)]')}>
           {(['billed', 'collected'] as const).map((field, barIndex) => <div key={field} className="w-[34%] max-w-7 rounded-t-[4px] transition-[height] duration-700 ease-out motion-reduce:transition-none" style={{ height: mounted ? `${Math.max((item[field] / max) * 100, item[field] > 0 ? 1 : 0)}%` : '0%', transitionDelay: `${index * 70 + barIndex * 40}ms`, background: `var(--viz-${field})` }} />)}
         </div>
         <span className={clsx('mt-2 h-4 text-[11px] font-semibold capitalize', hover === index ? 'text-[var(--ink-primary)]' : 'text-[var(--ink-tertiary)]')}>{monthLabel(item.key)}</span>
       </div>)}
-      {hovered && hover !== null ? <div className="pointer-events-none absolute top-0 z-20 w-48 rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 text-xs shadow-lg" style={{ left: `${((hover + 0.5) / data.months.length) * 100}%`, transform: hover >= data.months.length / 2 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)' }}>
+      {hovered && hover !== null ? <div className="pointer-events-none absolute top-0 z-20 w-48 rounded-xl border border-[var(--line)] bg-[var(--paper)] p-3 text-xs shadow-lg" style={{ left: `${((hover + 0.5) / data.months.length) * 100}%`, transform: hover >= data.months.length / 2 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)' }}>
         <p className="font-bold capitalize text-[var(--ink-primary)]">{monthLabel(hovered.key)} {hovered.key.slice(0, 4)}</p>
         <p className="mt-2 flex items-center justify-between gap-2 text-[var(--ink-secondary)]"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-[var(--viz-billed)]" />Facturado</span><span className="font-mono font-bold text-[var(--ink-primary)]">{money(hovered.billed, data.currency)}</span></p>
         <p className="mt-1 flex items-center justify-between gap-2 text-[var(--ink-secondary)]"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-[var(--viz-collected)]" />Cobrado</span><span className="font-mono font-bold text-[var(--ink-primary)]">{money(hovered.collected, data.currency)}</span></p>
@@ -174,7 +174,7 @@ function AgingChart({ data, className }: { data: CollectionInsights; className?:
   return <Card title="Antigüedad de la deuda" subtitle="Saldo pendiente según días de atraso · tocá un tramo para ver cada cliente" className={className}>
     {total <= 0 ? <p className="py-10 text-center text-sm text-[var(--ink-tertiary)]">No hay saldos pendientes. 🎉</p> : <ul className="space-y-1">
       {data.aging.map((item, index) => <li key={item.key}>
-        <button type="button" disabled={!item.clients.length} onClick={() => setReport(item.key)} className="group block w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--viz-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-default disabled:hover:bg-transparent" title={`${item.label}: ${money(item.amount, data.currency)} en ${item.count} cargos de ${item.clients.length} clientes`}>
+        <button type="button" disabled={!item.clients.length} onClick={() => setReport(item.key)} className="group block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--viz-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-default disabled:hover:bg-transparent" title={`${item.label}: ${money(item.amount, data.currency)} en ${item.count} cargos de ${item.clients.length} clientes`}>
           <div className="mb-1 flex items-baseline justify-between gap-2 text-xs"><span className="inline-flex items-center gap-1 font-semibold text-[var(--ink-secondary)] group-hover:text-[var(--brand-blue)]">{item.label}{item.clients.length ? <span className="font-medium text-[var(--ink-muted)]">· {item.clients.length} {item.clients.length === 1 ? 'cliente' : 'clientes'}</span> : null}</span><span className="inline-flex items-center gap-1 font-mono font-bold tabular-nums text-[var(--ink-primary)]">{money(item.amount, data.currency)} <span className="font-sans font-medium text-[var(--ink-muted)]">· {total ? Math.round((item.amount / total) * 100) : 0}%</span>{item.clients.length ? <ChevronRight size={13} className="text-[var(--ink-muted)] group-hover:text-[var(--brand-blue)]" /> : null}</span></div>
           <div className="h-3 overflow-hidden rounded-[4px] bg-[var(--viz-track)]"><div className="h-full rounded-[4px] transition-[width] duration-700 ease-out group-hover:brightness-110 motion-reduce:transition-none" style={{ width: mounted ? `${(item.amount / max) * 100}%` : '0%', transitionDelay: `${index * 90}ms`, background: `var(--viz-seq-${index + 1})` }} /></div>
         </button>
@@ -231,10 +231,10 @@ function AgingReport({ data, initialKey, onClose }: { data: CollectionInsights; 
     <section role="dialog" aria-modal="true" aria-labelledby="aging-report-title" className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] shadow-2xl animate-slide-up">
       <header className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
         <div className="min-w-0">
-          <h2 id="aging-report-title" className="font-display text-lg font-extrabold text-[var(--ink-primary)]">Informe de antigüedad de la deuda</h2>
+          <h2 id="aging-report-title" className="font-display text-lg font-bold text-[var(--ink-primary)]">Informe de antigüedad de la deuda</h2>
           <p className="text-xs text-[var(--ink-tertiary)]">Saldo pendiente de cada cliente en los tramos elegidos · {data.currency}</p>
         </div>
-        <button type="button" className="rounded-lg p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" onClick={onClose}><X size={18} /></button>
+        <button type="button" className="rounded-xl p-2 text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]" aria-label="Cerrar" onClick={onClose}><X size={18} /></button>
       </header>
 
       <div className="space-y-3 border-b border-[var(--line)] px-5 py-4">
@@ -275,7 +275,7 @@ function TopDebtors({ data }: { data: CollectionInsights }) {
   return <Card title="Clientes con mayor deuda" subtitle="Los 5 saldos pendientes más altos · la parte más oscura ya está vencida">
     {!data.topDebtors.length ? <p className="py-6 text-center text-sm text-[var(--ink-tertiary)]">Ningún cliente tiene deuda pendiente.</p> : <ul className="grid gap-x-8 gap-y-3 md:grid-cols-2">
       {data.topDebtors.map((debtor, index) => <li key={debtor.id}>
-        <Link href={`/clients/${debtor.id}`} className="group block rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-blue)]">
+        <Link href={`/clients/${debtor.id}`} className="group block rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-blue)]">
           <div className="mb-1 flex items-baseline justify-between gap-3 text-xs"><span className="truncate font-bold text-[var(--ink-primary)] group-hover:text-[var(--brand-blue)]">{debtor.name}</span><span className="shrink-0 font-mono font-bold tabular-nums text-[var(--ink-primary)]">{money(debtor.outstanding, data.currency)}</span></div>
           <div className="flex h-3 overflow-hidden rounded-[4px] bg-[var(--viz-track)]" title={`Vencido ${money(debtor.overdue, data.currency)} · por vencer ${money(debtor.outstanding - debtor.overdue, data.currency)}`}>
             <div className="flex h-full gap-[2px] transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: mounted ? `${(debtor.outstanding / max) * 100}%` : '0%', transitionDelay: `${index * 90}ms` }}>
