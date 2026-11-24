@@ -25,6 +25,21 @@ export function canAccessInternalConversation(
   return type === InternalConversationType.GENERAL || participantUserIds.includes(userId)
 }
 
+/**
+ * Para el visto: hasta cuándo leyó cada destinatario (todos menos quien consulta). En el grupo
+ * general son todos los miembros del espacio, aunque nunca lo hayan abierto (lastReadAt null).
+ */
+export function messageReaders(
+  audienceUserIds: string[],
+  participants: Array<{ userId: string; lastReadAt: Date | null }>,
+  currentUserId: string,
+) {
+  const readAt = new Map(participants.map((participant) => [participant.userId, participant.lastReadAt]))
+  return [...new Set(audienceUserIds)]
+    .filter((userId) => userId !== currentUserId)
+    .map((userId) => ({ userId, lastReadAt: readAt.get(userId) ?? null }))
+}
+
 export class InternalChatService {
   async listMembers(ctx: ChatContext) {
     const members = await db.workspaceUser.findMany({
@@ -148,7 +163,7 @@ export class InternalChatService {
   }
 
   async listMessages(ctx: ChatContext, conversationId: string, limit: number, cursor?: string) {
-    await this.assertAccess(ctx, conversationId)
+    const conversation = await this.assertAccess(ctx, conversationId)
     const messages = await db.internalChatMessage.findMany({
       where: { workspaceId: ctx.workspaceId, conversationId },
       take: limit + 1,
@@ -171,7 +186,27 @@ export class InternalChatService {
     return {
       items: page.reverse(),
       nextCursor,
+      readers: await this.listReaders(ctx, conversation),
     }
+  }
+
+  private async listReaders(ctx: ChatContext, conversation: { id: string; type: InternalConversationType; participants: { userId: string }[] }) {
+    const [participants, audience] = await Promise.all([
+      db.internalConversationParticipant.findMany({
+        where: { conversationId: conversation.id },
+        select: { userId: true, lastReadAt: true },
+      }),
+      conversation.type === InternalConversationType.GENERAL
+        ? db.workspaceUser.findMany({ where: { workspaceId: ctx.workspaceId }, select: { userId: true } }).then((rows) => rows.map((row) => row.userId))
+        : Promise.resolve(conversation.participants.map((participant) => participant.userId)),
+    ])
+    const readers = messageReaders(audience, participants, ctx.userId)
+    const users = await db.user.findMany({ where: { id: { in: readers.map((reader) => reader.userId) } }, select: memberSelect })
+    const byId = new Map(users.map((user) => [user.id, user]))
+    return readers.flatMap((reader) => {
+      const user = byId.get(reader.userId)
+      return user ? [{ ...user, lastReadAt: reader.lastReadAt }] : []
+    })
   }
 
   async markRead(ctx: ChatContext, conversationId: string, messageId?: string) {
@@ -183,10 +218,19 @@ export class InternalChatService {
       where: { id: messageId, workspaceId: ctx.workspaceId, conversationId },
       select: { createdAt: true },
     }) : null
-    await db.internalConversationParticipant.updateMany({
-      where: { conversationId, userId: ctx.userId },
-      data: { lastReadAt: message?.createdAt ?? new Date() },
+    const readAt = message?.createdAt ?? new Date()
+    // Sólo se avanza: así un "leído" repetido (o atrasado) no genera eventos ni vuelve atrás el visto.
+    const { count } = await db.internalConversationParticipant.updateMany({
+      where: { conversationId, userId: ctx.userId, OR: [{ lastReadAt: null }, { lastReadAt: { lt: readAt } }] },
+      data: { lastReadAt: readAt },
     })
+    return {
+      // Sin un mensaje concreto no hay visto nuevo que mostrar a los demás.
+      advanced: count > 0 && Boolean(message),
+      audienceUserIds: conversation.type === InternalConversationType.DIRECT
+        ? conversation.participants.map((participant) => participant.userId)
+        : undefined,
+    }
   }
 
   async sendMessage(ctx: ChatContext, conversationId: string, body: string) {

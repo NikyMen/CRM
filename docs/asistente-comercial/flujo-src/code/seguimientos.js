@@ -15,6 +15,9 @@ const last9 = (v) => String(v ?? '').replace(/\D/g, '').slice(-9);
 const lista = (v) => String(v ?? '').split(/[,;\s]+/).map(last9).filter(Boolean);
 const prueba = lista(cfg.soloPrueba);
 const excluidos = [...lista(cfg.excluir), last9(cfg.notificarA)].filter(Boolean);
+// Chats que en el CRM atiende una persona («Atiende una persona»): sin seguimientos.
+let conPersona = [];
+try { conPersona = ($('CRM: chats que atiende una persona').first().json.phones ?? []).map(last9); } catch { conPersona = []; }
 
 const now = Date.now();
 const H = 3600e3;
@@ -35,6 +38,7 @@ for (const { json: row } of $input.all()) {
   if (e.seguirDesde && e.seguirDesde > now) continue;
   if (!e.lastOutAt || !e.lastInAt || e.lastInAt > e.lastOutAt) continue; // el cliente habló último: no corresponde
   if (excluidos.includes(last9(e.phone))) continue;
+  if (conPersona.includes(last9(e.phone))) continue;
   if (prueba.length && !prueba.includes(last9(e.phone))) continue;
 
   // Chats de antes de este cambio (sin `followUps`): si ya recibieron un seguimiento no reciben

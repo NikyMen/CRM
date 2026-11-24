@@ -493,6 +493,40 @@ t('seguimiento: los sábados no se envía aunque la oficina atienda', () => {
   const e = { stage: 'COSTOS_ENVIADOS', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H }
   assert.strictEqual(seg([rowFor(e)], { atencionDias: '1,2,3,4,5,6' }, '2026-11-07T14:00:00Z').length, 0)
 })
+// ---------- «Atiende una persona» y «Forzar IA» desde el chat comercial del CRM ----------
+const forzado = (cuerpo) => norm({
+  event: 'messages.upsert', force: true,
+  data: { messages: [{ key: { id: 'crm-force-1', remoteJid: '595991222333@s.whatsapp.net', fromMe: false, senderPn: '595991222333@s.whatsapp.net' }, pushName: 'Ana', messageBody: cuerpo, messageTimestamp: 1_700_000_000 }] },
+})
+t('forzar IA: el cuerpo que arma el CRM entra como mensaje entrante marcado', () => {
+  const m = forzado('¿Cuánto sale?\nY si incluye IVA')
+  assert.strictEqual(m.route, 'inbound'); assert.strictEqual(m.force, true); assert.strictEqual(m.phone, '595991222333'); assert.strictEqual(m.kind, 'text')
+  assert.strictEqual(m.text, '¿Cuánto sale?\nY si incluye IVA')
+})
+t('forzar IA: un mensaje común de wppia no viene marcado', () => assert.strictEqual(tx.force, false))
+t('forzar IA: saca la pausa por persona y responde, sin tope por hora ni filtro de cortesías', () => {
+  const e2 = { pausedUntil: Date.now() + 1e6, humano: true, hist: Array(10).fill(Date.now() - 1000), botReplies: 1 }
+  const r = run('Estado del chat', { input: item({ estado: JSON.stringify(e2) }), nodes: wfNodes({ 'Normalizar mensaje': item(forzado('gracias')) }) })[0].json
+  assert.strictEqual(r.responder, true); assert.strictEqual(r.e.pausedUntil, undefined); assert.strictEqual(r.e.humano, false)
+})
+t('forzar IA: con el bot apagado en el panel igual no responde', () => {
+  const r = run('Estado del chat', { input: item({}), nodes: { Config: item({ ...CFG, botActivo: false }), 'Normalizar mensaje': item(forzado('hola')) } })[0].json
+  assert.strictEqual(r.motivo, 'bot_apagado')
+})
+t('atiende una persona (CRM): el flujo corta antes de la IA', () => {
+  const si = wf.nodes.find((n) => n.name === '¿Atiende una persona (CRM)?')
+  assert.match(JSON.stringify(si.parameters), /assistantPaused === true/)
+  assert.deepStrictEqual(wf.connections['CRM: etapa del lead'].main[0].map((c) => c.node), ['¿Atiende una persona (CRM)?'])
+  const salidas = wf.connections['¿Atiende una persona (CRM)?'].main
+  assert.strictEqual(salidas[0].length, 0); assert.deepStrictEqual(salidas[1].map((c) => c.node), ['Armar contexto IA'])
+})
+t('atiende una persona (CRM): sin seguimientos para esos chats', () => {
+  const e = { stage: 'COSTOS_ENVIADOS', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H }
+  const conPausa = run('Seguimientos pendientes', { input: [rowFor(e)], nodes: { Config: item(CFG), 'CRM: chats que atiende una persona': item({ phones: ['0991 222 333'] }) }, now: '2026-11-02T14:00:00Z' })
+  assert.strictEqual(conPausa.length, 0)
+  assert.strictEqual(seg([rowFor(e)], {}, '2026-11-02T14:00:00Z').length, 1)
+})
+
 t('el envío de WhatsApp manda texto o documento', () => {
   const body = wf.nodes.find((n) => n.name === 'Enviar WhatsApp (wppia)').parameters.jsonBody
   assert.match(body, /documentUrl/); assert.match(body, /application\/pdf/)

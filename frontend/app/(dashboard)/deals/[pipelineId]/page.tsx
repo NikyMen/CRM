@@ -24,13 +24,14 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Building2, Check, CheckCheck, ChevronDown, Hourglass, Loader2, Pencil, Search, Send, Settings, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { Building2, Check, CheckCheck, ChevronDown, Hourglass, Loader2, Pencil, Search, Send, Settings, ThumbsDown, ThumbsUp, UserRound, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '../../pipelines/page'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 import { COMMERCIAL_WHATSAPP, LineWhatsAppLinkDialog, LineWhatsAppPanel, useLineWhatsAppSession } from '@/components/romez/LineWhatsAppPanel'
 import { chatListTime, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
+import { TopbarContent } from '@/components/romez/Topbar'
 
 function chatTitle(deal: KanbanCard) {
   const chat = deal.chat
@@ -162,6 +163,7 @@ function DealCardBody({ deal }: { deal: KanbanCard }) {
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       <span className="rounded-full bg-[var(--paper-inset)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-tertiary)]">#{deal.leadNumber}</span>
       {chat?.source === 'commercial' ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--wa-green-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--wa-green)]" title="Vino del WhatsApp comercial"><WhatsAppLogo size={10} /> Comercial</span> : null}
+      {chat?.assistantPaused ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lo atiende una persona: el asistente no contesta"><UserRound size={10} /> Persona</span> : null}
       {unread ? <span className="rounded-full bg-[var(--wa-green)] px-2 py-0.5 text-[10px] font-bold text-white">{unread} sin leer</span> : null}
       {deal.isRotten ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lleva demasiado tiempo en esta etapa"><Hourglass size={10} /> {deal.daysInStage} d quieto</span> : deal.daysInStage > 0 ? <span className="text-[10px] text-[var(--ink-muted)]">{deal.daysInStage} d en la etapa</span> : null}
       {deal.companyId ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><Building2 size={10} /> Cliente</span> : null}
@@ -242,7 +244,7 @@ function KanbanColumnComponent({ column, deals, total, filtering, onOpenDeal }: 
 function FunnelBar({ columns, total }: { columns: KanbanColumn[]; total: number }) {
   if (!total) return null
   return (
-    <div className="mt-4">
+    <div className="mt-3">
       <div className="flex h-2.5 overflow-hidden rounded-full bg-[var(--ast-track)]" role="img" aria-label="Leads por etapa">
         {columns.map((column) => column.count ? <div key={column.stage.id} className="h-full transition-all" style={{ width: `${(column.count / total) * 100}%`, background: column.stage.color }} title={`${column.stage.name.trim()}: ${column.count}`} /> : null)}
       </div>
@@ -589,28 +591,28 @@ export default function KanbanPage() {
 
   return (
     <div className="relative flex h-full flex-col bg-[var(--background)]">
-      <header className="shrink-0 px-4 pb-3 pt-4 sm:px-6">
-        <div className="ast-card ast-rise px-5 py-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-[var(--ast-accent-2)]">Gestión comercial · embudo</p>
-              {pipelines.length > 1 ? (
-                <button type="button" onClick={() => setIsPipelineSwitcherOpen(true)} className="mt-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg text-left font-display text-xl font-semibold tracking-tight text-[var(--ink-primary)] hover:text-[var(--ast-accent)]" title="Cambiar de embudo">
-                  <span className="truncate">{board.pipeline.name}</span> <ChevronDown size={18} className="shrink-0 text-[var(--ink-muted)]" />
-                </button>
-              ) : <h1 className="mt-0.5 truncate font-display text-xl font-semibold tracking-tight text-[var(--ink-primary)]">{board.pipeline.name}</h1>}
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--wa-green)] px-4 text-[13px] font-semibold text-white shadow-sm hover:brightness-110" onClick={() => setWhatsAppPanel({})} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
-                <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
-                <WhatsAppLogo size={16} /> Chats de WhatsApp
-              </button>
-              {canEditBoard ? <button type="button" className="btn-secondary !px-3" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Gestión comercial" title="Vincular, reconectar o desvincular el WhatsApp comercial (QR)"><Settings size={15} /></button> : null}
-              {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
-            </div>
-          </div>
-          {!editingBoard ? <>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+      {/* Título y acciones en la barra superior, como el resto de las secciones: el tablero gana alto. */}
+      <TopbarContent>
+        <div className="min-w-0 flex-1">
+          <p className="hidden truncate text-xs font-medium text-[var(--ink-tertiary)] sm:block">Gestión comercial · embudo</p>
+          {pipelines.length > 1 ? (
+            <button type="button" onClick={() => setIsPipelineSwitcherOpen(true)} className="inline-flex max-w-full items-center gap-1 rounded-lg text-left font-display text-base font-bold leading-tight text-[var(--ink-primary)] hover:text-[var(--ast-accent)]" title="Cambiar de embudo">
+              <span className="truncate">{board.pipeline.name}</span> <ChevronDown size={16} className="shrink-0 text-[var(--ink-muted)]" />
+            </button>
+          ) : <h1 className="truncate font-display text-base font-bold leading-tight text-[var(--ink-primary)]">{board.pipeline.name}</h1>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" className="inline-flex h-9 items-center gap-2 rounded-full bg-[var(--wa-green)] px-3 text-[13px] font-semibold text-white shadow-sm hover:brightness-110 sm:px-4" onClick={() => setWhatsAppPanel({})} aria-label="Chats de WhatsApp" title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
+            <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
+            <WhatsAppLogo size={16} /> <span className="hidden sm:inline">Chats de WhatsApp</span>
+          </button>
+          {canEditBoard ? <button type="button" className="btn-secondary h-9 !px-3" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Gestión comercial" title="Vincular, reconectar o desvincular el WhatsApp comercial (QR)"><Settings size={15} /></button> : null}
+          {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary h-9" title={editingBoard ? 'Volver al tablero' : 'Editar tablero'}><Pencil size={15} /><span className="hidden lg:inline">{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</span></button>}
+        </div>
+      </TopbarContent>
+      <header className={clsx('shrink-0 px-4 pt-3 sm:px-6', !editingBoard && 'pb-3')}>
+          {!editingBoard ? <div className="ast-card ast-rise px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
               <label className="relative w-full sm:w-72">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input !rounded-full pl-9" placeholder="Buscar lead, teléfono o mensaje" aria-label="Buscar en el tablero" />
@@ -622,8 +624,7 @@ export default function KanbanPage() {
               <span className="ml-auto hidden text-xs text-[var(--ink-muted)] lg:inline">Clic abre el chat · arrastrá la tarjeta para cambiar de etapa</span>
             </div>
             <FunnelBar columns={board.columns} total={totalDeals} />
-          </> : null}
-        </div>
+          </div> : null}
       </header>
 
       {editingBoard ? <div className="flex-1 overflow-y-auto"><PipelinesPage /></div> : <div className="min-h-0 flex-1 overflow-x-auto px-4 pb-4 sm:px-6">

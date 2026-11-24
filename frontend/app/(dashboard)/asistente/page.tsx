@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Bot, LayoutDashboard, Lock, MessagesSquare, PlugZap, Save, ShieldCheck, SlidersHorizontal, Tags, type LucideIcon } from 'lucide-react'
+import { Bot, LayoutDashboard, Lock, MessagesSquare, PlugZap, Save, SlidersHorizontal, Tags, type LucideIcon } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { assistantApi, toSettingsInput, type AssistantSettings, type AssistantSettingsInput } from '@/lib/assistant'
 import { getErrorMessage } from '@/lib/format'
-import { ErrorState, LoadingState, PageFrame } from '@/components/romez/OperationalUI'
+import { ErrorState, LoadingState, PageFrame, PageHeader } from '@/components/romez/OperationalUI'
 import { AssistantBehavior } from '@/components/romez/assistant/AssistantBehavior'
 import { AssistantConnection } from '@/components/romez/assistant/AssistantConnection'
 import { AssistantOverview } from '@/components/romez/assistant/AssistantOverview'
@@ -83,31 +83,21 @@ export default function AssistantPage() {
 
   return (
     <PageFrame className="assistant-ui !space-y-7">
-      <header className="ast-rise relative overflow-hidden rounded-[2rem] border border-[var(--line-soft)] px-6 py-7 shadow-[var(--ast-card-shadow)] sm:px-9 sm:py-9" style={{ background: 'var(--ast-hero)' }}>
-        <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-[var(--line-soft)]" />
-        <div aria-hidden className="pointer-events-none absolute -right-6 -top-10 h-44 w-44 rounded-full border border-[var(--line-soft)]" />
-        <div className="relative flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ast-accent)] shadow-sm">
-              <ShieldCheck size={13} /> Gestión comercial · sólo administradores
-            </p>
-            <h1 className="font-display mt-4 text-[clamp(1.75rem,3.4vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-[var(--ink-primary)]">Asistente de WhatsApp</h1>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[var(--ink-secondary)]">Configurá qué responde el asistente, cuánto cuesta cada servicio y cuándo deriva a una persona. Todo lo que cambies acá lo lee el flujo de n8n.</p>
-          </div>
-          {status ? (
-            <div className="flex items-center gap-4 self-start rounded-3xl border border-[var(--line-soft)] bg-[var(--paper)] py-3.5 pl-3.5 pr-6 shadow-[var(--ast-card-shadow)] lg:self-auto">
-              <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--ast-accent)] text-[var(--ast-on-accent)]">
-                <Bot size={22} />
-                <span className={clsx('absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[var(--paper)]', status.on ? 'ast-pulse bg-[var(--success)]' : 'bg-[var(--ink-muted)]')} />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-[var(--ink-primary)]">{status.title}</p>
-                <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{status.detail}</p>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Gestión comercial · sólo administradores"
+        title="Asistente de WhatsApp"
+        description="Configurá qué responde el asistente, cuánto cuesta cada servicio y cuándo deriva a una persona. Todo lo que cambies acá lo lee el flujo de n8n."
+        action={status ? (
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] py-1 pl-1 pr-3 text-xs shadow-sm" title={status.detail}>
+            <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ast-accent)] text-[var(--ast-on-accent)]">
+              <Bot size={14} />
+              <span className={clsx('absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--paper)]', status.on ? 'ast-pulse bg-[var(--success)]' : 'bg-[var(--ink-muted)]')} />
+            </span>
+            <span className="font-semibold text-[var(--ink-primary)]">{status.title}</span>
+            <span className="hidden text-[var(--ink-tertiary)] xl:inline">· {status.detail}</span>
+          </span>
+        ) : undefined}
+      />
 
       <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
         <div className="inline-flex gap-1 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] p-1.5 shadow-[var(--ast-card-shadow)]" role="tablist" aria-label="Secciones del asistente">

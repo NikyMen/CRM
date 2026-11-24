@@ -1398,6 +1398,9 @@ model CollectionWhatsAppChat {
   lastMessageAt      DateTime?
   lastMessagePreview String?
   lastMessageFromMe  Boolean?
+  /// Línea comercial: el chat lo atiende una persona y el asistente de n8n no responde.
+  assistantPaused    Boolean   @default(false)
+  assistantPausedAt  DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

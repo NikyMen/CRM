@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, FolderOpen, LoaderCircle, RefreshCw } from 'luc
 import clsx from 'clsx'
 import type { AccountSummary, Client } from '@/types'
 import { formatMoney, fullName } from '@/lib/format'
+import { TopbarContent } from '@/components/romez/Topbar'
 
 export function PageHeader({
   eyebrow,
@@ -18,24 +19,22 @@ export function PageHeader({
   action?: ReactNode
   backHref?: string
 }) {
+  // El título va en la barra superior (como Tickets) para dejarle todo el alto al contenido; la
+  // descripción queda como ayuda al pasar el mouse. En pantallas chicas las acciones no entran en
+  // la barra y se muestran arriba del contenido.
   return (
-    <header className="ast-rise relative overflow-hidden rounded-[2rem] border border-[var(--line-soft)] px-6 py-7 shadow-[var(--ast-card-shadow)] sm:px-9 sm:py-8" style={{ background: 'var(--ast-hero)' }}>
-      <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-[var(--line-soft)]" />
-      <div aria-hidden className="pointer-events-none absolute -right-6 -top-10 h-44 w-44 rounded-full border border-[var(--line-soft)]" />
-      <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="min-w-0 max-w-3xl">
-          {backHref ? (
-            <Link href={backHref} className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ink-secondary)] shadow-sm hover:text-[var(--ast-accent)]">
-              <ArrowLeft size={13} /> Volver
-            </Link>
-          ) : null}
-          {eyebrow ? <p className={clsx('inline-flex items-center rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ast-accent)] shadow-sm', backHref && 'ml-2')}>{eyebrow}</p> : null}
-          <h1 className={clsx('page-title', eyebrow || backHref ? 'mt-4' : '')}>{title}</h1>
-          {description ? <p className="page-subtitle max-w-2xl">{description}</p> : null}
+    <>
+      <TopbarContent>
+        {backHref ? <Link href={backHref} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--ink-secondary)] hover:bg-[var(--paper-soft)] hover:text-[var(--ast-accent)]" aria-label="Volver" title="Volver"><ArrowLeft size={18} /></Link> : null}
+        <div className="min-w-0 flex-1" title={description}>
+          {eyebrow ? <p className="hidden truncate text-xs font-medium text-[var(--ink-tertiary)] sm:block">{eyebrow}</p> : null}
+          <h1 className="truncate font-display text-base font-bold leading-tight text-[var(--ink-primary)]">{title}</h1>
+          {description ? <p className="sr-only">{description}</p> : null}
         </div>
-        {action ? <div className="relative flex shrink-0 flex-wrap gap-2">{action}</div> : null}
-      </div>
-    </header>
+        {action ? <div className="hidden shrink-0 items-center gap-2 lg:flex">{action}</div> : null}
+      </TopbarContent>
+      {action ? <div className="flex flex-wrap gap-2 lg:hidden">{action}</div> : null}
+    </>
   )
 }
 

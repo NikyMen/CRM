@@ -136,6 +136,8 @@ export interface KanbanCard {
     lastMessagePreview?: string | null
     lastMessageFromMe?: boolean | null
     contactName?: string | null
+    /** Sólo chats comerciales: lo atiende una persona y el asistente no responde. */
+    assistantPaused?: boolean
     /** `commercial`: el lead vino del WhatsApp comercial; si no, del de Tickets. */
     source?: 'tickets' | 'commercial'
   }
@@ -765,9 +767,16 @@ export interface InternalChatConversation {
   unreadCount: number
 }
 
+/** Destinatario de una conversación interna y hasta cuándo leyó (para el visto). */
+export interface InternalChatReader extends AssigneeSummary {
+  email: string
+  lastReadAt?: string | null
+}
+
 export interface InternalChatMessagesPage {
   items: InternalChatMessage[]
   nextCursor?: string | null
+  readers?: InternalChatReader[]
 }
 
 export type ClientPersonType = 'INDIVIDUAL' | 'LEGAL_ENTITY'
@@ -1152,6 +1161,8 @@ export interface CollectionWhatsAppChat {
   lastMessageAt?: string | null
   lastMessagePreview?: string | null
   lastMessageFromMe?: boolean | null
+  /** Línea comercial: lo atiende una persona y el asistente de WhatsApp no responde. */
+  assistantPaused?: boolean
 }
 
 export interface CollectionWhatsAppMessage {

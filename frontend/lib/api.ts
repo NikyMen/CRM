@@ -502,6 +502,10 @@ function lineWhatsAppApi(prefix: string) {
     getMedia: (messageId: string) => api.get<Blob>(`${prefix}/messages/${encodeURIComponent(messageId)}/media`, { responseType: 'blob' }),
     /** Lead del tablero vinculado al chat (sólo la línea comercial). */
     getLead: (chatId: string) => api.get<{ lead: ChatLead | null }>(`${prefix}/chats/${chatId}/lead`),
+    /** «Atiende una persona» (paused) o «Atiende el asistente» (sólo la línea comercial). */
+    setAssistantPaused: (chatId: string, paused: boolean) => api.put<{ id: string; assistantPaused: boolean }>(`${prefix}/chats/${chatId}/assistant`, { paused }),
+    /** «Forzar IA»: el asistente contesta ya los mensajes sin respuesta (sólo la línea comercial). */
+    forceAssistant: (chatId: string) => api.post<{ forced: boolean; messages: number }>(`${prefix}/chats/${chatId}/assistant/force`),
   }
 }
 

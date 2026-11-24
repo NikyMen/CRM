@@ -81,6 +81,8 @@ return [{
     fileName,
     location,
     tsMs: Number(raw.messageTimestamp) ? Number(raw.messageTimestamp) * 1000 : Date.now(),
+    // «Forzar IA» desde el chat comercial del CRM: responder ya, aunque el chat esté pausado.
+    force: body.force === true && !fromMe,
     // Lo que pide POST /api/decrypt-media de wppia para bajar el audio.
     rawForMedia: { key: { id: key.id }, message: raw.message },
   },

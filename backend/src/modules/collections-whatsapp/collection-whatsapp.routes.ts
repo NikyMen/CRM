@@ -13,6 +13,7 @@ import { reactionSchema } from '../whatsapp/whatsapp.reactions'
 import { collectionWhatsAppManager, commercialWhatsAppManager, type CollectionWhatsAppManager } from './collection-whatsapp.manager'
 import { findCommercialLeadByChat } from '../deals/commercial-lead-stage'
 import { dealVisibilityWhere } from '../deals/deal-access'
+import { forceAssistantReply, setAssistantPaused } from './commercial-assistant'
 
 const sendSchema = z.object({
   text: z.string().trim().max(4096).optional(),
@@ -75,6 +76,20 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
             canMove: ctx.role !== 'viewer',
           },
         })
+      })
+
+      // «Atiende una persona» / «Atiende el asistente»: el asistente de n8n no responde mientras
+      // una persona tenga el chat.
+      app.put<{ Params: { id: string } }>('/chats/:id/assistant', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+        const ctx = req.user as WorkspaceContext
+        const { paused } = z.object({ paused: z.boolean() }).parse(req.body)
+        return reply.send(await setAssistantPaused(ctx.workspaceId, req.params.id, paused))
+      })
+
+      // «Forzar IA»: el asistente contesta ya lo que el cliente escribió sin respuesta.
+      app.post<{ Params: { id: string } }>('/chats/:id/assistant/force', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+        const ctx = req.user as WorkspaceContext
+        return reply.send(await forceAssistantReply(ctx.workspaceId, req.params.id))
       })
     }
 

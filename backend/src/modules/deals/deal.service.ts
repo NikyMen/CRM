@@ -124,6 +124,8 @@ export interface KanbanCard {
     lastMessagePreview: string | null
     lastMessageFromMe: boolean | null
     contactName: string | null
+    /** Sólo chats comerciales: una persona lo atiende y el asistente no responde. */
+    assistantPaused?: boolean
     /** `commercial`: chat del WhatsApp comercial; si no, el de Tickets. */
     source: 'tickets' | 'commercial'
   } | null
@@ -298,7 +300,7 @@ export class DealService {
     const commercialChatIds = [...new Set(deals.map((deal) => readCommercialChatId(deal.customData)).filter((id): id is string => Boolean(id)))]
     const commercialChats = new Map((commercialChatIds.length ? await db.collectionWhatsAppChat.findMany({
       where: { workspaceId, line: 'commercial', id: { in: commercialChatIds } },
-      select: { id: true, jid: true, displayName: true, phoneNumber: true, unreadCount: true, lastMessageAt: true, lastMessagePreview: true, lastMessageFromMe: true, company: { select: { name: true } } },
+      select: { id: true, jid: true, displayName: true, phoneNumber: true, unreadCount: true, lastMessageAt: true, lastMessagePreview: true, lastMessageFromMe: true, assistantPaused: true, company: { select: { name: true } } },
     }) : []).map((chat) => [chat.id, chat]))
 
     const now = new Date()
@@ -359,6 +361,7 @@ export class DealService {
             lastMessageAt: commercialChat.lastMessageAt,
             lastMessagePreview: commercialChat.lastMessagePreview,
             lastMessageFromMe: commercialChat.lastMessageFromMe,
+            assistantPaused: commercialChat.assistantPaused,
             contactName,
             source: 'commercial',
           } : chat ? {
@@ -382,7 +385,7 @@ export class DealService {
         } satisfies KanbanCard
       }))
 
-      const visibleCards: KanbanCard[] = cards.filter((card): card is KanbanCard => Boolean(card))
+      const visibleCards = cards.filter((card) => Boolean(card)) as KanbanCard[]
       const totalValue = visibleCards.reduce((sum, d) => sum + (d.value ?? 0), 0)
 
       return {

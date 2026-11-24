@@ -8,7 +8,7 @@ import { auth } from '@/lib/auth'
 import { teamApi } from '@/lib/api'
 import { fullName, getErrorMessage } from '@/lib/format'
 import { formatDay, isOverdue, PRIORITY_LABEL, STATUS_LABEL, tasksApi, todayInParaguay, toInput, type Task, type TaskFilters, type TaskInput, type TaskStatus } from '@/lib/tasks'
-import { ErrorState, LoadingState, PageFrame } from '@/components/romez/OperationalUI'
+import { ErrorState, LoadingState, PageFrame, PageHeader } from '@/components/romez/OperationalUI'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { EMPTY_TASK, TaskForm, type Member } from '@/components/romez/tasks/TaskForm'
 import { TaskHistory } from '@/components/romez/tasks/TaskHistory'
@@ -88,24 +88,15 @@ export default function TasksPage() {
 
   return (
     <PageFrame className="assistant-ui !space-y-7">
-      <header className="ast-rise relative overflow-hidden rounded-[2rem] border border-[var(--line-soft)] px-6 py-7 shadow-[var(--ast-card-shadow)] sm:px-9 sm:py-8" style={{ background: 'var(--ast-hero)' }}>
-        <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-[var(--line-soft)]" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-[var(--line-soft)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--ast-accent)] shadow-sm"><ClipboardList size={13} /> Equipo del estudio</p>
-            <h1 className="font-display mt-4 text-[clamp(1.75rem,3.4vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-[var(--ink-primary)]">Tareas</h1>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[var(--ink-secondary)]">
-              {isManager ? 'Creá tareas, asignalas a alguien del equipo y seguí cómo avanzan. Todo cambio queda en el historial.' : 'Las tareas que te asignaron. Cambiá el estado a medida que avanzás.'}
-            </p>
-          </div>
-          {isManager ? (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-secondary !rounded-full" onClick={() => setHistory({})}><History size={15} /> Historial</button>
-              <button type="button" className="btn-primary !rounded-full" onClick={() => { save.reset(); setEditing('new') }}><Plus size={15} /> Nueva tarea</button>
-            </div>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Equipo del estudio"
+        title="Tareas"
+        description={isManager ? 'Creá tareas, asignalas a alguien del equipo y seguí cómo avanzan. Todo cambio queda en el historial.' : 'Las tareas que te asignaron. Cambiá el estado a medida que avanzás.'}
+        action={isManager ? <>
+          <button type="button" className="btn-secondary !rounded-full" onClick={() => setHistory({})}><History size={15} /> Historial</button>
+          <button type="button" className="btn-primary !rounded-full" onClick={() => { save.reset(); setEditing('new') }}><Plus size={15} /> Nueva tarea</button>
+        </> : undefined}
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat icon={CircleDashed} label="Pendientes" value={counts.pending} />

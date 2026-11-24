@@ -70,6 +70,7 @@ const chatSelect = {
   lastMessageAt: true,
   lastMessagePreview: true,
   lastMessageFromMe: true,
+  assistantPaused: true,
   company: { select: { id: true, name: true, ruc: true, dv: true, isArchived: true } },
 } as const
 

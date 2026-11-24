@@ -57,7 +57,16 @@ export async function internalChatRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/conversations/:id/read', async (req, reply) => {
     const ctx = req.user as { workspaceId: string; userId: string }
     const { messageId } = z.object({ messageId: z.string().min(1).optional() }).parse(req.body ?? {})
-    await service.markRead(ctx, req.params.id, messageId)
+    const { advanced, audienceUserIds } = await service.markRead(ctx, req.params.id, messageId)
+    // Avisa a los demás para que vean el visto al momento.
+    if (advanced) {
+      internalChatRealtime.publish(ctx.workspaceId, {
+        type: 'internal-chat.read',
+        conversationId: req.params.id,
+        senderId: ctx.userId,
+        audienceUserIds,
+      })
+    }
     return reply.status(204).send()
   })
 

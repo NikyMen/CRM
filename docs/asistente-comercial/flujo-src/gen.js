@@ -252,10 +252,13 @@ const leerEtapa = add({
   credentials: { httpHeaderAuth: { name: 'ROMEZ CRM X-API-Key' } }, onError: 'continueRegularOutput', alwaysOutputData: true,
   notes: 'GET /inbound/commercial-leads/stage. Si falla, el asistente sigue sin ese dato.', notesInFlow: true,
 })
+// «Atiende una persona» en el chat del CRM: el asistente no responde (la misma consulta lo informa).
+const ifPersona = ifNode('¿Atiende una persona (CRM)?', '={{ $json.assistantPaused === true }}', [4800, 560])
 link(ficha.name, ifEtapa.name)
 link(ifEtapa.name, leerEtapa.name, 0)
 link(ifEtapa.name, ctx.name, 1)
-link(leerEtapa.name, ctx.name)
+link(leerEtapa.name, ifPersona.name)
+link(ifPersona.name, ctx.name, 1)
 link(ctx.name, agent.name)
 link(llm.name, agent.name, 0, 'ai_languageModel')
 link(mem.name, agent.name, 0, 'ai_memory')
@@ -343,7 +346,22 @@ const enviarSeg = add({
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [1800, 760], name: 'Enviar seguimiento (wppia)',
   credentials: wppiaCred, onError: 'continueRegularOutput',
 })
-link(ifScan.name, leerTodos.name, 0)
+// Chats que en el CRM atiende una persona: no reciben seguimientos.
+const ifPausas = ifNode('¿Leer chats con persona del CRM?', "={{ $('Config').first().json.crmEtapasActivo === true }}", [960, 960])
+const crmPausas = add({
+  parameters: {
+    method: 'GET', url: "={{ $('Config').first().json.crmUrl }}/inbound/commercial-chats/assistant-paused",
+    authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+    options: { timeout: 5000 },
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [1080, 1080], name: 'CRM: chats que atiende una persona',
+  credentials: { httpHeaderAuth: { name: 'ROMEZ CRM X-API-Key' } }, onError: 'continueRegularOutput', alwaysOutputData: true,
+  notes: 'GET /inbound/commercial-chats/assistant-paused. Si falla, los seguimientos siguen sin ese dato.', notesInFlow: true,
+})
+link(ifScan.name, ifPausas.name, 0)
+link(ifPausas.name, crmPausas.name, 0)
+link(ifPausas.name, leerTodos.name, 1)
+link(crmPausas.name, leerTodos.name)
 link(leerTodos.name, segui.name)
 link(segui.name, guardarSeg.name)
 link(guardarSeg.name, enviarSeg.name)
@@ -357,7 +375,7 @@ sticky(
   '4) en wppia, apuntar el webhook de la sesión a `/webhook/romez-comercial` y activar `includeFromMe` (mensajes propios) para que funcione la pausa por toma humana.',
   [-40, -260], 760, 220, 4)
 sticky('### 1 · Entrada\nwppia envía cada mensaje. Se valida el secreto, se descartan grupos, difusiones, números internos y todo lo que no esté en `soloPrueba`.', [260, 330], 560, 100, 7)
-sticky('### 2 · Toma humana\nSi una persona escribe desde el teléfono, el bot se calla `pausaHoras`. El eco de los envíos del bot (90 s) se ignora.', [1040, 700], 560, 90, 3)
+sticky('### 2 · Toma humana\nSi una persona escribe desde el teléfono, el bot se calla `pausaHoras`. El eco de los envíos del bot (90 s) se ignora. Con «Atiende una persona» en el chat del CRM no responde hasta que lo devuelvan; «Forzar IA» (mensaje con `force: true` por este mismo webhook) le saca la pausa y contesta lo pendiente.', [1040, 700], 560, 90, 3)
 sticky('### 3 · Audios\nwppia descifra → se baja el archivo → Whisper transcribe. Más de `maxAudioSegundos`: se pide resumen por escrito.', [2000, -40], 940, 90, 6)
 sticky('### 4 · Anti-ráfaga\nEspera `esperaSegundos` y responde solo al último mensaje, con todo el texto junto. Evita 3 respuestas a 3 mensajes seguidos.', [3200, 80], 760, 90, 5)
 sticky('### 5 · IA con bloques\nEl modelo NO escribe precios: elige bloques de la **Ficha de servicios** (la primera vez van los PDF). Cualquier cifra suelta se descarta, el rubro se pregunta una sola vez y van como máximo 3 mensajes propios por turno.', [4400, 80], 840, 90, 2)

@@ -3,7 +3,7 @@
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, Check, CheckCheck, FolderOpen, Loader2, MessageCircle, Search, Settings, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bot, CalendarClock, Check, CheckCheck, FolderOpen, Loader2, MessageCircle, Search, Settings, Sparkles, ThumbsDown, ThumbsUp, Trash2, UserRound, X } from 'lucide-react'
 import clsx from 'clsx'
 import { collectionsWhatsAppApi, commercialWhatsAppApi, dealsApi, type LineWhatsAppApi } from '@/lib/api'
 import { fullName, getErrorMessage } from '@/lib/format'
@@ -178,7 +178,10 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
                         </span>
                         {chat.unreadCount ? <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] px-1.5 text-[10px] font-bold text-white">{chat.unreadCount}</span> : null}
                       </span>
-                      {chat.company ? <span className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><FolderOpen size={10} className="shrink-0" /> <span className="truncate">{chat.displayName && chat.displayName !== chat.company.name ? chat.displayName : 'Cliente con legajo'}</span></span> : null}
+                      {chat.company || chat.assistantPaused ? <span className="mt-1 flex flex-wrap items-center gap-1">
+                        {chat.company ? <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><FolderOpen size={10} className="shrink-0" /> <span className="truncate">{chat.displayName && chat.displayName !== chat.company.name ? chat.displayName : 'Cliente con legajo'}</span></span> : null}
+                        {chat.assistantPaused ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lo atiende una persona: el asistente no contesta"><UserRound size={10} /> Persona</span> : null}
+                      </span> : null}
                     </span>
                   </button>
                   {canManage ? <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-[var(--danger)] opacity-0 hover:bg-[var(--danger-paper)] focus-visible:opacity-100 disabled:opacity-40 group-hover:opacity-100" disabled={removeChat.isPending && removeChat.variables === chat.id} onClick={() => askRemove(chat)} aria-label={`Eliminar chat con ${chatTitle(chat)}`} title="Eliminar chat"><Trash2 size={15} /></button> : null}
@@ -251,6 +254,45 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
   }
   const title = chat ? chatTitle(chat) : 'Chat'
 
+  // Asistente de WhatsApp (sólo la línea comercial): «Atiende una persona» lo calla en este chat y
+  // «Forzar IA» le hace contestar ya lo que quedó sin respuesta.
+  const commercial = line.key === COMMERCIAL_WHATSAPP.key
+  const paused = Boolean(chat?.assistantPaused)
+  const [assistantNote, setAssistantNote] = useState<{ tone: 'info' | 'error'; text: string } | null>(null)
+  const [waitingAi, setWaitingAi] = useState<{ ids: Set<string>; until: number } | null>(null)
+  const [tick, setTick] = useState(0)
+  const togglePause = useMutation({
+    mutationFn: (next: boolean) => line.api.setAssistantPaused(chatId, next),
+    onSuccess: () => { setAssistantNote(null); onSent() },
+    onError: (error) => setAssistantNote({ tone: 'error', text: getErrorMessage(error, 'No se pudo cambiar quién atiende el chat.') }),
+  })
+  const force = useMutation({
+    mutationFn: () => line.api.forceAssistant(chatId),
+    onSuccess: (response) => {
+      const count = response.data.messages
+      setAssistantNote({ tone: 'info', text: `El asistente está contestando ${count === 1 ? 'el último mensaje' : `los últimos ${count} mensajes`}; en unos segundos aparece acá.` })
+      setWaitingAi({ ids: new Set(messages.map((message) => message.id)), until: Date.now() + 120_000 })
+      onSent()
+    },
+    onError: (error) => setAssistantNote({ tone: 'error', text: getErrorMessage(error, 'No se pudo forzar al asistente.') }),
+  })
+  const aiReplied = Boolean(waitingAi && messages.some((message) => message.fromMe && !waitingAi.ids.has(message.id)))
+  const { refetch: refetchMessages } = messagesQuery
+  // Mientras la IA contesta se relee el chat cada 3 s, hasta que aparece su respuesta o pasan 2 min.
+  useEffect(() => {
+    if (!waitingAi) return
+    if (aiReplied) { setWaitingAi(null); setAssistantNote(null); return }
+    const left = waitingAi.until - Date.now()
+    if (left <= 0) {
+      setWaitingAi(null)
+      setAssistantNote({ tone: 'error', text: 'La respuesta del asistente todavía no llegó. Puede tardar un poco más: revisá el chat en un rato.' })
+      return
+    }
+    const timer = window.setTimeout(() => { void refetchMessages(); setTick((value) => value + 1) }, Math.min(3_000, left))
+    return () => window.clearTimeout(timer)
+  }, [waitingAi, aiReplied, tick, refetchMessages])
+  const aiWorking = force.isPending || Boolean(waitingAi)
+
   return <>
     <header className="flex items-center gap-3 border-b border-[var(--line-soft)] bg-[var(--paper)] px-3 py-2.5 sm:px-4">
       <button type="button" onClick={back} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--ink-secondary)] hover:bg-[var(--paper-soft)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={18} /></button>
@@ -263,10 +305,38 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
         <p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p>
       </div>
       {line.promises && canWrite && chat ? <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
+      {commercial && chat ? <>
+        <button
+          type="button"
+          onClick={() => togglePause.mutate(!paused)}
+          disabled={!canWrite || togglePause.isPending}
+          aria-pressed={paused}
+          title={!canWrite ? 'Tu rol no puede cambiar quién atiende el chat' : paused ? 'Devolver el chat al asistente: vuelve a contestar los mensajes que lleguen' : 'Pasar el chat a una persona: el asistente deja de contestar y no manda seguimientos'}
+          className={clsx('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition hover:brightness-95 disabled:cursor-default disabled:opacity-60', paused ? 'bg-[var(--warning-paper)] text-[var(--warning)]' : 'bg-[var(--success-paper)] text-[var(--success)]')}
+        >
+          {togglePause.isPending ? <Loader2 size={14} className="animate-spin" /> : paused ? <UserRound size={14} /> : <Bot size={14} />}
+          <span className="hidden lg:inline">{paused ? 'Atiende una persona' : 'Atiende el asistente'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => force.mutate()}
+          disabled={!canWrite || aiWorking}
+          title={canWrite ? 'El asistente contesta ya los mensajes sin responder (todos juntos) y queda activo en este chat' : 'Tu rol no puede forzar al asistente'}
+          className={clsx('relative inline-flex h-9 shrink-0 items-center gap-1.5 overflow-hidden rounded-full px-3 text-xs font-semibold transition hover:brightness-95 disabled:cursor-default', aiWorking ? 'bg-[var(--wa-ai)] text-white' : 'bg-[var(--wa-ai-soft)] text-[var(--wa-ai)]', !canWrite && 'opacity-60')}
+        >
+          {aiWorking ? <span aria-hidden className="absolute inset-0 animate-pulse bg-white/15" /> : null}
+          {aiWorking ? <Loader2 size={14} className="relative animate-spin" /> : <Sparkles size={14} />}
+          <span className="relative hidden lg:inline">{aiWorking ? 'La IA está respondiendo…' : 'Forzar IA'}</span>
+        </button>
+      </> : null}
       {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary !min-h-9 hidden !px-3 sm:inline-flex"><FolderOpen size={15} /> Ver legajo</Link> : null}
       {onDelete ? <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--danger)] hover:bg-[var(--danger-paper)] disabled:opacity-40" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={16} /></button> : null}
     </header>
-    {line.key === COMMERCIAL_WHATSAPP.key ? <LeadStageBar line={line} chatId={chatId} /> : null}
+    {commercial ? <LeadStageBar line={line} chatId={chatId} /> : null}
+    {assistantNote ? <p role={assistantNote.tone === 'error' ? 'alert' : 'status'} className={clsx('flex items-center gap-2 px-4 py-2 text-xs font-semibold', assistantNote.tone === 'error' ? 'bg-[var(--danger-paper)] text-[var(--danger)]' : 'bg-[var(--wa-ai-soft)] text-[var(--wa-ai)]')}>
+      <span className="min-w-0 flex-1">{assistantNote.text}</span>
+      <button type="button" onClick={() => setAssistantNote(null)} className="shrink-0 rounded-full p-0.5 hover:bg-black/5" aria-label="Cerrar aviso"><X size={13} /></button>
+    </p> : null}
     <div ref={threadRef} className="wa-thread min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-8">
       <div ref={contentRef}>
       {messagesQuery.isLoading ? <p className="flex items-center justify-center gap-2 py-10 text-xs text-[var(--ink-tertiary)]"><Loader2 size={14} className="animate-spin" /> Cargando mensajes…</p> : messagesQuery.isError ? <p className="py-10 text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(messagesQuery.error)}</p> : messages.length ? messages.map((message, index) => {
@@ -278,9 +348,20 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
           <Bubble line={line} message={message} tail={!sameSender} onReact={canReply ? (emoji) => react(message.id, emoji) : undefined} />
         </Fragment>
       }) : <div className="mx-auto mt-10 max-w-sm rounded-2xl bg-[var(--wa-day)] px-5 py-4 text-center shadow-sm"><p className="text-sm font-semibold text-[var(--ink-primary)]">Conversación nueva</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">Todavía no hay mensajes con este contacto en el {line.title}.</p></div>}
+      {waitingAi ? <div className="mt-2.5 flex justify-end" aria-live="polite">
+        <div className="flex items-center gap-2 rounded-xl rounded-tr-sm bg-[var(--wa-out)] px-3 py-2 text-xs font-semibold text-[var(--wa-ai)] shadow-sm">
+          <Bot size={13} /> Asistente escribiendo
+          <span className="flex gap-0.5" aria-hidden>
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--wa-ai)] [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--wa-ai)] [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--wa-ai)]" />
+          </span>
+        </div>
+      </div> : null}
       <div ref={bottomRef} />
       </div>
     </div>
+    {commercial && canReply && !paused ? <p className="border-t border-[var(--line-soft)] bg-[var(--paper)] px-4 pt-2 text-[11px] text-[var(--ink-tertiary)]">El asistente sigue contestando a este cliente. Si lo vas a atender vos, pasalo a una persona.</p> : null}
     <TicketComposer
       variant="whatsapp"
       canReply={canReply}

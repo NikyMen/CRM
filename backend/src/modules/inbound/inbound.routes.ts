@@ -13,6 +13,7 @@ import {
   lastStageChange,
   resolveBotStageMove,
 } from '../deals/commercial-lead-stage'
+import { isAssistantPausedForPhone, pausedCommercialPhones } from '../collections-whatsapp/commercial-assistant'
 import {
   assertInboundChannelAllowed,
   createValidatedInboundActivity,
@@ -48,11 +49,16 @@ export async function inboundRoutes(
   app.get('/commercial-leads/stage', async (req, reply) => {
     const { workspaceId } = await requireApiKey(req)
     const { phone } = z.object({ phone: z.string().trim().min(6).max(40) }).parse(req.query)
-    const lead = await findCommercialLeadByPhone(workspaceId, phone)
-    if (!lead || !lead.stage) return reply.send({ found: false })
+    // `assistantPaused`: una persona tomó el chat desde el CRM y el asistente no debe responder.
+    const [lead, assistantPaused] = await Promise.all([
+      findCommercialLeadByPhone(workspaceId, phone),
+      isAssistantPausedForPhone(workspaceId, phone),
+    ])
+    if (!lead || !lead.stage) return reply.send({ found: false, assistantPaused })
     const change = await lastStageChange(workspaceId, lead.id)
     return reply.send({
       found: true,
+      assistantPaused,
       dealId: lead.id,
       leadNumber: lead.leadNumber,
       stage: lead.stage.name,
@@ -62,6 +68,15 @@ export async function inboundRoutes(
       changedByPerson: change?.byPerson ?? false,
       changedBy: change?.by ?? null,
     })
+  })
+
+  // ─── GET /inbound/commercial-chats/assistant-paused ─────────────
+  // Teléfonos de los chats comerciales que atiende una persona: el asistente no les manda
+  // seguimientos.
+  app.get('/commercial-chats/assistant-paused', async (req, reply) => {
+    const { workspaceId } = await requireApiKey(req)
+    reply.header('cache-control', 'no-store')
+    return reply.send({ phones: await pausedCommercialPhones(workspaceId) })
   })
 
   // ─── POST /inbound/commercial-leads/stage ───────────────────────

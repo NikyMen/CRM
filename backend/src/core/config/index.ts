@@ -33,6 +33,9 @@ const envSchema = z.object({
   UPLOAD_MAX_BYTES: z.coerce.number().int().min(1_048_576).max(25_000_000).default(10_485_760),
   CLIENT_DOCUMENTS_DIR: optionalString(z.string().min(1)),
   N8N_RESET_WEBHOOK_URL: optionalString(z.string().url()),
+  // Webhook del asistente comercial en n8n (el mismo que usa wppia) y su secreto: «Forzar IA».
+  ASSISTANT_WEBHOOK_URL: optionalString(z.string().url()),
+  ASSISTANT_WEBHOOK_SECRET: optionalString(z.string().min(8)),
   META_WEBHOOK_VERIFY_TOKEN: z.string().min(1).optional(),
   META_APP_ID: z.string().min(1).optional(),
   META_APP_SECRET: z.string().min(1).optional(),

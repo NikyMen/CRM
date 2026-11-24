@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 
 export type InternalChatRealtimeEvent = {
   id: string
-  type: 'internal-chat.updated'
+  type: 'internal-chat.updated' | 'internal-chat.read'
   at: string
   conversationId: string
   senderId?: string
