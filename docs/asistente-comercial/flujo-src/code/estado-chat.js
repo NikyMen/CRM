@@ -19,7 +19,12 @@ e.hist = (e.hist ?? []).filter((t) => now - t < 3600e3);
 
 let responder = true;
 let motivo = null;
-const trivial = /^(ok|oka|okey|okis|dale|listo|gracias|muchas gracias|jaja|ja|👍|🙏|\.)+[\s!.]*$/i;
+// Cortesías que cierran la charla ("gracias", "igualmente 🙏"): no se contestan para no sumar otro
+// "quedamos a disposición". Un "ok / dale / perfecto" solo se ignora si el bot no había hecho una
+// pregunta: si la hizo, es una respuesta ("¿Quiere avanzar?" → "Dale") y hay que atenderla.
+const agradece = /^(?:\s*(?:muchas gracias|muchaa? gracias|mil gracias|gracias a (?:usted|vos|ustedes)|gracias|igualmente|jaja|ja|👍|🙏|🙌|😊|🫡|\.)\s*[,!.]*\s*)+$/i;
+const asiente = /^(?:\s*(?:muchas gracias|gracias|igualmente|okey|okis|oka|ok|dale|listo|bueno|perfecto|excelente|genial|entendido|entiendo|👍|🙏|🙌|\.)\s*[,!.]*\s*)+$/i;
+const trivial = { test: (t) => agradece.test(t) || (!e.ultimaPregunta && asiente.test(t)) };
 
 if (duplicado) { responder = false; motivo = 'duplicado'; }
 else if (cfg.botActivo === false) { responder = false; motivo = 'bot_apagado'; }
@@ -30,6 +35,9 @@ else if (e.hist.length >= (Number(cfg.maxRespuestasPorHora) > 0 ? Number(cfg.max
 }
 else if (msg.kind === 'text' && trivial.test(msg.text) && (e.botReplies || 0) > 0) {
   responder = false; motivo = 'mensaje_de_cortesia';
+}
+else if (msg.kind === 'sticker' && (e.botReplies || 0) > 0) {
+  responder = false; motivo = 'sticker';
 }
 
 return [{ json: { ...msg, e, estado: JSON.stringify(e), responder, motivo } }];

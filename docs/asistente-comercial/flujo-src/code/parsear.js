@@ -10,6 +10,7 @@ const now = Date.now();
 const STAGES = ['NUEVO', 'CALIFICANDO', 'COSTOS_ENVIADOS', 'DOCUMENTACION', 'LISTO_PARA_INICIAR', 'DERIVADO', 'DESCARTADO'];
 const clean = (v) => String(v ?? '').replace(/\r/g, '').trim();
 const SIN_IA = ficha.mensajeFallback || 'Disculpe, en este momento no puedo darle la información. Le paso con el Lic. José Rojas, que le responde a la brevedad 🙏';
+const textoCliente = clean(last.text);
 
 // 1) Parseo tolerante (el modelo puede envolver el JSON en ```).
 const rawOut = clean(ai.output ?? ai.text ?? '');
@@ -25,10 +26,9 @@ if (fallback) p = { needs_human: true, human_reason: 'FALLA_IA', reply_parts: [S
 // 2) Red de seguridad: un precio escrito "a mano" por el modelo se descarta (solo valen los bloques).
 const tienePrecio = (t) => /\bGs\.?\s*\d|\d{1,3}(?:\.\d{3})+/.test(t);
 const descartados = [];
-const parts = (Array.isArray(p.reply_parts) ? p.reply_parts : [])
+let parts = (Array.isArray(p.reply_parts) ? p.reply_parts : [])
   .map(clean).filter(Boolean)
-  .filter((t) => { if (tienePrecio(t)) { descartados.push(t); return false; } return true; })
-  .slice(0, 2);
+  .filter((t) => { if (tienePrecio(t)) { descartados.push(t); return false; } return true; });
 let closing = clean(p.closing);
 if (tienePrecio(closing)) { descartados.push(closing); closing = ''; }
 
@@ -36,62 +36,127 @@ if (tienePrecio(closing)) { descartados.push(closing); closing = ''; }
 const bloquesPrevios = e.bloques ?? {};
 const bloques = [...new Set(Array.isArray(p.blocks) ? p.blocks : [])]
   .filter((k) => ficha.bloques[k] && !(bloquesPrevios[k] && now - bloquesPrevios[k] < 6 * 3600e3))
-  .slice(0, 5);
+  .slice(0, 3);
 
 let needsHuman = p.needs_human === true;
 let reason = clean(p.human_reason) || null;
+
+// 4) Claves por WhatsApp: el cliente nunca debe mandarlas y no se reenvían en el aviso.
+// Una clave escrita ("clave: abc123", "contraseña Pepe2024") o el par usuario/clave típico ("3955602 / Accidente11").
+// Preguntar por una clave ("¿necesito clave de Marangatu?") no dispara el aviso.
+const PATRON_CLAVE = /\b(clave|contrase(?:ñ|n)a|password)\b\s*(?:es|de acceso)?\s*[:=]?\s*(?=\S*\d)(?=\S*[a-zA-Z])\S{5,}|\b\d{6,8}\s*[\/|]\s*(?=\S*[a-zA-Z])(?=\S*\d)\S{6,}/i;
+const envioClaves = PATRON_CLAVE.test(textoCliente);
+const AVISO_CLAVES = 'Por su seguridad, le pedimos que no envíe claves ni contraseñas por WhatsApp. El Lic. José Rojas le indicará cómo hacerlo de forma segura 🔒';
+if (envioClaves) { needsHuman = true; reason = reason || 'ENVIO_CLAVES'; }
+
 // Si descartamos un precio y no queda nada útil, mejor una persona.
 if (!parts.length && !bloques.length && !closing) {
   needsHuman = true; reason = reason || 'SIN_RESPUESTA_UTIL';
   parts.push(descartados.length ? 'Permítame un momento, le paso con el Lic. José Rojas para confirmarle ese dato 🙏' : SIN_IA);
 }
 
-// Una sola pregunta por turno. El modelo a veces pregunta en reply_parts y repite la misma
-// pregunta en closing (caso Eduardo de Sotto: "¿a qué rubro…?" + "¿Cuál es el rubro…?").
-// Si ya hay una pregunta en los mensajes, o si se deriva a una persona, el cierre-pregunta sobra.
-const esPregunta = (t) => /\?\s*$/.test(clean(t)) || /¿[^?]*\?/.test(clean(t));
-if (closing && esPregunta(closing) && (parts.some(esPregunta) || needsHuman)) closing = '';
+// 5) Sin presentación repetida: después de la primera respuesta el bot no vuelve a decir quién es.
+const PRESENTACION = /^(?:(?:hola|buen(?:os|as)\s*(?:d[ií]as|tardes|noches)?)[,!. ]*)?soy (?:el )?asistente virtual de (?:la )?consultora romez[.,!]?\s*/i;
+if ((e.botReplies || 0) > 0) parts = parts.map((t) => t.replace(PRESENTACION, '').trim()).filter(Boolean);
 
-// Red final: nunca dos mensajes iguales (ignorando mayúsculas, tildes, signos y espacios).
+// 6) El rubro se pregunta UNA sola vez y nunca si ya se sabe, si ya tiene EAS o si se deriva.
+const PREGUNTA_RUBRO = /rubro|a qu[eé] se dedica|actividad (principal|econ[oó]mica)?|qu[eé] actividad/i;
+const esPregunta = (t) => /\?\s*$/.test(clean(t)) || /¿[^?]*\?/.test(clean(t));
+const lead = { ...(e.lead ?? {}) };
+for (const [k, v] of Object.entries(p.lead ?? {})) {
+  if (v !== null && v !== undefined && clean(v) !== '') lead[k] = v;
+}
+const rubroBloqueado = Boolean(e.rubroPreguntado || lead.rubro || lead.tiene_eas === true || needsHuman);
+const preguntaRubro = (t) => esPregunta(t) && PREGUNTA_RUBRO.test(t);
+if (rubroBloqueado) {
+  parts = parts.filter((t) => !preguntaRubro(t));
+  if (preguntaRubro(closing)) closing = '';
+}
+
+// 7) Presentación y brochure en PDF: la primera vez que toca información de la EAS, en lugar de
+// los textos largos se envía un mensaje de presentación y los dos PDF (en ese orden).
+const EAS_INFO = ['EAS_COSTO', 'EAS_CONTABLE', 'EAS_LIBROS', 'EAS_REQUISITOS'];
+const brochures = Array.isArray(ficha.brochures) ? ficha.brochures.filter((b) => b && b.url) : [];
+const usarBrochure = brochures.length > 0 && !e.brochureAt && !needsHuman && bloques.some((k) => EAS_INFO.includes(k));
+const bloquesTexto = usarBrochure ? bloques.filter((k) => !EAS_INFO.includes(k)) : bloques;
+const INTRO_BROCHURE = 'Le comparto nuestra presentación institucional y el detalle de nuestros servicios para EAS, con la inversión, qué incluye, el plazo y los requisitos 📎';
+const PREGUNTA_RUBRO_BROCHURE = '¿A qué se dedicaría la empresa? Así le confirmo que la EAS le conviene 🙌';
+const CIERRE_BROCHURE = '¿Tiene alguna consulta o le gustaría avanzar con la constitución de su EAS?';
+
+// Lo que anuncia un envío ("le envío…", "le comparto…") sobra cuando el sistema ya manda bloques o PDF.
+const ANUNCIO = /\b(le|les) (env[ií]o|comparto|paso|dejo|mando|adjunto)\b|\ba continuaci[oó]n\b/i;
+const hayEnvio = bloquesTexto.length > 0 || usarBrochure;
+if (hayEnvio) parts = parts.filter((t) => !ANUNCIO.test(t));
+// reply_parts nunca termina en pregunta: la única pregunta del turno va en el cierre.
+const preguntaEnParts = parts.find(esPregunta);
+parts = parts.filter((t) => !esPregunta(t));
+if (!closing && preguntaEnParts && !needsHuman) closing = preguntaEnParts;
+// Como máximo 1 mensaje propio si se envían bloques o PDF, 2 si no.
+parts = parts.slice(0, hayEnvio ? 1 : 2);
+
+let closingFinal = closing;
+if (usarBrochure) {
+  closingFinal = !rubroBloqueado ? PREGUNTA_RUBRO_BROCHURE : CIERRE_BROCHURE;
+}
+if (needsHuman && closingFinal && esPregunta(closingFinal)) closingFinal = '';
+const preguntoRubroAhora = !rubroBloqueado && preguntaRubro(closingFinal);
+
+const to = '+' + ctx.phone;
+// Red final: nunca dos mensajes de texto iguales (ignorando mayúsculas, signos y espacios).
 const firma = (t) => clean(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const vistos = new Set();
-const textos = [...parts, ...bloques.map((k) => ficha.bloques[k]), ...(closing ? [closing] : [])]
-  .filter((t) => { const f = firma(t); if (vistos.has(f)) return false; vistos.add(f); return true; });
-const to = '+' + ctx.phone;
-const mensajes = textos.map((text) => ({ to, text }));
+const mensajes = [
+  ...(envioClaves ? [{ to, text: AVISO_CLAVES }] : []),
+  ...parts.map((text) => ({ to, text })),
+  ...(usarBrochure
+    ? [{ to, text: INTRO_BROCHURE }, ...brochures.map((b) => ({ to, documentUrl: b.url, fileName: b.fileName }))]
+    : []),
+  ...bloquesTexto.map((k) => ({ to, text: ficha.bloques[k] })),
+  ...(closingFinal ? [{ to, text: closingFinal }] : []),
+].filter((m) => { if (!m.text) return true; const f = firma(m.text); if (vistos.has(f)) return false; vistos.add(f); return true; });
 
-// 4) Ficha del chat.
-for (const [k, v] of Object.entries(p.lead ?? {})) {
-  if (v !== null && v !== undefined && clean(v) !== '') e.lead = { ...(e.lead ?? {}), [k]: v };
-}
+// 8) Ficha del chat.
+e.lead = lead;
 if (!e.name && e.lead?.nombre) e.name = e.lead.nombre;
 e.intent = clean(p.intent) || e.intent || null;
 e.stage = needsHuman ? 'DERIVADO' : (STAGES.includes(p.stage) ? p.stage : (e.stage || 'CALIFICANDO'));
-if (bloques.includes('EAS_COSTO')) e.priced = true;
+if (bloques.includes('EAS_COSTO') || usarBrochure) e.priced = true;
+if (usarBrochure) e.brochureAt = now;
+if (preguntoRubroAhora) e.rubroPreguntado = now;
+// Si el bot cerró con una pregunta, un "ok / dale" siguiente es una respuesta (ver «Estado del chat»).
+e.ultimaPregunta = Boolean(closingFinal && esPregunta(closingFinal));
 e.bloques = { ...bloquesPrevios };
 for (const k of bloques) e.bloques[k] = now;
 e.hist = [...(e.hist ?? []), now];
 e.botReplies = (e.botReplies || 0) + 1;
 e.lastBotAt = now;
 e.lastOutAt = now;
-e.followUpSent = false;
+
+// Seguimiento: el cliente que dice "por ahora no" no recibe más recordatorios; el que dice
+// "lo analizo / les aviso" recibe como mucho uno, a partir de los 5 días.
+const NO_INTERESA = /\b(no me interesa|por ahora no|no gracias|no estoy interesad|prefiero (otra|otro)|vi opciones m[aá]s econ[oó]micas|es (muy )?caro|precio (ya )?(es )?elevado|ya tengo (contador|con otro)|ya estoy tramitando)\b/i;
+const MAS_ADELANTE = /\b(lo analizo|lo voy a analizar|analizando|lo pienso|lo voy a pensar|les? aviso|te aviso|le confirmo|le contacto|les contacto|me comunico|lo hablo|lo consulto|m[aá]s adelante|la semana (que viene|entrante|pr[oó]xima)|el (a[nñ]o|mes) que viene|mañana (le|te) paso|cuando pueda)\b/i;
+if (NO_INTERESA.test(textoCliente) || e.stage === 'DESCARTADO') e.noSeguir = true;
+else if (MAS_ADELANTE.test(textoCliente)) e.seguirDesde = now + 5 * 86400e3;
+
 if (needsHuman) {
   const horas = Number(cfg.pausaHoras) > 0 ? Number(cfg.pausaHoras) : 8;
   e.pausedUntil = now + horas * 3600e3;
   e.derivadoMotivo = reason;
 }
 
-// 5) Aviso interno y sincronización opcional con el CRM.
-const lead = e.lead ?? {};
+// 9) Aviso interno y sincronización opcional con el CRM.
+const MOTIVOS = { OBJECION_PRECIO: 'Objeción de precio (conviene llamarlo)', ENVIO_CLAVES: 'Mandó claves por WhatsApp (no reenviarlas)' };
+const ultimoParaAviso = envioClaves ? '[contenido oculto: el cliente envió claves]' : textoCliente.slice(0, 300);
 const aviso = needsHuman
   ? [
       '🔔 Lead para atender',
-      `Nombre: ${lead.nombre || e.name || ctx.name || 'sin dato'}`,
+      `Nombre: ${lead.nombre || 'sin dato'}${e.name && e.name !== lead.nombre ? ` (perfil: ${e.name})` : ''}`,
       `Teléfono: +${ctx.phone}`,
-      `Interés: ${lead.tipo || e.intent || 'sin dato'}${lead.rubro ? ' · rubro: ' + lead.rubro : ''}`,
-      `Motivo: ${reason || 'sin dato'}`,
-      `Etapa: ${e.stage}`,
-      `Último mensaje: "${clean(last.text).slice(0, 300)}"`,
+      `Interés: ${lead.tipo || e.intent || 'sin dato'}${lead.rubro ? ' · rubro: ' + lead.rubro : ''}${lead.tiene_eas ? ' · ya tiene EAS' : ''}`,
+      `Motivo: ${MOTIVOS[reason] || reason || 'sin dato'}`,
+      `Etapa: ${e.stage}${e.brochureAt ? ' · ya recibió los PDF' : ''}`,
+      `Último mensaje: "${ultimoParaAviso}"`,
       ctx.enHorario ? '' : '(Entró fuera de horario de atención)',
     ].filter(Boolean).join('\n')
   : '';
@@ -127,6 +192,6 @@ return [{
     avisoTo: avisoTo(cfg.notificarA),
     crmSync,
     crm,
-    meta: { fallback, descartados, bloques, stage: e.stage },
+    meta: { fallback, descartados, bloques, stage: e.stage, brochure: usarBrochure, envioClaves },
   },
 }];

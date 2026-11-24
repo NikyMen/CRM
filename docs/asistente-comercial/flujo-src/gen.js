@@ -272,7 +272,8 @@ const enviar = add({
   parameters: {
     method: 'POST', url: "={{ $('Config').first().json.wppiaUrl }}/api/send-message",
     ...BEARER, sendBody: true, specifyBody: 'json',
-    jsonBody: '={{ ({ to: $json.to, text: $json.text }) }}',
+    // Texto o documento (los PDF de presentación y servicios van como documentUrl).
+    jsonBody: '={{ ({ to: $json.to, ...($json.text ? { text: $json.text } : {}), ...($json.documentUrl ? { documentUrl: $json.documentUrl, fileName: $json.fileName, mimetype: "application/pdf" } : {}) }) }}',
     options: { timeout: 15000, batching: { batch: { batchSize: 1, batchInterval: 1500 } } },
   },
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [5700, 100], name: 'Enviar WhatsApp (wppia)',
@@ -359,9 +360,9 @@ sticky('### 1 · Entrada\nwppia envía cada mensaje. Se valida el secreto, se de
 sticky('### 2 · Toma humana\nSi una persona escribe desde el teléfono, el bot se calla `pausaHoras`. El eco de los envíos del bot (90 s) se ignora.', [1040, 700], 560, 90, 3)
 sticky('### 3 · Audios\nwppia descifra → se baja el archivo → Whisper transcribe. Más de `maxAudioSegundos`: se pide resumen por escrito.', [2000, -40], 940, 90, 6)
 sticky('### 4 · Anti-ráfaga\nEspera `esperaSegundos` y responde solo al último mensaje, con todo el texto junto. Evita 3 respuestas a 3 mensajes seguidos.', [3200, 80], 760, 90, 5)
-sticky('### 5 · IA con bloques\nEl modelo NO escribe precios: elige bloques de la **Ficha de servicios**. Cualquier cifra suelta se descarta antes de enviar.', [4400, 80], 840, 90, 2)
+sticky('### 5 · IA con bloques\nEl modelo NO escribe precios: elige bloques de la **Ficha de servicios** (la primera vez van los PDF). Cualquier cifra suelta se descarta, el rubro se pregunta una sola vez y van como máximo 3 mensajes propios por turno.', [4400, 80], 840, 90, 2)
 sticky('### 6 · Derivación\nSi `needs_human`: se avisa a `notificarA`, el chat queda pausado `pausaHoras` y la persona continúa.', [5420, 380], 560, 90, 3)
-sticky('### 7 · Seguimiento\nUn solo recordatorio a las 24 h a quien no respondió (recibió costos o quedó en la primera pregunta).', [1040, 880], 760, 90, 5)
+sticky('### 7 · Seguimiento\nComo máximo 2 por chat: a las 24 h y, a quien recibió la información, otro a los 5 días ofreciendo una llamada. Nunca a quien dijo que no ni a chats que ya atiende una persona.', [1040, 880], 760, 90, 5)
 
 const wf = {
   name: 'ROMEZ - Asistente comercial WhatsApp',

@@ -1,9 +1,10 @@
 // FICHA DE SERVICIOS: única fuente de precios y textos. EDITAR AQUÍ (y confirmar vigencia con el Lic. Rojas).
 // El modelo NUNCA escribe precios: solo elige códigos de bloque y el flujo pega el texto exacto.
-// Textos tomados de lo que el equipo manda hoy por WhatsApp (conversaciones del 19/10 al 1/11/2026).
+// Textos tomados de lo que el equipo manda por WhatsApp. Precios vigentes al 23/11/2026 (panel /asistente y brochure).
+// Con crmConfigActivo estos valores son solo el respaldo: mandan los del panel.
 const bloques = {
   EAS_COSTO:
-    '📌 Creación de EAS – Gs. 880.000\n' +
+    '📌 Creación de EAS – Gs. 990.000\n' +
     'Incluye:\n' +
     '✅ Elaboración de la proforma preestablecida.\n' +
     '✅ Inscripción en la DNIT (RUC).\n' +
@@ -15,7 +16,7 @@ const bloques = {
     '💳 Forma de pago: 50% para iniciar el trámite y 50% al finalizar.\n' +
     '⏳ Plazo de entrega: 15 días corridos, contados desde la recepción de toda la documentación requerida por parte del cliente.',
   EAS_CONTABLE:
-    '📌 Servicio Contable para EAS – Gs. 440.000 mensuales\n' +
+    '📌 Servicio Contable para EAS – Gs. 450.000 mensuales\n' +
     'Incluye:\n' +
     '✅ Presentación de impuestos.\n' +
     '✅ Preparación de Estados Financieros.\n' +
@@ -25,7 +26,7 @@ const bloques = {
     '✅ Informes trimestrales con proyección de los impuestos anuales a pagar.\n' +
     '✅ Retiro de documentos 1 vez al mes en Asunción y Gran Asunción.\n' +
     '❌ No incluye procesos judiciales laborales ni la liquidación de haberes de empleados, los cuales se cotizan por separado con una abogada laboralista.\n' +
-    '💰 Honorarios: Gs. 440.000 mensuales, sin costos adicionales por nuestros servicios.',
+    '💰 Honorarios: Gs. 450.000 mensuales, sin costos adicionales por nuestros servicios.',
   EAS_LIBROS:
     '📚 Elaboración de Libros Contables y Societarios para EAS – Gs. 2.750.000\n' +
     'Incluye la preparación de 7 libros oficiales, con 100 hojas cada uno:\n' +
@@ -50,7 +51,7 @@ const bloques = {
     '6- Actividad económica al cual se va a dedicar\n' +
     '7- Definir representante legal principal y secundario\n' +
     '8- Factura de Ande no vencida más de 90 días',
-  IVA_HABILITACION: 'La habilitación de IVA para prestación de servicios tiene un costo de Gs. 150.000.',
+  IVA_HABILITACION: 'La habilitación de IVA para prestación de servicios tiene un costo de Gs. 175.000.',
   UBICACION:
     'Estamos en Fernando de la Mora (Gran Asunción). Podemos guiarle en todo el proceso a distancia, ' +
     'pero la firma de los papeles en la DNIT debe hacerse de forma presencial.',
@@ -62,7 +63,7 @@ const catalogo = {
   EAS_LIBROS: 'Libros contables y societarios de la EAS (7 libros).',
   EAS_REQUISITOS: 'Los 8 requisitos para constituir una EAS.',
   IVA_HABILITACION: 'Costo de habilitar IVA para prestación de servicios.',
-  UBICACION: 'Dónde está la oficina y que la firma en la DNIT es presencial.',
+  UBICACION: 'Dirección y horario de la oficina, que atendemos a todo el país y que la firma en la DNIT es presencial.',
 };
 
 // Temas SIN tarifa cargada: el bot debe derivar, nunca inventar.
@@ -70,15 +71,27 @@ const sinTarifa = [
   'Constitución de SRL o SA',
   'Marcas y registros (los atiende una abogada externa)',
   'Liquidación de haberes y juicios laborales (se cotizan aparte con una abogada laboralista)',
-  'Descuentos, precios especiales o negociación',
+  'Descuentos, precios especiales, cuotas o negociación',
+  'Cambios en una EAS existente (socios, acciones, representante, nombre, disolución)',
+  'Capital a integrar (depende de la actividad)',
+  'Inscripción de RUC de persona física, contabilidad solo IVA y firma electrónica',
+  'Deudas en el RUC, impuestos atrasados, timbrado o facturas vencidas',
+];
+
+// Presentación y brochure en PDF (pedido de José Rojas, 13/11/2026): primero la presentación de ROMEZ y
+// después el de EAS. Se publican en el servidor del CRM (/var/www/romez-brochures). Llevan los mismos
+// precios que el panel: si cambia un precio, hay que actualizar también el PDF.
+const brochures = [
+  { url: 'https://romez.consultoriadigital.io/brochures/romez-presentacion.pdf', fileName: 'ROMEZ - Presentación.pdf' },
+  { url: 'https://romez.consultoriadigital.io/brochures/romez-servicios-eas.pdf', fileName: 'ROMEZ - Servicios para EAS.pdf' },
 ];
 
 // Si el CRM respondió (nodo «Config»), manda lo que se edita en el panel /asistente; si no, valen los valores de arriba.
 const cfg = $('Config').first().json;
 if (cfg.configOrigen === 'crm') {
   return [{ json: {
-    bloques: cfg.bloques ?? {}, catalogo: cfg.catalogo ?? {}, sinTarifa: cfg.sinTarifa ?? [],
+    bloques: cfg.bloques ?? {}, catalogo: cfg.catalogo ?? {}, sinTarifa: cfg.sinTarifa ?? [], brochures,
     instruccionesExtra: cfg.instruccionesExtra ?? '', mensajeFallback: cfg.mensajeFallback ?? '', origen: 'crm',
   } }];
 }
-return [{ json: { bloques, catalogo, sinTarifa, instruccionesExtra: '', mensajeFallback: '', origen: 'nodo' } }];
+return [{ json: { bloques, catalogo, sinTarifa, brochures, instruccionesExtra: '', mensajeFallback: '', origen: 'nodo' } }];

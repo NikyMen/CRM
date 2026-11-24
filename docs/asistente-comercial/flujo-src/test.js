@@ -178,9 +178,16 @@ const good = JSON.stringify({ intent: 'EAS_COSTOS', stage: 'COSTOS_ENVIADOS', ne
 const p1 = parse('```json\n' + good + '\n```')
 t('parseo: tolera ``` y descarta bloques inventados', () => {
   assert.deepStrictEqual(p1.meta.bloques, ['EAS_COSTO', 'EAS_REQUISITOS'])
-  assert.strictEqual(p1.mensajes.length, 4)
-  assert.ok(p1.mensajes[1].text.includes('Gs. 880.000'))
   assert.ok(p1.mensajes.every((m) => m.to === '+' + lead.phone))
+})
+t('parseo: la primera vez van la presentación y los 2 PDF en lugar de los textos largos', () => {
+  assert.strictEqual(p1.meta.brochure, true)
+  const docs = p1.mensajes.filter((m) => m.documentUrl)
+  assert.deepStrictEqual(docs.map((m) => m.fileName), ['ROMEZ - Presentación.pdf', 'ROMEZ - Servicios para EAS.pdf'])
+  assert.ok(!p1.mensajes.some((m) => /Gs\. /.test(m.text || '')), 'los montos van en el PDF')
+  // rubro ya conocido → el cierre invita a avanzar, no pregunta el rubro
+  assert.strictEqual(p1.mensajes.at(-1).text, '¿Tiene alguna consulta o le gustaría avanzar con la constitución de su EAS?')
+  assert.ok(JSON.parse(p1.estado).brochureAt)
 })
 t('parseo: la ficha del chat se actualiza (etapa, lead, bloques)', () => {
   const e = JSON.parse(p1.estado)
@@ -336,7 +343,8 @@ t('Ficha de servicios: con el CRM usa SUS bloques (incluso vacíos), sin el CRM 
   assert.deepStrictEqual(vacio.bloques, {})
   const sinCrm = run('Ficha de servicios', { input: item({}), nodes: wfNodes({}) })[0].json
   assert.strictEqual(sinCrm.origen, 'nodo')
-  assert.ok(sinCrm.bloques.EAS_COSTO.includes('880.000'))
+  assert.ok(sinCrm.bloques.EAS_COSTO.includes('990.000'))
+  assert.strictEqual(conCrm.brochures.length, 2, 'los PDF se mandan también con la config del CRM')
 })
 t('el precio del CRM llega exacto al cliente y el modelo no ve montos', () => {
   const nodes = { Config: item(merge(CRM_RESP)) }
@@ -344,7 +352,7 @@ t('el precio del CRM llega exacto al cliente y el modelo no ve montos', () => {
   const ctx = run('Armar contexto IA', { input: item(f), nodes: { ...nodes, '¿Último mensaje?': item(ult), 'Ficha de servicios': item(f) } })[0].json
   assert.ok(!ctx.aiInput.includes('900.000'), 'el modelo no debe ver el monto')
   const salida = JSON.stringify({ stage: 'COSTOS_ENVIADOS', needs_human: false, reply_parts: ['Le paso los costos'], blocks: ['EAS_COSTO'] })
-  const limpio = { ...ult, e: {} } // Parsear modifica el estado que recibe: usamos una copia sin bloques ya enviados
+  const limpio = { ...ult, e: { brochureAt: 1 } } // copia sin bloques enviados y con los PDF ya mandados: va el texto
   const p = run('Parsear respuesta IA', { input: item({ output: salida }), nodes: { ...nodes, 'Ficha de servicios': item(f), 'Armar contexto IA': item(ctx), '¿Último mensaje?': item(limpio) } })[0].json
   assert.ok(p.mensajes.some((m) => m.text === 'Creación de EAS – Gs. 900.000'))
 })
@@ -370,6 +378,124 @@ t('el seguimiento usa la plantilla del CRM, con y sin nombre', () => {
   assert.strictEqual(con[0].json.text, 'Hola Alba, ¿pudo revisar todo?')
   const sin = run('Seguimientos pendientes', { input: fila({}), nodes: { Config: item({ ...cfgCrm, mensajeSeguimiento: 'Buenas {{nombre}}, ¿pudo revisar?' }) }, now: '2026-11-02T14:00:00Z' })
   assert.strictEqual(sin[0].json.text, 'Buenas, ¿pudo revisar?')
+})
+
+// ---------- mejoras del 23/11/2026 (análisis de las conversaciones reales) ----------
+console.log('Mejoras 23/11')
+const parseCon = (salida, e, texto = 'quiero info') => run('Parsear respuesta IA', {
+  input: item({ output: JSON.stringify(salida) }),
+  nodes: wfNodes({ 'Ficha de servicios': item(fichaOut), 'Armar contexto IA': item(ctxOut), '¿Último mensaje?': item({ ...ult, text: texto, e: JSON.parse(JSON.stringify(e)) }) }),
+})[0].json
+const textos = (p) => p.mensajes.filter((m) => m.text).map((m) => m.text)
+
+t('primer pedido de info sin rubro: PDF y UNA pregunta por el rubro, que queda registrada', () => {
+  const p = parseCon({ stage: 'COSTOS_ENVIADOS', needs_human: false, reply_parts: ['Hola, soy el asistente virtual de la Consultora ROMEZ.', 'Le envío la información de costos.'], blocks: ['EAS_COSTO'], closing: '¿A qué rubro se dedicaría?' }, {})
+  const tx = textos(p)
+  assert.strictEqual(tx.filter((x) => x.includes('?')).length, 1, 'una sola pregunta')
+  assert.match(tx.at(-1), /A qué se dedicaría la empresa/)
+  assert.ok(!tx.some((x) => /Le envío/.test(x)), 'sin anunciar lo que manda el sistema')
+  assert.ok(JSON.parse(p.estado).rubroPreguntado)
+})
+t('el rubro no se vuelve a preguntar si ya se preguntó, ni en los mensajes ni en el cierre', () => {
+  const p = parseCon({ needs_human: false, reply_parts: ['¿Podría indicarme a qué rubro se dedicaría?'], blocks: ['EAS_CONTABLE'], closing: '¿Cuál es su actividad principal?' }, { rubroPreguntado: 1, brochureAt: 1, botReplies: 1 })
+  assert.ok(!textos(p).some((x) => /rubro|actividad principal/.test(x)))
+  assert.ok(textos(p).some((x) => x.includes('Servicio Contable')))
+})
+t('a quien ya tiene EAS no se le pregunta el rubro para constituir', () => {
+  const p = parseCon({ needs_human: false, lead: { tiene_eas: true }, reply_parts: ['Perfecto.'], blocks: [], closing: '¿En qué rubro piensa desarrollar su EAS?' }, { botReplies: 1 }, 'Ya tengo mi EAS')
+  assert.ok(!textos(p).some((x) => /rubro/.test(x)))
+})
+t('después de la primera respuesta no repite la presentación', () => {
+  const p = parseCon({ needs_human: false, reply_parts: ['Hola, soy el asistente virtual de la Consultora ROMEZ. Con gusto le ayudo con eso.'], blocks: [], closing: '' }, { botReplies: 2 })
+  assert.deepStrictEqual(textos(p), ['Con gusto le ayudo con eso.'])
+})
+t('con bloques: como máximo 1 mensaje propio, y la pregunta solo al final', () => {
+  const p = parseCon({ needs_human: false, reply_parts: ['Perfecto.', 'La contabilidad mensual cubre impuestos.', '¿Quiere los requisitos?'], blocks: ['EAS_CONTABLE'], closing: '' }, { brochureAt: 1, botReplies: 1, rubroPreguntado: 1 })
+  const tx = textos(p)
+  assert.strictEqual(tx.length, 3)
+  assert.match(tx[1], /Servicio Contable/)
+  assert.strictEqual(tx[2], '¿Quiere los requisitos?')
+})
+t('claves por WhatsApp: aviso de seguridad, derivación y el aviso al equipo no las reenvía', () => {
+  const p = parseCon({ needs_human: false, reply_parts: ['Recibido.'], blocks: [], closing: '' }, { botReplies: 3 }, '3955602 / Clave2024x')
+  assert.match(textos(p)[0], /no envíe claves/)
+  assert.strictEqual(p.handoff, true)
+  assert.ok(!p.aviso.includes('Clave2024x')); assert.match(p.aviso, /contenido oculto/); assert.match(p.aviso, /claves por WhatsApp/)
+})
+t('preguntar por una clave no dispara el aviso', () => {
+  const p = parseCon({ needs_human: false, reply_parts: ['Eso lo vemos en el trámite.'], blocks: [], closing: '' }, { botReplies: 1 }, '¿Necesito clave de Marangatu?')
+  assert.strictEqual(p.meta.envioClaves, false)
+})
+t('objeción de precio: deriva con un motivo claro para José y sin pregunta', () => {
+  const p = parseCon({ intent: 'OBJECION_PRECIO', needs_human: true, human_reason: 'OBJECION_PRECIO', reply_parts: ['Entiendo. El Lic. José Rojas le escribe para ver su caso.'], blocks: [], closing: '¿Algo más?' }, { botReplies: 2 }, 'vi opciones más económicas')
+  assert.match(p.aviso, /Objeción de precio/); assert.ok(!textos(p).some((x) => x.includes('?')))
+  assert.strictEqual(JSON.parse(p.estado).noSeguir, true)
+})
+t('"lo analizo" posterga el seguimiento 5 días; "por ahora no" lo frena', () => {
+  const s = { needs_human: false, reply_parts: ['Perfecto, quedo a disposición.'], blocks: [], closing: '' }
+  const a = JSON.parse(parseCon(s, { botReplies: 1 }, 'Lo analizo con mi socio y te aviso').estado)
+  assert.ok(a.seguirDesde > Date.now() + 4 * 86400e3); assert.ok(!a.noSeguir)
+  const b = JSON.parse(parseCon(s, { botReplies: 1 }, 'Por ahora no, gracias').estado)
+  assert.strictEqual(b.noSeguir, true)
+})
+t('el aviso usa el nombre que dijo la persona y marca el de perfil aparte', () => {
+  const p = parseCon({ needs_human: true, human_reason: 'Quiere avanzar', lead: { nombre: 'Julio' }, reply_parts: ['Le escribe el Lic. Rojas.'], blocks: [] }, { name: 'Pandas', botReplies: 1 })
+  assert.match(p.aviso, /Nombre: Julio \(perfil: Pandas\)/)
+})
+
+// -- estado del chat: cortesías y respuestas cortas --
+const estadoCon = (e, text, kind = 'text') => run('Estado del chat', { input: item({ estado: JSON.stringify(e) }), nodes: wfNodes({ 'Normalizar mensaje': item({ ...lead, messageId: 'C' + Math.random(), text, kind }) }) })[0].json
+t('"Dale" después de una pregunta del bot es una respuesta y se atiende', () => {
+  assert.strictEqual(estadoCon({ botReplies: 1, ultimaPregunta: true }, 'Dale').responder, true)
+  assert.strictEqual(estadoCon({ botReplies: 1, ultimaPregunta: false }, 'Dale').motivo, 'mensaje_de_cortesia')
+})
+t('"Muchas gracias, igualmente" y los stickers no disparan otra respuesta', () => {
+  assert.strictEqual(estadoCon({ botReplies: 1, ultimaPregunta: true }, 'Muchaa gracias  Igualmente.').motivo, 'mensaje_de_cortesia')
+  assert.strictEqual(estadoCon({ botReplies: 1 }, '', 'sticker').motivo, 'sticker')
+  assert.strictEqual(estadoCon({ botReplies: 1, ultimaPregunta: true }, 'Si').responder, true)
+})
+
+// -- contexto: lo que el modelo necesita para no repetir --
+t('contexto: avisa presentación hecha, rubro preguntado, EAS existente, PDF enviados y atención humana', () => {
+  const u2 = { ...ult, e: { botReplies: 2, rubroPreguntado: 1, lead: { tiene_eas: true }, brochureAt: 1, lastHumanAt: Date.now() - 2 * 86400e3 } }
+  const c = run('Armar contexto IA', { input: item(fichaOut), nodes: wfNodes({ '¿Último mensaje?': item(u2), 'Ficha de servicios': item(fichaOut) }) })[0].json.aiInput
+  for (const frase of ['ya te presentaste', 'Ya se le preguntó el rubro: sí', 'Ya tiene una EAS', 'Ya se le enviaron en PDF', 'Una persona del equipo ya le escribió'])
+    assert.ok(c.includes(frase), frase)
+  assert.match(c, /NO lo uses como nombre/)
+})
+
+// -- seguimientos --
+const D = 24 * H
+t('seguimiento: el segundo, a los 5 días, ofrece una llamada y es el último', () => {
+  const e = { stage: 'COSTOS_ENVIADOS', brochureAt: 1, followUps: 1, lastInAt: Date.now() - 7 * D, lastOutAt: Date.now() - 5.5 * D }
+  const r = seg([rowFor(e)], {}, '2026-11-02T14:00:00Z')
+  assert.strictEqual(r.length, 1); assert.match(r[0].json.text, /le llama/)
+  const e2 = JSON.parse(r[0].json.estado)
+  assert.strictEqual(e2.followUps, 2)
+  assert.strictEqual(seg([rowFor({ ...e2, lastOutAt: Date.now() - 6 * D })], {}, '2026-11-02T14:00:00Z').length, 0, 'no hay tercero')
+})
+t('seguimiento: nunca a quien dijo que no, a chats atendidos por una persona ni a internos', () => {
+  const base = { stage: 'COSTOS_ENVIADOS', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H }
+  for (const e of [{ ...base, noSeguir: true }, { ...base, lastHumanAt: Date.now() - 3 * D }, { ...base, seguirDesde: Date.now() + D }])
+    assert.strictEqual(seg([rowFor(e)], {}, '2026-11-02T14:00:00Z').length, 0)
+  assert.strictEqual(seg([rowFor(base)], { excluir: '0991222333' }, '2026-11-02T14:00:00Z').length, 0)
+})
+t('seguimiento: sin el nombre de perfil, y a quien no recibió info le ofrece el costo (sin pedir el rubro)', () => {
+  const r = seg([rowFor({ stage: 'NUEVO', name: 'Pandas', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H })], {}, '2026-11-02T14:00:00Z')
+  assert.strictEqual(r.length, 1)
+  assert.ok(!/Pandas/.test(r[0].json.text)); assert.ok(!/rubro/.test(r[0].json.text)); assert.match(r[0].json.text, /^Buenas, /)
+})
+t('seguimiento: chats viejos que ya recibieron uno no reciben más', () => {
+  const e = { stage: 'COSTOS_ENVIADOS', followUpSent: true, lastInAt: Date.now() - 7 * D, lastOutAt: Date.now() - 5.5 * D }
+  assert.strictEqual(seg([rowFor(e)], {}, '2026-11-02T14:00:00Z').length, 0)
+})
+t('seguimiento: los sábados no se envía aunque la oficina atienda', () => {
+  const e = { stage: 'COSTOS_ENVIADOS', lastInAt: Date.now() - 30 * H, lastOutAt: Date.now() - 26 * H }
+  assert.strictEqual(seg([rowFor(e)], { atencionDias: '1,2,3,4,5,6' }, '2026-11-07T14:00:00Z').length, 0)
+})
+t('el envío de WhatsApp manda texto o documento', () => {
+  const body = wf.nodes.find((n) => n.name === 'Enviar WhatsApp (wppia)').parameters.jsonBody
+  assert.match(body, /documentUrl/); assert.match(body, /application\/pdf/)
 })
 
 console.log(`\n${ok} pruebas OK`)

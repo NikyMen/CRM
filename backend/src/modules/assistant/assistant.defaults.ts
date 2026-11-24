@@ -1,7 +1,7 @@
 /**
  * Valores iniciales del asistente comercial: los textos que el equipo de ROMEZ ya envía hoy por
  * WhatsApp (conversaciones de la línea comercial, 19/10 al 1/11/2026). Los montos están como
- * campo aparte y entran en el texto con {{precio}}; hay que confirmarlos antes de usarlos con clientes.
+ * campo aparte y entran en el texto con {{precio}}. Precios vigentes al 23/11/2026 (panel y brochure).
  */
 export type DefaultService = {
   code: string
@@ -16,7 +16,7 @@ export const DEFAULT_SERVICES: DefaultService[] = [
     code: 'EAS_COSTO',
     title: 'Creación de EAS',
     description: 'Costo de creación de una EAS, qué incluye, forma de pago y plazo.',
-    amount: '880000',
+    amount: '990000',
     body: [
       '📌 Creación de EAS – Gs. {{precio}}',
       'Incluye:',
@@ -35,7 +35,7 @@ export const DEFAULT_SERVICES: DefaultService[] = [
     code: 'EAS_CONTABLE',
     title: 'Servicio contable para EAS',
     description: 'Servicio contable mensual para una EAS (qué incluye y qué no).',
-    amount: '440000',
+    amount: '450000',
     body: [
       '📌 Servicio Contable para EAS – Gs. {{precio}} mensuales',
       'Incluye:',
@@ -92,15 +92,15 @@ export const DEFAULT_SERVICES: DefaultService[] = [
     code: 'IVA_HABILITACION',
     title: 'Habilitación de IVA',
     description: 'Costo de habilitar IVA para prestación de servicios.',
-    amount: '150000',
+    amount: '175000',
     body: 'La habilitación de IVA para prestación de servicios tiene un costo de Gs. {{precio}}.',
   },
   {
     code: 'UBICACION',
     title: 'Ubicación y trámite a distancia',
-    description: 'Dónde está la oficina y que la firma en la DNIT es presencial.',
+    description: 'Dirección y horario de la oficina, que atendemos a todo el país y que la firma en la DNIT es presencial.',
     amount: null,
-    body: 'Estamos en Fernando de la Mora (Gran Asunción). Podemos guiarle en todo el proceso a distancia, pero la firma de los papeles en la DNIT debe hacerse de forma presencial.',
+    body: 'Estamos en 1ro. de Mayo casi Teniente Enciso 1718, Fernando de la Mora (Zona Sur), y trabajamos con clientes de todo el país. Atendemos de lunes a viernes de 08:00 a 12:00 y de 13:00 a 17:00, y los sábados de 08:00 a 12:00. Podemos guiarle en todo el proceso a distancia, pero la firma de los papeles en la DNIT debe hacerse de forma presencial.',
   },
 ]
 
@@ -108,7 +108,11 @@ export const DEFAULT_HANDOFF_TOPICS = [
   'Constitución de SRL o SA',
   'Marcas y registros (los atiende una abogada externa)',
   'Liquidación de haberes y juicios laborales (se cotizan aparte con una abogada laboralista)',
-  'Descuentos, precios especiales o negociación',
+  'Descuentos, precios especiales, cuotas o negociación',
+  'Cambios en una EAS existente (socios, acciones, representante, nombre, disolución)',
+  'Capital a integrar (depende de la actividad)',
+  'Inscripción de RUC de persona física, contabilidad solo IVA y firma electrónica',
+  'Deudas en el RUC, impuestos atrasados, timbrado o facturas vencidas',
 ]
 
 export const DEFAULT_FALLBACK_MESSAGE =
