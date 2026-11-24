@@ -257,6 +257,16 @@ function toNullableNumber(value: unknown) {
   return null
 }
 
+/**
+ * Los acuses de WhatsApp pueden llegar desordenados (p. ej. al reconectar llega un "entregado"
+ * después del "visto"). Este filtro evita que un estado anterior pise a uno más avanzado.
+ */
+function statusAdvanceWhere(status: string | null | undefined) {
+  const later = status === 'sent' ? ['delivered', 'read'] : status === 'delivered' ? ['read'] : []
+  if (!later.length) return {}
+  return { OR: [{ status: null }, { status: { notIn: later } }] }
+}
+
 function normalizeMessageStatus(value: unknown, fromMe = false) {
   if (value == null) {
     return fromMe ? 'sent' : null
@@ -552,6 +562,7 @@ export {
   normalizeMessageStatus,
   safeFileName,
   selectChatDisplayName,
+  statusAdvanceWhere,
   supportsChat,
   toDate,
 }
@@ -3230,7 +3241,11 @@ export class WhatsAppManager {
 
       const updateData: Record<string, unknown> = {}
       if (patch?.status !== undefined) {
-        updateData.status = normalizeMessageStatus(patch.status, Boolean(item?.key?.fromMe))
+        const status = normalizeMessageStatus(patch.status, Boolean(item?.key?.fromMe))
+        await prisma.whatsAppMessage.updateMany({
+          where: { workspaceId, remoteJid, messageId, ...statusAdvanceWhere(status) },
+          data: { status },
+        })
       }
       if (patch?.message) {
         const details = extractMessageDetails({ ...item, message: patch.message })

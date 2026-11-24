@@ -1,6 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
+import { AlertCircle, Check, CheckCheck, Clock } from 'lucide-react'
 
 /** Piezas visuales del chat estilo WhatsApp (líneas propias y tablero de leads). */
 
@@ -56,4 +57,17 @@ export function WaAvatar({ id, name, imageUrl, className = 'h-11 w-11 text-sm' }
         : initials(name)}
     </span>
   )
+}
+
+/**
+ * Tildes de WhatsApp de un mensaje enviado: reloj mientras sale, una tilde gris (enviado),
+ * dos grises (entregado) y dos azules (visto). Lo que llega del teléfono vía Baileys se
+ * normaliza en el backend a sending | sent | delivered | read | error.
+ */
+export function MessageTicks({ status, pending = false, size = 14, className }: { status?: string | null; pending?: boolean; size?: number; className?: string }) {
+  if (pending || status === 'sending') return <Clock size={size - 3} className={clsx('shrink-0', className)} aria-label="Enviando" />
+  if (status === 'error') return <AlertCircle size={size - 2} className="shrink-0 text-[var(--danger)]" aria-label="No se pudo enviar" />
+  if (status === 'read') return <CheckCheck size={size} className="shrink-0 text-[#53bdeb]" aria-label="Visto" />
+  if (status === 'delivered') return <CheckCheck size={size} className={clsx('shrink-0', className)} aria-label="Entregado" />
+  return <Check size={size} className={clsx('shrink-0', className)} aria-label="Enviado" />
 }

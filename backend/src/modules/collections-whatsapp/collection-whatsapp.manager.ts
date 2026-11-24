@@ -17,6 +17,7 @@ import {
   normalizeMessageStatus,
   safeFileName,
   selectChatDisplayName,
+  statusAdvanceWhere,
   toDate,
   WHATSAPP_OUTBOUND_FILE_MAX_BYTES,
 } from '../whatsapp/whatsapp.manager'
@@ -722,9 +723,10 @@ export class CollectionWhatsAppManager {
     for (const item of updates) {
       const messageId = item?.key?.id
       if (!messageId || item?.update?.status === undefined) continue
+      const status = normalizeMessageStatus(item.update.status, true)
       await db.collectionWhatsAppMessage.updateMany({
-        where: { workspaceId, messageId, fromMe: true, chat: { line: this.line } },
-        data: { status: normalizeMessageStatus(item.update.status, true) },
+        where: { workspaceId, messageId, fromMe: true, chat: { line: this.line }, ...statusAdvanceWhere(status) },
+        data: { status },
       }).catch(() => {})
     }
   }

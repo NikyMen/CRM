@@ -3,7 +3,7 @@
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, Check, CheckCheck, Clock, FolderOpen, Loader2, MessageCircle, Search, Settings, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Check, CheckCheck, FolderOpen, Loader2, MessageCircle, Search, Settings, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { collectionsWhatsAppApi, commercialWhatsAppApi, dealsApi, type LineWhatsAppApi } from '@/lib/api'
 import { fullName, getErrorMessage } from '@/lib/format'
@@ -15,7 +15,7 @@ import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
-import { chatListTime, dayKey, dayLabel, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
+import { chatListTime, dayKey, dayLabel, MessageTicks, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 import { brand } from '@/lib/brand'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
@@ -349,9 +349,7 @@ function LeadStageBar({ line, chatId }: { line: WhatsAppLineConfig; chatId: stri
 }
 
 function SendStatus({ message }: { message: CollectionWhatsAppMessage }) {
-  if (message.messageId.startsWith('local-')) return <Clock size={11} className="shrink-0" aria-label="Enviando" />
-  if (message.status === 'read') return <CheckCheck size={14} className="shrink-0 text-sky-500" aria-label="Leído" />
-  return <CheckCheck size={14} className="shrink-0" aria-label="Enviado" />
+  return <MessageTicks status={message.status} pending={message.messageId.startsWith('local-')} />
 }
 
 function Bubble({ line, message, tail, onReact }: { line: WhatsAppLineConfig; message: CollectionWhatsAppMessage; tail: boolean; onReact?: (emoji: string) => Promise<unknown> }) {
