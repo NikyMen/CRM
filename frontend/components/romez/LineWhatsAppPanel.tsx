@@ -1,21 +1,21 @@
 'use client'
 
-import { useDeferredValue, useEffect, useRef, useState } from 'react'
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, CheckCheck, MessageCircle, Search, Settings, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Check, CheckCheck, Clock, FolderOpen, Loader2, MessageCircle, Search, Settings, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 import { collectionsWhatsAppApi, commercialWhatsAppApi, dealsApi, type LineWhatsAppApi } from '@/lib/api'
-import { formatDateTime, fullName, getErrorMessage } from '@/lib/format'
+import { fullName, getErrorMessage } from '@/lib/format'
 import type { CollectionWhatsAppChat, CollectionWhatsAppMessage, WhatsAppLinkSession } from '@/types'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
-import { EmptyState } from '@/components/romez/OperationalUI'
 import { useConfirmDelete } from '@/components/romez/ConfirmDelete'
 import { TicketComposer, type ComposerPayload } from '@/components/romez/TicketComposer'
 import { WhatsAppLinkDialog } from '@/components/romez/WhatsAppLinkDialog'
 import { ContactName } from '@/components/romez/ContactName'
 import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, visibleMessageText } from '@/components/romez/ChatMessageParts'
 import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
+import { chatListTime, dayKey, dayLabel, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 import { brand } from '@/lib/brand'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
@@ -48,6 +48,8 @@ export const COMMERCIAL_WHATSAPP: WhatsAppLineConfig = {
   emptyDescription: 'Cuando alguien escriba al número comercial va a aparecer acá.',
   api: commercialWhatsAppApi,
 }
+
+type ChatFilter = 'all' | 'unread' | 'client' | 'prospect'
 
 function sessionKey(line: WhatsAppLineConfig) {
   return `${line.key}-session`
@@ -82,6 +84,7 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(initialChatId ?? null)
   const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<ChatFilter>('all')
   const deferredSearch = useDeferredValue(search.trim())
   const [linkOpen, setLinkOpen] = useState(false)
   const confirmDelete = useConfirmDelete()
@@ -105,49 +108,92 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
 
   useEffect(() => { if (initialChatId) setSelectedId(initialChatId) }, [initialChatId])
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !linkOpen) onClose() }
+    // Un Esc que ya atendió un popup (reacciones, plantillas, emojis) no cierra el panel.
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !linkOpen && !event.defaultPrevented) onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose, linkOpen])
 
   const sessionQuery = useLineWhatsAppSession(line)
   const chatsQuery = useQuery<CollectionWhatsAppChat[]>({ queryKey: [chatsKey, deferredSearch], queryFn: () => line.api.listChats(deferredSearch).then((response) => response.data), refetchInterval: 5_000 })
-  const chats = chatsQuery.data ?? []
+  const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
+  const counts = useMemo(() => ({
+    unread: chats.filter((chat) => chat.unreadCount > 0).length,
+    client: chats.filter((chat) => chat.company).length,
+    prospect: chats.filter((chat) => !chat.company).length,
+  }), [chats])
+  const visibleChats = useMemo(() => chats.filter((chat) => filter === 'all' ? true : filter === 'unread' ? chat.unreadCount > 0 : filter === 'client' ? Boolean(chat.company) : !chat.company), [chats, filter])
   const selected = chats.find((chat) => chat.id === selectedId)
   const connected = sessionQuery.data?.status === 'CONNECTED'
+  const sessionLabel = connected ? [sessionQuery.data?.pushName, sessionQuery.data?.phoneNumber ? `+${sessionQuery.data.phoneNumber}` : null].filter(Boolean).join(' · ') || 'Conectado' : 'Sin conexión: vinculá el número desde Configuración'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-0 sm:p-4" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={line.title} className="flex w-full max-w-6xl flex-col overflow-hidden bg-[var(--paper)] shadow-2xl sm:rounded-xl sm:border sm:border-[var(--line)]">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[#1f8f4e] px-4 text-white">
-          <WhatsAppLogo size={22} />
-          <div className="min-w-0 flex-1"><p className="truncate font-display text-sm font-extrabold">{line.title}</p><p className="truncate text-[11px] text-white/80">{connected ? [sessionQuery.data?.pushName, sessionQuery.data?.phoneNumber ? `+${sessionQuery.data.phoneNumber}` : null].filter(Boolean).join(' · ') || 'Conectado' : 'Sin conexión: vinculá el número con el botón de configuración'}</p></div>
-          <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-bold hover:bg-white/10" onClick={() => setLinkOpen(true)}><Settings size={15} /> <span className="hidden sm:inline">Configuración</span></button>
-          <button type="button" className="rounded-lg p-1.5 hover:bg-white/10" onClick={onClose} aria-label={`Cerrar ${line.title}`}><X size={19} /></button>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/45 p-0 backdrop-blur-[2px] sm:p-4" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-label={line.title} className="ast-rise flex w-full max-w-7xl flex-col overflow-hidden bg-[var(--paper)] shadow-[var(--ast-float-shadow)] sm:rounded-[1.5rem] sm:border sm:border-[var(--line-soft)]">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--line-soft)] px-4 sm:px-5">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] text-white shadow-sm"><WhatsAppLogo size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-[15px] font-semibold text-[var(--ink-primary)]">{line.title}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs text-[var(--ink-tertiary)]">
+              <span aria-hidden className={clsx('h-2 w-2 shrink-0 rounded-full', connected ? 'ast-pulse bg-[var(--success)]' : 'bg-[var(--danger)]')} />
+              <span className="truncate">{sessionLabel}</span>
+            </p>
+          </div>
+          <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setLinkOpen(true)} title="Vincular, reconectar o desvincular el número (QR)"><Settings size={15} /> <span className="hidden sm:inline">Configuración</span></button>
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)] hover:text-[var(--ink-primary)]" onClick={onClose} aria-label={`Cerrar ${line.title}`}><X size={19} /></button>
         </header>
-        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(280px,340px)_1fr]">
-          <section className={clsx('min-h-0 flex-col border-r border-[var(--line)]', selectedId ? 'hidden md:flex' : 'flex')}>
-            <div className="border-b border-[var(--line-soft)] p-3"><label className="relative block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input pl-9" placeholder="Cliente, RUC o teléfono…" /></label>{removeChat.isError ? <p role="alert" className="mt-2 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeChat.error, 'No se pudo eliminar el chat.')}</p> : null}</div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {chatsQuery.isLoading ? <p className="p-6 text-center text-xs text-[var(--ink-tertiary)]">Cargando chats…</p> : chatsQuery.isError ? <p className="p-6 text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(chatsQuery.error)}</p> : chats.length ? chats.map((chat) => (
-                <div key={chat.id} className={clsx('group relative border-b border-[var(--line-soft)]', selectedId === chat.id ? 'bg-[var(--brand-paper)]' : 'hover:bg-[var(--paper-soft)]')}>
-                <button type="button" onClick={() => setSelectedId(chat.id)} className={clsx('block w-full px-4 py-3 text-left', canManage && 'pr-12')}>
-                  <div className="flex items-start gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#1f8f4e] text-xs font-extrabold text-white">{chatTitle(chat).replace('+', '').slice(0, 2).toUpperCase()}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2"><p className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--ink-primary)]">{chatTitle(chat)}</p>{chat.unreadCount ? <span className="rounded-full bg-[#1f8f4e] px-1.5 text-[10px] font-extrabold text-white">{chat.unreadCount}</span> : null}</div>
-                      <p className="mt-0.5 truncate text-xs text-[var(--ink-tertiary)]">{chat.lastMessageFromMe ? 'Vos: ' : ''}{chat.lastMessagePreview || 'Sin mensajes todavía'}</p>
-                      {chat.lastMessageAt ? <p className="mt-1 text-[10px] font-semibold text-[var(--ink-muted)]">{formatDateTime(chat.lastMessageAt)}</p> : null}
-                    </div>
-                  </div>
-                </button>
-                {canManage ? <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-[var(--danger)] opacity-60 hover:bg-[var(--danger-paper)] hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40 group-hover:opacity-100" disabled={removeChat.isPending && removeChat.variables === chat.id} onClick={() => askRemove(chat)} aria-label={`Eliminar chat con ${chatTitle(chat)}`} title="Eliminar chat"><Trash2 size={15} /></button> : null}
-                </div>
-              )) : <EmptyState icon={MessageCircle} title="Sin chats" description={deferredSearch ? 'No hay chats que coincidan con la búsqueda.' : line.emptyDescription} />}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(290px,360px)_minmax(0,1fr)]">
+          <aside className={clsx('min-h-0 flex-col border-r border-[var(--line-soft)] bg-[var(--paper)]', selectedId ? 'hidden md:flex' : 'flex')}>
+            <div className="space-y-2.5 border-b border-[var(--line-soft)] p-3">
+              <div className="flex items-baseline justify-between px-1">
+                <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Conversaciones</h2>
+                <span className="text-xs text-[var(--ink-muted)]">{visibleChats.length === chats.length ? chats.length : `${visibleChats.length} de ${chats.length}`}</span>
+              </div>
+              <label className="relative block"><Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input !rounded-full pl-9" placeholder="Cliente, RUC o teléfono…" /></label>
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filtrar conversaciones">
+                <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>Todas</FilterChip>
+                <FilterChip active={filter === 'unread'} onClick={() => setFilter('unread')}>Sin leer{counts.unread ? <b className="ml-0.5">{counts.unread}</b> : null}</FilterChip>
+                <FilterChip active={filter === 'client'} onClick={() => setFilter('client')}>Clientes{counts.client ? <span className="ml-0.5 opacity-70">{counts.client}</span> : null}</FilterChip>
+                <FilterChip active={filter === 'prospect'} onClick={() => setFilter('prospect')}>Sin legajo{counts.prospect ? <span className="ml-0.5 opacity-70">{counts.prospect}</span> : null}</FilterChip>
+              </div>
+              {removeChat.isError ? <p role="alert" className="px-1 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeChat.error, 'No se pudo eliminar el chat.')}</p> : null}
             </div>
-          </section>
+            <ul className="min-h-0 flex-1 divide-y divide-[var(--line-soft)] overflow-y-auto">
+              {chatsQuery.isLoading ? <li className="flex items-center justify-center gap-2 p-8 text-xs text-[var(--ink-tertiary)]"><Loader2 size={14} className="animate-spin" /> Cargando chats…</li> : chatsQuery.isError ? <li className="p-6 text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(chatsQuery.error)}</li> : visibleChats.length ? visibleChats.map((chat) => (
+                <li key={chat.id} className="group relative">
+                  <button type="button" onClick={() => setSelectedId(chat.id)} className={clsx('flex w-full items-center gap-3 border-l-4 py-3 pl-3 text-left transition', canManage ? 'pr-11' : 'pr-3', selectedId === chat.id ? 'border-l-[var(--wa-green)] bg-[var(--wa-green-soft)]' : 'border-l-transparent hover:bg-[var(--paper-soft)]')}>
+                    <span className="relative">
+                      <WaAvatar id={chat.id} name={chatTitle(chat)} />
+                      {chat.unreadCount ? <span aria-hidden className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-[var(--wa-green)] ring-2 ring-[var(--paper)]" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className={clsx('truncate text-sm text-[var(--ink-primary)]', chat.unreadCount ? 'font-bold' : 'font-medium')}>{chatTitle(chat)}</span>
+                        <span className={clsx('shrink-0 text-[11px]', chat.unreadCount ? 'font-semibold text-[var(--wa-green)]' : 'text-[var(--ink-muted)]')}>{chatListTime(chat.lastMessageAt)}</span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-2">
+                        <span className={clsx('min-w-0 flex-1 truncate text-xs', chat.unreadCount ? 'text-[var(--ink-secondary)]' : 'text-[var(--ink-tertiary)]')}>
+                          {chat.lastMessageFromMe ? <CheckCheck size={13} className="mr-1 inline -translate-y-px text-[var(--ink-muted)]" aria-label="Vos:" /> : null}
+                          {chat.lastMessagePreview || 'Sin mensajes todavía'}
+                        </span>
+                        {chat.unreadCount ? <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] px-1.5 text-[10px] font-bold text-white">{chat.unreadCount}</span> : null}
+                      </span>
+                      {chat.company ? <span className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><FolderOpen size={10} className="shrink-0" /> <span className="truncate">{chat.displayName && chat.displayName !== chat.company.name ? chat.displayName : 'Cliente con legajo'}</span></span> : null}
+                    </span>
+                  </button>
+                  {canManage ? <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-[var(--danger)] opacity-0 hover:bg-[var(--danger-paper)] focus-visible:opacity-100 disabled:opacity-40 group-hover:opacity-100" disabled={removeChat.isPending && removeChat.variables === chat.id} onClick={() => askRemove(chat)} aria-label={`Eliminar chat con ${chatTitle(chat)}`} title="Eliminar chat"><Trash2 size={15} /></button> : null}
+                </li>
+              )) : <li className="px-6 py-12 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--paper-inset)] text-[var(--ink-muted)]"><MessageCircle size={22} /></span><p className="mt-3 text-sm font-semibold text-[var(--ink-primary)]">Sin chats</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">{deferredSearch ? 'No hay chats que coincidan con la búsqueda.' : filter !== 'all' ? 'No hay chats con ese filtro.' : line.emptyDescription}</p></li>}
+            </ul>
+          </aside>
           <section className={clsx('min-h-0 flex-col', selectedId ? 'flex' : 'hidden md:flex')}>
-            {selectedId ? <ChatView key={selectedId} line={line} chatId={selectedId} chat={selected} connected={connected} canWrite={canWrite} canManage={canManage} currentUserId={currentUserId} back={() => setSelectedId(null)} onDelete={selected && canManage ? () => askRemove(selected) : undefined} deleting={removeChat.isPending} onSent={() => queryClient.invalidateQueries({ queryKey: [chatsKey] })} /> : <EmptyState icon={MessageCircle} title="Elegí un chat" description={`Abrí una conversación para leerla y responder desde el ${line.title}.`} />}
+            {selectedId ? <ChatView key={selectedId} line={line} chatId={selectedId} chat={selected} connected={connected} canWrite={canWrite} canManage={canManage} currentUserId={currentUserId} back={() => setSelectedId(null)} onDelete={selected && canManage ? () => askRemove(selected) : undefined} deleting={removeChat.isPending} onSent={() => queryClient.invalidateQueries({ queryKey: [chatsKey] })} /> : (
+              <div className="wa-thread flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                <span className="grid h-16 w-16 place-items-center rounded-3xl bg-[var(--paper)] text-[var(--wa-green)] shadow-[var(--ast-card-shadow)]"><MessageCircle size={28} /></span>
+                <p className="font-display text-base font-semibold text-[var(--ink-primary)]">Elegí una conversación</p>
+                <p className="max-w-sm text-sm text-[var(--ink-tertiary)]">Desde acá leés y respondés por el {line.title}{line.key === COMMERCIAL_WHATSAPP.key ? ', y movés al lead de etapa sin salir del chat' : ''}.</p>
+              </div>
+            )}
           </section>
         </div>
       </div>
@@ -156,16 +202,34 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
   )
 }
 
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} className={clsx('inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition', active ? 'bg-[var(--wa-green-soft)] text-[var(--wa-green)] ring-1 ring-[var(--wa-green)]/30' : 'bg-[var(--paper-inset)] text-[var(--ink-tertiary)] hover:text-[var(--ink-primary)]')}>{children}</button>
+}
+
 function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentUserId, back, onSent, onDelete, deleting }: { line: WhatsAppLineConfig; chatId: string; chat?: CollectionWhatsAppChat; connected: boolean; canWrite: boolean; canManage: boolean; currentUserId?: string; back: () => void; onSent: () => void; onDelete?: () => void; deleting: boolean }) {
   const queryClient = useQueryClient()
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const messagesKey = [`${line.key}-messages`, chatId]
   const messagesQuery = useQuery<CollectionWhatsAppMessage[]>({ queryKey: messagesKey, queryFn: () => line.api.listMessages(chatId).then((response) => response.data), refetchInterval: 4_000 })
   const markRead = useMutation({ mutationFn: () => line.api.markRead(chatId), onSuccess: onSent })
-  const messages = messagesQuery.data ?? []
+  const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data])
   const lastId = messages[messages.length - 1]?.id
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }) }, [lastId])
+  // Las fotos y videos cargan después: si el usuario está al final, el hilo sigue pegado abajo.
+  const threadRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const stickToBottom = useRef(true)
+  useEffect(() => {
+    const thread = threadRef.current
+    const content = contentRef.current
+    if (!thread || !content) return
+    const onScroll = () => { stickToBottom.current = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 120 }
+    const observer = new ResizeObserver(() => { if (stickToBottom.current) thread.scrollTop = thread.scrollHeight })
+    thread.addEventListener('scroll', onScroll, { passive: true })
+    observer.observe(content)
+    return () => { thread.removeEventListener('scroll', onScroll); observer.disconnect() }
+  }, [])
   const unread = chat?.unreadCount ?? 0
   const { mutate: markAsRead } = markRead
   useEffect(() => { if (unread > 0) markAsRead() }, [unread, lastId, markAsRead])
@@ -185,38 +249,57 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
     await line.api.renameChat(chatId, name)
     onSent()
   }
+  const title = chat ? chatTitle(chat) : 'Chat'
 
   return <>
-    <header className="flex items-center gap-3 border-b border-[var(--line-soft)] px-4 py-3">
-      <button type="button" onClick={back} className="rounded-lg border border-[var(--line)] p-2 text-[var(--ink-secondary)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={16} /></button>
-      <div className="min-w-0 flex-1">{!chat ? <p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">Chat</p> : chat.company ? <><p className="truncate font-display text-base font-extrabold text-[var(--ink-primary)]">{chat.company.name}</p><div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-semibold text-[var(--ink-secondary)]" /></div></> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-base font-extrabold text-[var(--ink-primary)]" />}<p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p></div>
-      {line.key === COMMERCIAL_WHATSAPP.key ? <LeadStageSelect line={line} chatId={chatId} /> : null}
-      {line.promises && canWrite && chat ? <button type="button" className="btn-secondary" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
-      {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary hidden sm:inline-flex">Ver legajo</Link> : null}
-      {onDelete ? <button type="button" className="btn-danger" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={15} /></button> : null}
+    <header className="flex items-center gap-3 border-b border-[var(--line-soft)] bg-[var(--paper)] px-3 py-2.5 sm:px-4">
+      <button type="button" onClick={back} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--ink-secondary)] hover:bg-[var(--paper-soft)] md:hidden" aria-label="Volver a los chats"><ArrowLeft size={18} /></button>
+      <WaAvatar id={chatId} name={title} className="h-10 w-10 text-sm" />
+      <div className="min-w-0 flex-1">
+        {!chat ? <p className="truncate font-display text-[15px] font-semibold text-[var(--ink-primary)]">Chat</p> : chat.company ? <>
+          <p className="truncate font-display text-[15px] font-semibold leading-tight text-[var(--ink-primary)]">{chat.company.name}</p>
+          <div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-medium text-[var(--ink-secondary)]" /></div>
+        </> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-[15px] font-semibold text-[var(--ink-primary)]" />}
+        <p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p>
+      </div>
+      {line.promises && canWrite && chat ? <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
+      {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary !min-h-9 hidden !px-3 sm:inline-flex"><FolderOpen size={15} /> Ver legajo</Link> : null}
+      {onDelete ? <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--danger)] hover:bg-[var(--danger-paper)] disabled:opacity-40" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={16} /></button> : null}
     </header>
-    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[var(--chat-surface)] p-4 sm:p-6">
-      {messagesQuery.isLoading ? <p className="text-center text-xs text-[var(--ink-tertiary)]">Cargando mensajes…</p> : messagesQuery.isError ? <p className="text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(messagesQuery.error)}</p> : messages.length ? messages.map((message) => <Bubble key={message.id} line={line} message={message} onReact={canReply ? (emoji) => react(message.id, emoji) : undefined} />) : <EmptyState icon={MessageCircle} title="Conversación nueva" description={`Todavía no hay mensajes con este contacto en el ${line.title}.`} />}
+    {line.key === COMMERCIAL_WHATSAPP.key ? <LeadStageBar line={line} chatId={chatId} /> : null}
+    <div ref={threadRef} className="wa-thread min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-8">
+      <div ref={contentRef}>
+      {messagesQuery.isLoading ? <p className="flex items-center justify-center gap-2 py-10 text-xs text-[var(--ink-tertiary)]"><Loader2 size={14} className="animate-spin" /> Cargando mensajes…</p> : messagesQuery.isError ? <p className="py-10 text-center text-xs font-semibold text-[var(--danger)]">{getErrorMessage(messagesQuery.error)}</p> : messages.length ? messages.map((message, index) => {
+        const previous = messages[index - 1]
+        const newDay = !previous || dayKey(previous.sentAt) !== dayKey(message.sentAt)
+        const sameSender = !newDay && previous?.fromMe === message.fromMe
+        return <Fragment key={message.id}>
+          {newDay ? <p className="my-3 text-center"><span className="inline-block rounded-lg bg-[var(--wa-day)] px-3 py-1 text-[11px] font-medium text-[var(--ink-tertiary)] shadow-sm first-letter:uppercase">{dayLabel(message.sentAt)}</span></p> : null}
+          <Bubble line={line} message={message} tail={!sameSender} onReact={canReply ? (emoji) => react(message.id, emoji) : undefined} />
+        </Fragment>
+      }) : <div className="mx-auto mt-10 max-w-sm rounded-2xl bg-[var(--wa-day)] px-5 py-4 text-center shadow-sm"><p className="text-sm font-semibold text-[var(--ink-primary)]">Conversación nueva</p><p className="mt-1 text-xs text-[var(--ink-tertiary)]">Todavía no hay mensajes con este contacto en el {line.title}.</p></div>}
       <div ref={bottomRef} />
+      </div>
     </div>
     <TicketComposer
+      variant="whatsapp"
       canReply={canReply}
       canManage={canManage}
       currentUserId={currentUserId}
       send={send}
-      placeholder={canReply ? `Escribir por el ${line.title}…` : !connected ? `El ${line.title} no está conectado` : 'Tu rol solo puede leer los chats'}
-      hint={canReply ? 'Enter para enviar · Shift + Enter para nueva línea · 📎 adjuntar · ⚡ respuestas rápidas · 😊 reaccionar' : !connected ? 'Vinculá el número desde Configuración para poder enviar.' : 'Solo lectura.'}
+      placeholder={canReply ? 'Escribí un mensaje' : !connected ? `El ${line.title} no está conectado` : 'Tu rol solo puede leer los chats'}
+      hint={canReply ? `Enter envía · Shift + Enter nueva línea · 😊 emojis · 📎 adjuntar · ⚡ o "/" plantillas · pasá el mouse por un mensaje para reaccionar · sale por el ${line.title}` : !connected ? 'Vinculá el número desde Configuración para poder enviar.' : 'Solo lectura.'}
     />
     <PaymentPromiseDialog target={promiseTarget} onClose={() => setPromiseTarget(null)} />
   </>
 }
 
 /**
- * Etapa del lead en el tablero de Gestión comercial, cambiable desde el chat. El asistente de
- * WhatsApp la lee para saber en qué punto está el cliente; si una persona la cambia, el
- * asistente no la vuelve atrás.
+ * Etapas del lead en el tablero de Gestión comercial, cambiables desde el chat con un clic. El
+ * asistente de WhatsApp las lee para saber en qué punto está el cliente; si una persona la
+ * cambia, el asistente no la vuelve atrás.
  */
-function LeadStageSelect({ line, chatId }: { line: WhatsAppLineConfig; chatId: string }) {
+function LeadStageBar({ line, chatId }: { line: WhatsAppLineConfig; chatId: string }) {
   const queryClient = useQueryClient()
   const leadKey = [`${line.key}-lead`, chatId]
   const leadQuery = useQuery({ queryKey: leadKey, queryFn: () => line.api.getLead(chatId).then((response) => response.data.lead), refetchInterval: 30_000 })
@@ -229,37 +312,63 @@ function LeadStageSelect({ line, chatId }: { line: WhatsAppLineConfig; chatId: s
   })
   const lead = leadQuery.data
   if (!lead) return null
-  const current = lead.stages.find((stage) => stage.id === lead.stageId)
-  return <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--ink-tertiary)]" title={`Etapa del lead #${lead.leadNumber} en Gestión comercial`}>
-    <span className="hidden lg:inline">Etapa</span>
-    <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: current?.color }} />
-    <select
-      className="ctrl-input h-9 max-w-[11rem] py-1 text-xs font-semibold"
-      value={lead.stageId}
-      disabled={!lead.canMove || move.isPending}
-      onChange={(event) => move.mutate({ dealId: lead.id, stageId: event.target.value })}
-      aria-label="Cambiar la etapa del lead"
+  const stages = [...lead.stages].sort((a, b) => a.position - b.position)
+  const open = stages.filter((stage) => !stage.isWon && !stage.isLost)
+  const closed = stages.filter((stage) => stage.isWon || stage.isLost)
+  const currentIndex = open.findIndex((stage) => stage.id === lead.stageId)
+  const pendingStage = move.isPending ? move.variables?.stageId : null
+  const disabled = !lead.canMove || move.isPending
+  const pick = (stageId: string) => { if (stageId !== lead.stageId && !disabled) move.mutate({ dealId: lead.id, stageId }) }
+  const chip = (stage: (typeof stages)[number], content: React.ReactNode, extra?: string) => {
+    const current = stage.id === lead.stageId
+    return <button
+      key={stage.id}
+      type="button"
+      onClick={() => pick(stage.id)}
+      disabled={disabled && !current}
+      aria-pressed={current}
+      title={current ? `Etapa actual: ${stage.name.trim()}` : lead.canMove ? `Mover a ${stage.name.trim()}` : 'Tu rol no puede mover este lead'}
+      className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed', current ? 'text-[var(--ink-primary)] shadow-sm' : clsx('bg-[var(--paper)] text-[var(--ink-tertiary)] ring-1 ring-[var(--line-soft)] enabled:hover:text-[var(--ink-primary)] enabled:hover:ring-[var(--line)]', extra), disabled && !current && 'opacity-60')}
+      style={current ? { background: `color-mix(in srgb, ${stage.color} 22%, var(--paper))`, boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${stage.color} 70%, transparent)` } : undefined}
     >
-      {lead.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name.trim()}{stage.isWon ? ' ✓' : stage.isLost ? ' ✗' : ''}</option>)}
-    </select>
-    {move.isError ? <span className="font-semibold text-[var(--danger)]">{getErrorMessage(move.error)}</span> : null}
-  </label>
+      {pendingStage === stage.id ? <Loader2 size={11} className="animate-spin" /> : content}
+      {stage.name.trim()}
+    </button>
+  }
+  return <div className="border-b border-[var(--line-soft)] bg-[var(--paper-soft)] px-3 py-2 sm:px-4">
+    <div className="flex items-center gap-2">
+      <span className="hidden shrink-0 text-[11px] font-medium text-[var(--ink-muted)] lg:inline" title="Etapa del lead en Gestión comercial">Lead #{lead.leadNumber}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-0.5" role="group" aria-label="Cambiar la etapa del lead">
+        {open.map((stage, index) => chip(stage, currentIndex >= 0 && index < currentIndex ? <Check size={11} className="text-[var(--success)]" /> : <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: stage.color }} />))}
+        {closed.length ? <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-[var(--line)]" /> : null}
+        {closed.map((stage) => chip(stage, stage.isWon ? <ThumbsUp size={11} /> : <ThumbsDown size={11} />, stage.isWon ? 'text-[var(--success)]' : undefined))}
+      </div>
+    </div>
+    {move.isError ? <p role="alert" className="mt-1 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(move.error)}</p> : null}
+  </div>
 }
 
-function Bubble({ line, message, onReact }: { line: WhatsAppLineConfig; message: CollectionWhatsAppMessage; onReact?: (emoji: string) => Promise<unknown> }) {
+function SendStatus({ message }: { message: CollectionWhatsAppMessage }) {
+  if (message.messageId.startsWith('local-')) return <Clock size={11} className="shrink-0" aria-label="Enviando" />
+  if (message.status === 'read') return <CheckCheck size={14} className="shrink-0 text-sky-500" aria-label="Leído" />
+  return <CheckCheck size={14} className="shrink-0" aria-label="Enviado" />
+}
+
+function Bubble({ line, message, tail, onReact }: { line: WhatsAppLineConfig; message: CollectionWhatsAppMessage; tail: boolean; onReact?: (emoji: string) => Promise<unknown> }) {
   const hasMedia = isMediaType(message.messageType)
   const text = visibleMessageText(message.text, message.messageType, message.mediaFileName)
   const canReact = Boolean(onReact) && !message.messageId.startsWith('local-')
-  return <div className={clsx('group flex items-end gap-1', message.fromMe ? 'flex-row-reverse' : 'flex-row')}>
-    <div className={clsx('flex max-w-[82%] flex-col', message.fromMe ? 'items-end' : 'items-start')}>
-      <div className={clsx('rounded-lg border px-3 py-2.5', message.fromMe ? 'border-[#1f8f4e] bg-[#1f8f4e] text-white' : 'border-[var(--chat-incoming-border)] bg-[var(--chat-incoming-bg)] text-[var(--ink-primary)]')}>
-        <p className={clsx('text-[10px] font-bold', message.fromMe ? 'text-white/75' : 'text-[var(--ink-tertiary)]')}>{message.fromMe ? (message.sentBy ? fullName(message.sentBy) : line.teamLabel) : message.pushName || 'Cliente'}</p>
-        {hasMedia ? <ChatMedia messageType={message.messageType} mimeType={message.mediaMimeType} fileName={message.mediaFileName} sizeBytes={message.mediaSizeBytes} outgoing={message.fromMe} load={() => line.api.getMedia(message.id).then((response) => response.data)} /> : null}
-        {text ? <p className="mt-1 whitespace-pre-wrap text-sm leading-5">{text}</p> : null}
-        <p className={clsx('mt-1.5 flex items-center justify-end gap-1 text-[10px]', message.fromMe ? 'text-white/70' : 'text-[var(--ink-muted)]')}>{formatDateTime(message.sentAt)}{message.fromMe ? <CheckCheck size={11} className={message.status === 'read' ? 'text-sky-200' : undefined} /> : null}</p>
+  const mine = message.fromMe
+  return <div className={clsx('group flex items-end gap-1', mine ? 'flex-row-reverse' : 'flex-row', tail ? 'mt-2.5' : 'mt-0.5')}>
+    <div className={clsx('flex max-w-[85%] flex-col sm:max-w-[70%]', mine ? 'items-end' : 'items-start')}>
+      <div className={clsx('rounded-xl px-2.5 pb-1 pt-1.5 text-sm shadow-[0_1px_0.5px_rgba(11,20,26,.13)]', mine ? 'bg-[var(--wa-out)] text-[var(--wa-out-ink)]' : 'bg-[var(--wa-in)] text-[var(--ink-primary)]', tail && (mine ? 'rounded-tr-sm' : 'rounded-tl-sm'))}>
+        {tail ? <p className={clsx('text-[11px] font-semibold', mine ? 'text-[var(--wa-green)]' : 'text-[var(--ink-tertiary)]')}>{mine ? (message.sentBy ? fullName(message.sentBy) : line.teamLabel) : message.pushName || 'Cliente'}</p> : null}
+        {hasMedia ? <div className="max-w-[min(20rem,66vw)]"><ChatMedia messageType={message.messageType} mimeType={message.mediaMimeType} fileName={message.mediaFileName} sizeBytes={message.mediaSizeBytes} outgoing={false} load={() => line.api.getMedia(message.id).then((response) => response.data)} /></div> : null}
+        {text ? <p className="mt-0.5 whitespace-pre-wrap break-words leading-5">{text}</p> : null}
+        <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-[var(--wa-meta)]">{messageTime(message.sentAt)}{mine ? <SendStatus message={message} /> : null}</p>
       </div>
-      <MessageReactions reactions={message.reactions} outgoing={message.fromMe} />
+      <MessageReactions reactions={message.reactions} outgoing={mine} />
     </div>
-    {canReact ? <ReactionButton current={myReaction(message.reactions)} onReact={onReact!} outgoing={message.fromMe} /> : null}
+    {canReact ? <ReactionButton current={myReaction(message.reactions)} onReact={onReact!} outgoing={mine} /> : null}
   </div>
 }

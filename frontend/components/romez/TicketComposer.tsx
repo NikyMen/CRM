@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Loader2, Paperclip, Pencil, Plus, Search, Send, Trash2, X, Zap } from 'lucide-react'
+import { FileText, Loader2, Paperclip, Pencil, Plus, Search, Send, Smile, Trash2, X, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { quickRepliesApi } from '@/lib/api'
 import { getErrorMessage } from '@/lib/format'
@@ -35,13 +35,18 @@ function slashQuery(draft: string) {
   return match ? match[1].toLowerCase() : null
 }
 
-export function TicketComposer({ canReply, placeholder, hint, canManage, currentUserId, send }: {
+/** Emojis para escribir (no son reacciones: se insertan en el texto donde está el cursor). */
+const COMPOSER_EMOJIS = ['😊', '😀', '😂', '🙂', '😉', '😍', '🤝', '👍', '👌', '🙏', '👏', '💪', '✅', '❌', '⚠️', '📌', '📄', '📎', '📅', '⏰', '💰', '💵', '🧾', '📊', '📈', '🎉', '❤️', '🔥', '👀', '🤔', '😅', '😢']
+
+export function TicketComposer({ canReply, placeholder, hint, canManage, currentUserId, send, variant = 'default' }: {
   canReply: boolean
   placeholder: string
   hint: string
   canManage: boolean
   currentUserId?: string
   send: (payload: ComposerPayload) => Promise<unknown>
+  /** `whatsapp`: barra redondeada estilo WhatsApp con selector de emojis (líneas propias). */
+  variant?: 'default' | 'whatsapp'
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -52,6 +57,8 @@ export function TicketComposer({ canReply, placeholder, hint, canManage, current
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
   const [highlight, setHighlight] = useState(0)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const emojiRef = useRef<HTMLDivElement | null>(null)
 
   const slash = slashQuery(draft)
   const showPicker = canReply && (pickerOpen || slash !== null)
@@ -70,6 +77,29 @@ export function TicketComposer({ canReply, placeholder, hint, canManage, current
   useEffect(resize, [draft])
 
   const closePicker = () => { setPickerOpen(false); setPickerSearch('') }
+
+  useEffect(() => {
+    if (!emojiOpen) return
+    const onDown = (event: MouseEvent) => { if (!emojiRef.current?.contains(event.target as Node)) setEmojiOpen(false) }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setEmojiOpen(false) } }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
+  }, [emojiOpen])
+
+  // Inserta el emoji donde está el cursor y deja el foco en el texto.
+  const insertEmoji = (emoji: string) => {
+    const element = textareaRef.current
+    const start = element?.selectionStart ?? draft.length
+    const end = element?.selectionEnd ?? draft.length
+    setDraft((current) => `${current.slice(0, start)}${emoji}${current.slice(end)}`)
+    requestAnimationFrame(() => {
+      if (!element) return
+      element.focus()
+      const caret = start + emoji.length
+      element.setSelectionRange(caret, caret)
+    })
+  }
 
   // Inserta la respuesta como borrador: nunca se envía sola.
   const applyQuickReply = (item: QuickReply) => {
@@ -122,6 +152,40 @@ export function TicketComposer({ canReply, placeholder, hint, canManage, current
     }
     if (event.key === 'Escape' && showPicker) { event.preventDefault(); closePicker(); if (slash !== null) setDraft(''); return }
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit() }
+  }
+
+  if (variant === 'whatsapp') {
+    const iconButton = 'grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--ink-tertiary)] transition hover:bg-[var(--paper-soft)] hover:text-[var(--ink-primary)] disabled:cursor-not-allowed disabled:opacity-40'
+    return (
+      <div className="relative border-t border-[var(--line-soft)] bg-[var(--paper)] px-2 py-2 sm:px-3">
+        {showPicker ? <QuickReplyPicker items={matches} filtering={Boolean(term)} loading={quickRepliesQuery.isLoading} error={quickRepliesQuery.error} slashMode={slash !== null} search={pickerSearch} setSearch={setPickerSearch} highlight={highlight} pick={applyQuickReply} close={() => { closePicker(); if (slash !== null) setDraft('') }} canManage={canManage} currentUserId={currentUserId} /> : null}
+        {file ? (
+          <div className="mx-1 mb-2 flex items-center gap-2 rounded-2xl bg-[var(--paper-soft)] px-3 py-2">
+            <FileText size={16} className="shrink-0 text-[var(--wa-green)]" />
+            <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--ink-primary)]">{file.name} <span className="font-normal text-[var(--ink-muted)]">· {formatBytes(file.size)}</span></p>
+            <button type="button" disabled={sending} onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = '' }} className="rounded-full p-1 text-[var(--ink-tertiary)] hover:bg-[var(--paper)]" aria-label="Quitar archivo"><X size={14} /></button>
+          </div>
+        ) : null}
+        <div className="flex items-end gap-1">
+          <div ref={emojiRef} className="relative">
+            <button type="button" className={clsx(iconButton, emojiOpen && 'bg-[var(--paper-soft)] text-[var(--ink-primary)]')} disabled={!canReply || sending} onClick={() => setEmojiOpen((value) => !value)} aria-label="Insertar emoji" aria-expanded={emojiOpen} title="Emojis"><Smile size={20} /></button>
+            {emojiOpen ? (
+              <div className="absolute bottom-full left-0 z-30 mb-2 w-72 rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-2 shadow-[var(--ast-float-shadow)]" role="dialog" aria-label="Emojis">
+                <div className="grid grid-cols-8 gap-0.5">
+                  {COMPOSER_EMOJIS.map((emoji) => <button key={emoji} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertEmoji(emoji)} className="grid h-8 w-8 place-items-center rounded-lg text-lg transition hover:scale-110 hover:bg-[var(--paper-soft)]" aria-label={`Insertar ${emoji}`}>{emoji}</button>)}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <input ref={fileRef} type="file" className="sr-only" tabIndex={-1} onChange={(event) => chooseFile(event.target.files?.[0])} />
+          <button type="button" className={iconButton} disabled={!canReply || sending} onClick={() => fileRef.current?.click()} aria-label="Adjuntar archivo" title="Adjuntar foto, video, audio o documento"><Paperclip size={19} /></button>
+          <textarea ref={textareaRef} disabled={!canReply || sending} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} className="min-h-10 min-w-0 flex-1 resize-none rounded-3xl border border-[var(--line-soft)] bg-[var(--paper-inset)] px-4 py-2.5 text-sm leading-5 text-[var(--ink-primary)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--wa-green)] disabled:cursor-not-allowed disabled:opacity-60" rows={1} placeholder={canReply ? `${placeholder} · "/" para plantillas` : placeholder} />
+          <button type="button" className={clsx(iconButton, showPicker && 'bg-[var(--wa-green-soft)] text-[var(--wa-green)]')} disabled={!canReply || sending} onClick={() => (showPicker ? closePicker() : setPickerOpen(true))} aria-label="Respuestas rápidas" aria-expanded={showPicker} title="Plantillas (respuestas rápidas)"><Zap size={19} /></button>
+          <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" disabled={!canSend} onClick={() => void submit()} aria-label="Enviar respuesta">{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
+        </div>
+        {error ? <p className="mt-1.5 px-2 text-xs font-semibold text-[var(--danger)]">{error}</p> : audioWithText ? <p className="mt-1.5 px-2 text-xs font-semibold text-[var(--warning)]">WhatsApp no permite texto junto a un audio: enviá el audio solo o borrá el texto.</p> : <p className="mt-1.5 px-2 text-[10px] text-[var(--ink-muted)]">{hint}</p>}
+      </div>
+    )
   }
 
   return (

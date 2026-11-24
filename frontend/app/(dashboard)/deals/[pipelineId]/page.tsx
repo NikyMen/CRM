@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { dealsApi, pipelinesApi, whatsappApi } from '@/lib/api'
@@ -24,12 +24,13 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { Building2, Check, GripVertical, Loader2, MessageCircle, Pencil, Send, Settings, X } from 'lucide-react'
+import { Building2, Check, CheckCheck, ChevronDown, Hourglass, Loader2, Pencil, Search, Send, Settings, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '../../pipelines/page'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 import { COMMERCIAL_WHATSAPP, LineWhatsAppLinkDialog, LineWhatsAppPanel, useLineWhatsAppSession } from '@/components/romez/LineWhatsAppPanel'
+import { chatListTime, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 
 function chatTitle(deal: KanbanCard) {
   const chat = deal.chat
@@ -45,13 +46,11 @@ function chatPhone(deal: KanbanCard) {
   return digits ? `+${digits}` : raw
 }
 
-function chatInitial(deal: KanbanCard) {
-  return chatTitle(deal).slice(0, 1).toUpperCase()
-}
-
-function formatMessageTime(value?: string | null) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' }).format(new Date(value))
+function matchesSearch(deal: KanbanCard, term: string) {
+  if (!term) return true
+  const digits = term.replace(/\D/g, '')
+  return [chatTitle(deal), deal.title, deal.leadNumber, deal.chat?.lastMessagePreview].some((value) => value?.toLowerCase().includes(term))
+    || Boolean(digits && (deal.chat?.phoneNumber ?? deal.chat?.jid ?? '').includes(digits))
 }
 
 function recalcColumn(column: KanbanColumn): KanbanColumn {
@@ -134,27 +133,43 @@ const pointerFirstCollisionDetection: CollisionDetection = (args) => {
   return closestCorners(args)
 }
 
-function Avatar({ deal, size = 'h-11 w-11', textSize = 'text-sm' }: { deal: KanbanCard; size?: string; textSize?: string }) {
-  return (
-    <div className={clsx('flex shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 font-bold text-slate-500', size, textSize)}>
-      {deal.chat?.profileImageUrl ? (
-        <img
-          src={deal.chat.profileImageUrl}
-          alt={chatTitle(deal)}
-          className="h-full w-full object-cover"
-          referrerPolicy="no-referrer"
-        />
-      ) : (
-        chatInitial(deal)
-      )}
-    </div>
-  )
+function DealAvatar({ deal, className }: { deal: KanbanCard; className?: string }) {
+  return <WaAvatar id={deal.id} name={chatTitle(deal)} imageUrl={deal.chat?.profileImageUrl} className={className} />
 }
 
-function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCard) => void }) {
+/** Contenido de la tarjeta, común a la tarjeta del tablero y a la que se ve mientras se arrastra. */
+function DealCardBody({ deal }: { deal: KanbanCard }) {
   const chat = deal.chat
   const title = chatTitle(deal)
   const phone = chatPhone(deal)
+  const unread = chat?.unreadCount ?? 0
+  return <>
+    <div className="flex items-center gap-2.5">
+      <span className="relative">
+        <DealAvatar deal={deal} className="h-9 w-9 text-xs" />
+        {unread ? <span aria-hidden className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--wa-green)] ring-2 ring-[var(--paper)]" /> : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={clsx('truncate text-sm leading-5 text-[var(--ink-primary)]', unread ? 'font-bold' : 'font-semibold')}>{title}</p>
+        {phone.replace(/\D/g, '') !== title.replace(/\D/g, '') ? <p className="truncate text-[11px] text-[var(--ink-tertiary)]">{phone}</p> : null}
+      </div>
+      {chat?.lastMessageAt ? <span className={clsx('shrink-0 self-start text-[11px]', unread ? 'font-semibold text-[var(--wa-green)]' : 'text-[var(--ink-muted)]')}>{chatListTime(chat.lastMessageAt)}</span> : null}
+    </div>
+    <p className="mt-2 line-clamp-2 text-xs leading-[1.125rem] text-[var(--ink-secondary)]">
+      {chat?.lastMessageFromMe ? <CheckCheck size={13} className="mr-1 inline -translate-y-px text-[var(--ink-muted)]" aria-label="Vos:" /> : null}
+      {chat?.lastMessagePreview ?? (chat ? 'Sin mensajes todavía.' : 'Sin chat vinculado.')}
+    </p>
+    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <span className="rounded-full bg-[var(--paper-inset)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-tertiary)]">#{deal.leadNumber}</span>
+      {chat?.source === 'commercial' ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--wa-green-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--wa-green)]" title="Vino del WhatsApp comercial"><WhatsAppLogo size={10} /> Comercial</span> : null}
+      {unread ? <span className="rounded-full bg-[var(--wa-green)] px-2 py-0.5 text-[10px] font-bold text-white">{unread} sin leer</span> : null}
+      {deal.isRotten ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lleva demasiado tiempo en esta etapa"><Hourglass size={10} /> {deal.daysInStage} d quieto</span> : deal.daysInStage > 0 ? <span className="text-[10px] text-[var(--ink-muted)]">{deal.daysInStage} d en la etapa</span> : null}
+      {deal.companyId ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><Building2 size={10} /> Cliente</span> : null}
+    </div>
+  </>
+}
+
+function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCard) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: deal.id })
   const stableTransform = transform ? { ...transform, x: 0 } : null
 
@@ -163,84 +178,89 @@ function DealCard({ deal, onOpen }: { deal: KanbanCard; onOpen: (deal: KanbanCar
       ref={setNodeRef}
       style={{ transform: stableTransform ? CSS.Transform.toString(stableTransform) : undefined, transition }}
       {...attributes}
+      {...listeners}
+      aria-label={`${chatTitle(deal)}: abrir la conversación o arrastrar para cambiar de etapa`}
+      title="Clic para abrir la conversación · arrastrá para cambiar de etapa"
       className={clsx(
-        'group relative rounded-lg border bg-white p-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,opacity] duration-150',
-        'select-none',
+        'group relative cursor-grab select-none rounded-2xl bg-[var(--paper)] p-3 text-left outline-none ring-1 transition-[box-shadow,opacity] duration-150 active:cursor-grabbing',
         isDragging
           ? 'opacity-0'
-          : 'border-slate-200 hover:border-blue-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-400/40'
+          : 'shadow-[var(--ast-card-shadow)] ring-[var(--line-soft)] hover:shadow-[var(--ast-float-shadow)] hover:ring-[var(--wa-green)]/40 focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]'
       )}
       onClick={() => onOpen(deal)}
+      onKeyDown={(event) => { if (event.key === 'Enter') onOpen(deal) }}
     >
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          aria-label="Arrastrar oportunidad"
-          className="mt-0.5 flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-          onClick={(event) => event.stopPropagation()}
-          {...listeners}
-        >
-          <GripVertical size={17} />
-        </button>
-        <Avatar deal={deal} />
-        <div className="min-w-0 self-center">
-          <p className="truncate text-sm font-extrabold leading-5 text-slate-950">{title}</p>
-          {phone.replace(/\D/g, '') !== title.replace(/\D/g, '') ? (
-            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{phone}</p>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2">
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-700">
-          {chat?.lastMessageFromMe ? 'Tu: ' : ''}{chat?.lastMessagePreview ?? 'Sin preview disponible.'}
-        </p>
-        {chat?.lastMessageAt ? (
-          <p className="mt-1 text-[11px] font-semibold text-slate-400">{formatMessageTime(chat.lastMessageAt)}</p>
-        ) : null}
-      </div>
+      <DealCardBody deal={deal} />
     </article>
   )
 }
 
-function KanbanColumnComponent({ column, onOpenDeal }: { column: KanbanColumn; onOpenDeal: (deal: KanbanCard) => void }) {
+function columnHint(column: KanbanColumn, total: number) {
+  if (column.stage.isWon) return 'Venta ganada'
+  if (column.stage.isLost) return 'Venta perdida'
+  return total ? `${Math.round((column.count / total) * 100)}% del embudo` : 'Sin leads todavía'
+}
+
+function KanbanColumnComponent({ column, deals, total, filtering, onOpenDeal }: { column: KanbanColumn; deals: KanbanCard[]; total: number; filtering: boolean; onOpenDeal: (deal: KanbanCard) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.stage.id })
+  const unread = column.deals.filter((deal) => (deal.chat?.unreadCount ?? 0) > 0).length
+  const StageIcon = column.stage.isWon ? ThumbsUp : column.stage.isLost ? ThumbsDown : null
 
   return (
-    <section className="flex max-h-full w-80 shrink-0 flex-col rounded-2xl border border-slate-200/70 bg-slate-50/80 shadow-sm">
-      <div className="sticky top-0 z-10 rounded-t-2xl border-b border-slate-200/70 bg-white/80 p-4 backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="h-3 w-3 shrink-0 rounded-full border border-black/5 shadow-inner" style={{ backgroundColor: column.stage.color }} />
-            <span className="truncate text-sm font-extrabold tracking-tight text-slate-950">{column.stage.name}</span>
-            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 shadow-sm">
-              {column.count}
-            </span>
-          </div>
+    <section className={clsx('flex max-h-full w-[18.5rem] shrink-0 flex-col overflow-hidden rounded-[1.25rem] bg-[var(--paper-soft)] ring-1 transition', isOver ? 'ring-2 ring-[var(--wa-green)]/50' : 'ring-[var(--line-soft)]')} style={{ borderTop: `4px solid ${column.stage.color}` }}>
+      <header className="px-3.5 pb-2.5 pt-3">
+        <div className="flex items-center gap-2">
+          {StageIcon ? <StageIcon size={14} style={{ color: column.stage.color }} className="shrink-0" /> : <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: column.stage.color }} />}
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ink-primary)]">{column.stage.name.trim()}</h3>
+          {unread ? <span className="rounded-full bg-[var(--wa-green)] px-1.5 py-0.5 text-[10px] font-bold text-white" title={`${unread} con mensajes sin leer`}>{unread}</span> : null}
+          <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink-secondary)] ring-1 ring-[var(--line-soft)]">{filtering ? `${deals.length}/${column.count}` : column.count}</span>
         </div>
-      </div>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--ink-muted)]">{columnHint(column, total)}</p>
+      </header>
 
       <div
         ref={setNodeRef}
-        className={clsx(
-          'flex-1 space-y-3 overflow-y-auto rounded-b-2xl border-2 p-3 transition-colors duration-150',
-          isOver ? 'border-dashed border-blue-300 bg-blue-50/70' : 'border-transparent'
-        )}
+        className={clsx('min-h-24 flex-1 space-y-2 overflow-y-auto px-2 pb-2 transition-colors duration-150', isOver && 'bg-[var(--wa-green-soft)]')}
       >
-        <SortableContext items={column.deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
-          {column.deals.map((deal) => (
+        <SortableContext items={deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
+          {deals.map((deal) => (
             <DealCard key={deal.id} deal={deal} onOpen={onOpenDeal} />
           ))}
         </SortableContext>
 
-        {column.deals.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-3 py-6 text-center text-xs font-semibold leading-5 text-slate-400">
-            Sin oportunidades en esta etapa
+        {deals.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[var(--line)] px-3 py-6 text-center text-xs text-[var(--ink-muted)]">
+            {filtering && column.count ? 'Ningún lead coincide con la búsqueda' : 'Arrastrá un lead acá'}
           </div>
         ) : null}
       </div>
     </section>
   )
+}
+
+/** Barra del embudo: cuántos leads hay en cada etapa. */
+function FunnelBar({ columns, total }: { columns: KanbanColumn[]; total: number }) {
+  if (!total) return null
+  return (
+    <div className="mt-4">
+      <div className="flex h-2.5 overflow-hidden rounded-full bg-[var(--ast-track)]" role="img" aria-label="Leads por etapa">
+        {columns.map((column) => column.count ? <div key={column.stage.id} className="h-full transition-all" style={{ width: `${(column.count / total) * 100}%`, background: column.stage.color }} title={`${column.stage.name.trim()}: ${column.count}`} /> : null)}
+      </div>
+      <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+        {columns.map((column) => (
+          <li key={column.stage.id} className="flex items-center gap-1.5 text-xs text-[var(--ink-tertiary)]">
+            <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: column.stage.color }} />
+            {column.stage.name.trim()} <b className="font-semibold text-[var(--ink-primary)]">{column.count}</b>
+            <span className="text-[var(--ink-muted)]">· {Math.round((column.count / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Stat({ value, label, tone = 'default' }: { value: number; label: string; tone?: 'default' | 'green' }) {
+  return <span className={clsx('inline-flex items-baseline gap-1 rounded-full px-3 py-1 text-xs', tone === 'green' ? 'bg-[var(--wa-green-soft)] text-[var(--wa-green)]' : 'bg-[var(--paper-inset)] text-[var(--ink-tertiary)]')}><b className={clsx('text-sm font-semibold', tone === 'green' ? 'text-[var(--wa-green)]' : 'text-[var(--ink-primary)]')}>{value}</b> {label}</span>
 }
 
 function LeadChatModal({
@@ -288,46 +308,44 @@ function LeadChatModal({
   if (!deal) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <section className="flex h-[min(760px,90vh)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
+      <section className="ast-rise flex h-[min(760px,90vh)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.5rem] border border-[var(--line-soft)] bg-[var(--paper)] shadow-[var(--ast-float-shadow)]">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line-soft)] px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-3">
-            <Avatar deal={deal} size="h-12 w-12" />
+            <DealAvatar deal={deal} className="h-11 w-11 text-sm" />
             <div className="min-w-0">
-              <p className="truncate text-base font-extrabold text-slate-950">{chatTitle(deal)}</p>
-              <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{chatPhone(deal)}</p>
+              <p className="truncate font-display text-[15px] font-semibold text-[var(--ink-primary)]">{chatTitle(deal)}</p>
+              <p className="mt-0.5 truncate text-xs text-[var(--ink-tertiary)]">{chatPhone(deal)} · Lead #{deal.leadNumber}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {deal.companyId ? <button type="button" onClick={() => { onClose(); router.push(`/clients/${deal.companyId}`) }} className="btn-secondary"><Building2 size={15} /> Abrir cliente</button> : deal.status === 'WON' && canConvert ? <button type="button" disabled={convertMutation.isPending} onClick={() => convertMutation.mutate()} className="btn-primary"><Building2 size={15} /> {convertMutation.isPending ? 'Convirtiendo…' : 'Convertir en cliente'}</button> : null}
-            <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
+            <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)] hover:text-[var(--ink-primary)]">
               <X size={18} />
             </button>
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50 p-4 lg:flex-row">
+        <div className="wa-thread flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row">
           {messagesQuery.data?.chat ? <ChatIdentityPanel chat={messagesQuery.data.chat} /> : null}
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1">
+          <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1">
           {!jid ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+            <div className="rounded-2xl bg-[var(--warning-paper)] px-4 py-3 text-sm font-semibold text-[var(--warning)]">
               Esta oportunidad no tiene un chat de WhatsApp vinculado.
             </div>
           ) : messagesQuery.isLoading ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 className="animate-spin text-emerald-500" size={28} />
+              <Loader2 className="animate-spin text-[var(--wa-green)]" size={28} />
             </div>
           ) : (
             (messagesQuery.data?.items ?? []).map((message) => (
               <div key={message.id} className={clsx('flex', message.fromMe ? 'justify-end' : 'justify-start')}>
                 <div className={clsx(
-                  'max-w-[78%] rounded-lg px-3 py-2 text-sm leading-6 shadow-sm',
-                  message.fromMe ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-900'
+                  'max-w-[78%] rounded-xl px-2.5 pb-1 pt-1.5 text-sm leading-5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]',
+                  message.fromMe ? 'rounded-tr-sm bg-[var(--wa-out)] text-[var(--wa-out-ink)]' : 'rounded-tl-sm bg-[var(--wa-in)] text-[var(--ink-primary)]'
                 )}>
-                  <p className="whitespace-pre-wrap">{message.text ?? `[${message.messageType}]`}</p>
-                  <p className={clsx('mt-1 text-[11px] font-semibold', message.fromMe ? 'text-emerald-50/80' : 'text-slate-400')}>
-                    {formatMessageTime(message.sentAt)}
-                  </p>
+                  <p className="whitespace-pre-wrap break-words">{message.text ?? `[${message.messageType}]`}</p>
+                  <p className="mt-0.5 text-right text-[10px] text-[var(--wa-meta)]">{messageTime(message.sentAt)}</p>
                 </div>
               </div>
             ))
@@ -335,23 +353,23 @@ function LeadChatModal({
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-end gap-3 border-t border-slate-200 bg-white p-4">
+        <footer className="flex shrink-0 items-end gap-2 border-t border-[var(--line-soft)] bg-[var(--paper)] px-3 py-2.5">
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            rows={2}
+            rows={1}
             disabled={!jid || sendMutation.isPending}
-            placeholder="Escribir mensaje"
-            className="min-h-12 flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50"
+            placeholder="Escribí un mensaje"
+            className="min-h-10 flex-1 resize-none rounded-3xl border border-[var(--line-soft)] bg-[var(--paper-inset)] px-4 py-2.5 text-sm text-[var(--ink-primary)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--wa-green)] disabled:opacity-60"
           />
           <button
             type="button"
             onClick={() => text.trim() && sendMutation.mutate()}
             disabled={!jid || !text.trim() || sendMutation.isPending}
-            className="flex h-12 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Enviar"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {sendMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            Enviar
+            {sendMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
           </button>
         </footer>
       </section>
@@ -377,20 +395,20 @@ function PipelineSwitchModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/40 px-4 pt-24" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-24" onClick={onClose}>
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="pipeline-switch-title"
-        className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        className="ast-rise w-full max-w-md overflow-hidden rounded-[1.5rem] border border-[var(--line-soft)] bg-[var(--paper)] shadow-[var(--ast-float-shadow)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <header className="flex items-center justify-between border-b border-[var(--line-soft)] px-5 py-4">
           <div>
-            <h2 id="pipeline-switch-title" className="text-base font-extrabold text-slate-950">Cambiar embudo</h2>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">Elegí qué embudo comercial querés ver.</p>
+            <h2 id="pipeline-switch-title" className="text-base font-semibold text-[var(--ink-primary)]">Cambiar embudo</h2>
+            <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">Elegí qué embudo comercial querés ver.</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)]">
             <X size={18} />
           </button>
         </header>
@@ -398,10 +416,10 @@ function PipelineSwitchModal({
         <div className="max-h-[52vh] overflow-y-auto p-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <Loader2 className="animate-spin text-emerald-500" size={24} />
+              <Loader2 className="animate-spin text-[var(--wa-green)]" size={24} />
             </div>
           ) : pipelines.length === 0 ? (
-            <div className="px-3 py-8 text-center text-sm font-semibold text-slate-500">No hay embudos disponibles.</div>
+            <div className="px-3 py-8 text-center text-sm text-[var(--ink-tertiary)]">No hay embudos disponibles.</div>
           ) : (
             pipelines.map((pipeline) => {
               const isCurrent = pipeline.id === currentPipelineId
@@ -411,14 +429,14 @@ function PipelineSwitchModal({
                   key={pipeline.id}
                   type="button"
                   onClick={() => onSelect(pipeline)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-slate-50"
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left hover:bg-[var(--paper-soft)]"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold text-slate-950">{pipeline.name}</p>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-500">{pipeline.stages.length} etapas</p>
+                    <p className="truncate text-sm font-semibold text-[var(--ink-primary)]">{pipeline.name}</p>
+                    <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{pipeline.stages.length} etapas</p>
                   </div>
                   {isCurrent ? (
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--wa-green-soft)] text-[var(--wa-green)]">
                       <Check size={16} strokeWidth={2.5} />
                     </span>
                   ) : null}
@@ -443,6 +461,9 @@ export default function KanbanPage() {
   const [openDeal, setOpenDeal] = useState<KanbanCard | null>(null)
   const [isPipelineSwitcherOpen, setIsPipelineSwitcherOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState(false)
+  const [search, setSearch] = useState('')
+  // Después de soltar una tarjeta no se abre su chat por el clic que cierra el arrastre.
+  const justDragged = useRef(false)
   // WhatsApp propio de Gestión comercial: panel de chats y popup de vinculación por QR.
   const [whatsAppPanel, setWhatsAppPanel] = useState<{ chatId?: string } | null>(null)
   const [whatsAppLinkOpen, setWhatsAppLinkOpen] = useState(false)
@@ -482,9 +503,12 @@ export default function KanbanPage() {
     },
   })
 
+  const term = search.trim().toLowerCase()
+  const visibleDeals = useMemo(() => new Map((board?.columns ?? []).map((column) => [column.stage.id, column.deals.filter((deal) => matchesSearch(deal, term))])), [board, term])
   const activeDeal = board?.columns.flatMap((column) => column.deals).find((deal) => deal.id === activeId)
 
   function handleOpenDeal(deal: KanbanCard) {
+    if (justDragged.current) return
     // Los leads del WhatsApp comercial abren su chat en el panel del número comercial.
     if (deal.chat?.source === 'commercial') {
       setWhatsAppPanel({ chatId: deal.chat.id })
@@ -500,7 +524,12 @@ export default function KanbanPage() {
     router.push(`/leads/${pipeline.id}`)
   }
 
+  function releaseDragGuard() {
+    window.setTimeout(() => { justDragged.current = false }, 0)
+  }
+
   function handleDragStart(event: DragStartEvent) {
+    justDragged.current = true
     setActiveId(event.active.id as string)
   }
 
@@ -518,6 +547,7 @@ export default function KanbanPage() {
     const dealId = event.active.id as string
     const latestBoard = queryClient.getQueryData<KanbanBoard>(['kanban', pipelineId])
     setActiveId(null)
+    releaseDragGuard()
     if (!latestBoard) return
 
     const targetColumn = latestBoard.columns.find((column) => column.deals.some((deal) => deal.id === dealId))
@@ -535,13 +565,14 @@ export default function KanbanPage() {
 
   function handleDragCancel() {
     setActiveId(null)
+    releaseDragGuard()
     queryClient.invalidateQueries({ queryKey: ['kanban', pipelineId] })
   }
 
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-emerald-500" size={32} />
+        <Loader2 className="animate-spin text-[var(--wa-green)]" size={32} />
       </div>
     )
   }
@@ -553,32 +584,49 @@ export default function KanbanPage() {
     .filter((column) => !column.stage.isWon && !column.stage.isLost)
     .reduce((sum, column) => sum + column.count, 0)
   const closedDeals = totalDeals - activeDeals
+  const unreadDeals = board.columns.reduce((sum, column) => sum + column.deals.filter((deal) => (deal.chat?.unreadCount ?? 0) > 0).length, 0)
+  const wonDeals = board.columns.filter((column) => column.stage.isWon).reduce((sum, column) => sum + column.count, 0)
 
   return (
-    <div className="relative flex h-full flex-col bg-white">
-      <header className="sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white px-8 py-6">
-        <div className="flex items-center justify-between gap-6">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-lg font-extrabold tracking-tight text-slate-950">{board.pipeline.name}</span>
+    <div className="relative flex h-full flex-col bg-[var(--background)]">
+      <header className="shrink-0 px-4 pb-3 pt-4 sm:px-6">
+        <div className="ast-card ast-rise px-5 py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-[var(--ast-accent-2)]">Gestión comercial · embudo</p>
+              {pipelines.length > 1 ? (
+                <button type="button" onClick={() => setIsPipelineSwitcherOpen(true)} className="mt-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg text-left font-display text-xl font-semibold tracking-tight text-[var(--ink-primary)] hover:text-[var(--ast-accent)]" title="Cambiar de embudo">
+                  <span className="truncate">{board.pipeline.name}</span> <ChevronDown size={18} className="shrink-0 text-[var(--ink-muted)]" />
+                </button>
+              ) : <h1 className="mt-0.5 truncate font-display text-xl font-semibold tracking-tight text-[var(--ink-primary)]">{board.pipeline.name}</h1>}
             </div>
-            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{activeDeals} oportunidades activas</span>
-              {closedDeals > 0 ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{closedDeals} cerradas</span> : null}
-            </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--wa-green)] px-4 text-[13px] font-semibold text-white shadow-sm hover:brightness-110" onClick={() => setWhatsAppPanel({})} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
+                <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
+                <WhatsAppLogo size={16} /> Chats de WhatsApp
+              </button>
+              {canEditBoard ? <button type="button" className="btn-secondary !px-3" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Gestión comercial" title="Vincular, reconectar o desvincular el WhatsApp comercial (QR)"><Settings size={15} /></button> : null}
+              {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
+            </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <button type="button" className="btn-primary !border-[#1f8f4e] !bg-[#1f8f4e] hover:!bg-[#187a42]" onClick={() => setWhatsAppPanel({})} title={commercialConnected ? `WhatsApp comercial conectado${commercialSession.data?.phoneNumber ? ` · +${commercialSession.data.phoneNumber}` : ''}` : 'WhatsApp comercial sin conexión'}>
-              <span className={clsx('h-2 w-2 rounded-full', commercialConnected ? 'bg-white' : 'bg-red-300')} aria-hidden />
-              <WhatsAppLogo size={16} /> WhatsApp
-            </button>
-            {canEditBoard ? <button type="button" className="btn-secondary" onClick={() => setWhatsAppLinkOpen(true)} aria-label="Configurar WhatsApp de Gestión comercial" title="Vincular, reconectar o desvincular el WhatsApp comercial (QR)"><Settings size={15} /></button> : null}
-            {canEditBoard && <button type="button" onClick={() => setEditingBoard((value) => !value)} className="btn-secondary"><Pencil size={15} />{editingBoard ? 'Volver al tablero' : 'Editar tablero'}</button>}
-          </div>
+          {!editingBoard ? <>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="relative w-full sm:w-72">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input !rounded-full pl-9" placeholder="Buscar lead, teléfono o mensaje" aria-label="Buscar en el tablero" />
+              </label>
+              <Stat value={activeDeals} label="activos" />
+              {unreadDeals ? <Stat value={unreadDeals} label="sin leer" tone="green" /> : null}
+              {wonDeals ? <Stat value={wonDeals} label="ganados" /> : null}
+              {closedDeals - wonDeals > 0 ? <Stat value={closedDeals - wonDeals} label="perdidos" /> : null}
+              <span className="ml-auto hidden text-xs text-[var(--ink-muted)] lg:inline">Clic abre el chat · arrastrá la tarjeta para cambiar de etapa</span>
+            </div>
+            <FunnelBar columns={board.columns} total={totalDeals} />
+          </> : null}
         </div>
       </header>
 
-      {editingBoard ? <div className="flex-1 overflow-y-auto"><PipelinesPage /></div> : <div className="flex-1 overflow-x-auto p-4">
+      {editingBoard ? <div className="flex-1 overflow-y-auto"><PipelinesPage /></div> : <div className="min-h-0 flex-1 overflow-x-auto px-4 pb-4 sm:px-6">
         <DndContext
           sensors={sensors}
           collisionDetection={pointerFirstCollisionDetection}
@@ -589,24 +637,14 @@ export default function KanbanPage() {
         >
           <div className="flex h-full items-start gap-3">
             {board.columns.map((column) => (
-              <KanbanColumnComponent key={column.stage.id} column={column} onOpenDeal={handleOpenDeal} />
+              <KanbanColumnComponent key={column.stage.id} column={column} deals={visibleDeals.get(column.stage.id) ?? []} total={totalDeals} filtering={Boolean(term)} onOpenDeal={handleOpenDeal} />
             ))}
           </div>
 
           <DragOverlay adjustScale={false} dropAnimation={null} modifiers={[snapOverlayToCursor]}>
             {activeDeal ? (
-              <div className="w-[296px] cursor-grabbing rounded-xl border border-blue-300 bg-white p-3 shadow-xl shadow-slate-900/15">
-                <div className="flex items-start gap-3">
-                  <Avatar deal={activeDeal} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold leading-5 text-slate-950">{chatTitle(activeDeal)}</p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{chatPhone(activeDeal)}</p>
-                  </div>
-                </div>
-                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/70 px-2.5 py-2 text-xs font-bold text-blue-800">
-                  <MessageCircle size={13} className="mr-1.5 inline" />
-                  {activeDeal.chat?.lastMessagePreview ?? 'Chat activo'}
-                </div>
+              <div className="w-[17.5rem] rotate-[1.5deg] cursor-grabbing rounded-2xl bg-[var(--paper)] p-3 shadow-[var(--ast-float-shadow)] ring-2 ring-[var(--wa-green)]/50">
+                <DealCardBody deal={activeDeal} />
               </div>
             ) : null}
           </DragOverlay>

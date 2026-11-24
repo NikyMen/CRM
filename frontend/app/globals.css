@@ -311,3 +311,28 @@ button, a, input, textarea, select { transition: background-color 140ms ease, bo
 .dark .nav-active { border-color: rgb(255 255 255 / .12); background: rgb(255 255 255 / .1); color: #fff; }
 .dark .btn-primary { border-color: #3a62b0; background: #3a62b0; }
 .dark .btn-primary:hover { border-color: #4a72c0; background: #4a72c0; }
+
+/* Chat estilo WhatsApp de las líneas propias (Gestión comercial y Cobranzas) y tablero de leads. */
+:root {
+  --wa-green: #1f8f4e;
+  --wa-green-soft: #e3f4ea;
+  --wa-thread: #efeae2;
+  --wa-thread-pattern: radial-gradient(rgba(8, 45, 104, .045) 1px, transparent 1px);
+  --wa-out: #d9fdd3;
+  --wa-out-ink: #111b21;
+  --wa-in: #ffffff;
+  --wa-meta: rgba(17, 27, 33, .5);
+  --wa-day: rgba(255, 255, 255, .88);
+}
+.dark {
+  --wa-green: #3fb873;
+  --wa-green-soft: rgba(63, 184, 115, .16);
+  --wa-thread: #1b1d20;
+  --wa-thread-pattern: radial-gradient(rgba(220, 230, 245, .05) 1px, transparent 1px);
+  --wa-out: #144d37;
+  --wa-out-ink: #e9edef;
+  --wa-in: #303338;
+  --wa-meta: rgba(233, 237, 239, .55);
+  --wa-day: #292c30;
+}
+.wa-thread { background-color: var(--wa-thread); background-image: var(--wa-thread-pattern); background-size: 18px 18px; }

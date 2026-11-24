@@ -217,10 +217,11 @@ export function ReactionButton({ current, onReact, outgoing }: { current?: strin
   useEffect(() => {
     if (!open) return
     const onDown = (event: MouseEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false) }
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    // En captura y marcado como atendido: Esc cierra sólo el selector, no el panel que lo contiene.
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false) } }
     document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+    document.addEventListener('keydown', onKey, true)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
   }, [open])
 
   async function pick(emoji: string) {
