@@ -5,8 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
-import type { LucideProps } from 'lucide-react'
-import { BadgeDollarSign, Bell, Bot, ListChecks, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Bell, Bot, ListChecks, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, MessagesSquare, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -20,17 +19,25 @@ import { PaymentPromiseBell, usePromiseCounts } from '@/components/romez/Payment
 import { brand } from '@/lib/brand'
 import { useBranding } from '@/lib/useBranding'
 import { BrandImage } from '@/components/BrandImage'
+import { userMenuItemVisible } from '@/lib/instance'
+import { WhatsAppLogo } from '@/components/WhatsAppLogo'
+import { FacebookLogo, InstagramLogo } from '@/components/social/networks'
 
-type NavItem = { href: string; label: string; icon: ComponentType<LucideProps>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
+type NavItem = { href: string; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }>; roles?: Role[]; exact?: boolean; aliases?: string[]; module?: ModuleKey }
 
 const NAV_ITEMS: NavItem[] = [
+  // Bandeja de redes: el tablero de Mensajes y una sección por red.
+  { href: '/mensajes', label: 'Mensajes', icon: MessagesSquare, roles: ['owner', 'admin', 'member'], module: 'messages' },
+  { href: '/redes/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'], module: 'whatsapp' },
+  { href: '/redes/instagram', label: 'Instagram', icon: InstagramLogo, roles: ['owner', 'admin', 'member'], module: 'instagram' },
+  { href: '/redes/facebook', label: 'Facebook', icon: FacebookLogo, roles: ['owner', 'admin', 'member'], module: 'facebook' },
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true, module: 'home' },
   { href: '/clients', label: 'Clientes', icon: Building2, module: 'clients' },
   { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },
   { href: '/daily-reports', label: 'Planilla diaria', icon: ClipboardCheck, roles: ['owner', 'admin', 'member'], module: 'daily-reports' },
   { href: '/commercial', label: 'Gestión comercial', icon: BriefcaseBusiness, roles: ['owner', 'admin', 'member'], aliases: ['/leads', '/deals'], module: 'commercial' },
-  { href: '/tareas', label: 'Tareas', icon: ListChecks },
-  { href: '/asistente', label: 'Asistente IA', icon: Bot, roles: ['owner', 'admin'] },
+  { href: '/tareas', label: 'Tareas', icon: ListChecks, module: 'tasks' },
+  { href: '/asistente', label: 'Asistente IA', icon: Bot, roles: ['owner', 'admin'], module: 'assistant' },
   { href: '/balances', label: 'Saldos', icon: Scale, module: 'collections' },
   { href: '/collections', label: 'Cobranzas', icon: BadgeDollarSign, module: 'collections' },
   { href: '/tickets', label: 'Tickets', icon: Ticket, module: 'tickets', aliases: ['/customer-service'] },
@@ -133,8 +140,8 @@ function UserMenu({ user, onLogout, showTeam = false }: { user: ReturnType<typeo
         <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] py-1 shadow-lg">
           <div className="border-b border-[var(--line)] px-4 py-3 sm:hidden"><p className="truncate text-xs font-bold text-[var(--ink-primary)]">{fullName || user?.email}</p><p className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--ink-tertiary)]">{user?.role}</p></div>
           {showTeam ? <Link href="/team" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><UsersRound size={15} /> Equipo</Link> : null}
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); setNotificationsOpen(true) }} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Bell size={15} /> Notificaciones</button>
-          <Link href="/settings" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Settings size={15} /> Configuración</Link>
+          {userMenuItemVisible('notifications') ? <button type="button" role="menuitem" onClick={() => { setOpen(false); setNotificationsOpen(true) }} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Bell size={15} /> Notificaciones</button> : null}
+          {userMenuItemVisible('settings') ? <Link href="/settings" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-2.5 px-4 text-sm font-semibold text-[var(--ink-primary)] hover:bg-[var(--background)]"><Settings size={15} /> Configuración</Link> : null}
           <button type="button" role="menuitem" onClick={onLogout} className="flex min-h-10 w-full items-center gap-2.5 px-4 text-sm font-semibold text-red-600 hover:bg-[var(--background)]"><LogOut size={15} /> Cerrar sesión</button>
         </div>
       ) : null}

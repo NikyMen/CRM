@@ -14,6 +14,12 @@ export const MODULE_KEYS = [
   'stock',
   'team',
   'integrations',
+  'tasks',
+  'assistant',
+  'messages',
+  'whatsapp',
+  'instagram',
+  'facebook',
 ] as const
 
 export type ModuleKey = typeof MODULE_KEYS[number]
@@ -39,6 +45,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'stock', label: 'Stock', description: 'Inventario, movimientos y caja.', defaultEnabled: false },
   { key: 'team', label: 'Equipo', description: 'Miembros del estudio, invitaciones y roles.', defaultEnabled: true },
   { key: 'integrations', label: 'Integraciones', description: 'Webhooks, API Keys y el endpoint de Meta API.', defaultEnabled: true },
+  { key: 'tasks', label: 'Tareas', description: 'Tareas del equipo con responsable, vencimiento e historial.', defaultEnabled: true },
+  { key: 'assistant', label: 'Asistente IA', description: 'Configuración del asistente que responde el WhatsApp comercial.', defaultEnabled: true },
+  // Redes sociales: bandeja unificada en tablero y una sección por red. Apagadas por defecto.
+  { key: 'messages', label: 'Mensajes', description: 'Tablero con las conversaciones de WhatsApp, Instagram y Facebook, filtrable por red.', defaultEnabled: false },
+  { key: 'whatsapp', label: 'WhatsApp', description: 'Número de WhatsApp de la bandeja de Mensajes: conexión por QR y chats.', defaultEnabled: false },
+  { key: 'instagram', label: 'Instagram', description: 'Mensajes directos de Instagram y publicación de contenido.', defaultEnabled: false },
+  { key: 'facebook', label: 'Facebook', description: 'Mensajes de la página de Facebook (Messenger).', defaultEnabled: false },
 ]
 
 export const DEFAULT_MODULE_STATE: ModuleState = MODULE_DEFINITIONS.reduce((state, definition) => {
@@ -63,6 +76,12 @@ export const MODULE_PATHS: Record<ModuleKey, string[]> = {
   stock: ['/stock'],
   team: ['/team'],
   integrations: ['/webhooks', '/api-keys', '/api-meta'],
+  tasks: ['/tareas'],
+  assistant: ['/asistente'],
+  messages: ['/mensajes'],
+  whatsapp: ['/redes/whatsapp'],
+  instagram: ['/redes/instagram'],
+  facebook: ['/redes/facebook'],
 }
 
 export function normalizeModuleState(value: unknown): ModuleState {

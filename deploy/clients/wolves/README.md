@@ -194,8 +194,8 @@ node backend/scripts/build-pdf-logo.cjs deploy/clients/wolves/source/wolves-pdf-
 - El PDF dibuja el logo con **alto fijo** (76 pt en el encabezado, 330 pt la marca de agua). Un
   logo apaisado sin relleno haría una marca de agua más ancha que la hoja; por eso el origen
   tiene un lienzo de 1,55:1 con la palabra al 96 % del ancho.
-- En `main` el script no compila: en la línea 60 el `'\n'` quedó como un salto de línea literal.
-  Hasta que se corrija ahí, hay que correr una copia con esa línea arreglada.
+- El script tenía en la línea 60 un `'\n'` convertido en salto de línea literal y no compilaba;
+  quedó corregido al dar de alta Vicar (2026-11-26).
 
 ## A tener en cuenta
 

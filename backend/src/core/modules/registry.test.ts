@@ -19,6 +19,22 @@ test('cobranzas sólo está disponible por defecto para owner y admin', () => {
   assert.equal(readMemberModuleState(null, { collections: false }, 'admin').collections, true)
 })
 
+test('collectionsOff apaga cobranzas también para owner y admin', () => {
+  assert.equal(readMemberModuleState({ collectionsOff: true }, {}, 'owner').collections, false)
+  assert.equal(readMemberModuleState({ collectionsOff: true }, { collections: true }, 'member').collections, false)
+  assert.equal(readMemberModuleState({ collectionsOff: false }, {}, 'owner').collections, true)
+})
+
+test('las secciones de redes vienen apagadas y tareas y asistente prendidas', () => {
+  const state = readModuleState(null)
+  assert.equal(state.messages, false)
+  assert.equal(state.whatsapp, false)
+  assert.equal(state.instagram, false)
+  assert.equal(state.facebook, false)
+  assert.equal(state.tasks, true)
+  assert.equal(state.assistant, true)
+})
+
 test('el registro cubre todos los módulos apagables del producto', () => {
   const state = readModuleState(null)
   assert.deepEqual(Object.keys(state).sort(), [...MODULE_KEYS].sort())

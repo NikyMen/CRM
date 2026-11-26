@@ -33,13 +33,16 @@ export async function isModuleEnabled(workspaceId: string, userId: string, role:
 /**
  * preHandler que bloquea un módulo apagado desde Configuración.
  * Se usa después de `authenticate`, porque necesita el workspace del JWT.
+ * Con varias claves alcanza con que una esté prendida: sirve para una API que
+ * comparten varias secciones (el WhatsApp comercial lo usan Gestión comercial y Mensajes).
  */
-export function requireModule(key: ModuleKey) {
+export function requireModule(...keys: ModuleKey[]) {
   return async (req: any): Promise<void> => {
     if (req.method === 'OPTIONS') return
     const user = req.user as { workspaceId?: string; userId?: string; role?: string } | undefined
     if (!user?.workspaceId || !user.userId || !user.role) throw new ForbiddenError('No autenticado')
-    if (!(await isModuleEnabled(user.workspaceId, user.userId, user.role, key))) {
+    const state = await getModuleState(user.workspaceId, user.userId, user.role)
+    if (!keys.some((key) => state[key])) {
       throw new ForbiddenError('Este módulo está desactivado para tu espacio de trabajo')
     }
   }

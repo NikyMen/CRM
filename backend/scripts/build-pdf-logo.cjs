@@ -57,8 +57,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(path.join(outDir, `${name}-rgb.zlib`), zlib.deflateSync(rgb, { level: 9 }))
   fs.writeFileSync(path.join(outDir, `${name}-alpha.zlib`), zlib.deflateSync(alpha, { level: 9 }))
-  fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify({ width: info.width, height: info.height }, null, 2) + '
-')
+  fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify({ width: info.width, height: info.height }, null, 2) + '\n')
   console.log(`logo ${name} ${info.width}x${info.height} background=${background.join(',')}`)
 }
 

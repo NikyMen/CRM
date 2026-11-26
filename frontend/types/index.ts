@@ -138,8 +138,8 @@ export interface KanbanCard {
     contactName?: string | null
     /** Sólo chats comerciales: lo atiende una persona y el asistente no responde. */
     assistantPaused?: boolean
-    /** `commercial`: el lead vino del WhatsApp comercial; si no, del de Tickets. */
-    source?: 'tickets' | 'commercial'
+    /** `commercial`: el lead vino del WhatsApp comercial; `instagram` y `facebook`: de esa red; si no, del de Tickets. */
+    source?: 'tickets' | 'commercial' | 'instagram' | 'facebook'
   }
   createdAt: string
   updatedAt: string
@@ -1163,6 +1163,9 @@ export interface CollectionWhatsAppChat {
   lastMessageFromMe?: boolean | null
   /** Línea comercial: lo atiende una persona y el asistente de WhatsApp no responde. */
   assistantPaused?: boolean
+  /** Responsable del chat (bandeja de Mensajes). */
+  assignedToUserId?: string | null
+  assignedTo?: { id: string; firstName: string; lastName?: string | null; avatar?: string | null } | null
 }
 
 export interface CollectionWhatsAppMessage {

@@ -160,6 +160,7 @@ model Workspace {
   tasks                      Task[]
   taskEvents                 TaskEvent[]
   assets                     WorkspaceAsset[]
+  socialPosts                SocialPost[]
 
   @@map("workspaces")
 }
@@ -209,9 +210,11 @@ model User {
   taskEvents                 TaskEvent[]                       @relation("TaskEventActor")
   quickReplies               QuickReply[]                      @relation("QuickReplyAuthor")
   collectionWhatsAppMessages CollectionWhatsAppMessage[]       @relation("CollectionWhatsAppSender")
+  assignedCollectionChats    CollectionWhatsAppChat[]          @relation("CollectionWhatsAppChatAssignee")
   assignedPaymentPromises    PaymentPromise[]                  @relation("PaymentPromiseAssignee")
   createdPaymentPromises     PaymentPromise[]                  @relation("PaymentPromiseCreatedBy")
   closedPaymentPromises      PaymentPromise[]                  @relation("PaymentPromiseClosedBy")
+  socialPosts                SocialPost[]                      @relation("SocialPostAuthor")
 
   @@map("users")
 }
@@ -1401,17 +1404,23 @@ model CollectionWhatsAppChat {
   /// Línea comercial: el chat lo atiende una persona y el asistente de n8n no responde.
   assistantPaused    Boolean   @default(false)
   assistantPausedAt  DateTime?
+  /// Responsable del chat (bandeja de Mensajes): owner/admin asignan a cualquiera; el resto toma
+  /// un chat libre o libera el propio, como en Tickets.
+  assignedToUserId   String?
+  assignedAt         DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   workspace       Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company         Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assignedTo      User?                       @relation("CollectionWhatsAppChatAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   messages        CollectionWhatsAppMessage[]
   paymentPromises PaymentPromise[]
 
   @@unique([workspaceId, line, jid])
   @@index([workspaceId, line, lastMessageAt])
   @@index([workspaceId, companyId])
+  @@index([workspaceId, line, assignedToUserId])
   @@map("collection_whatsapp_chats")
 }
 
@@ -1608,4 +1617,31 @@ model TaskEvent {
   @@index([workspaceId, createdAt])
   @@index([taskId, createdAt])
   @@map("task_events")
+}
+
+/// Publicación para una red social armada desde el CRM (hoy sólo Instagram). La imagen va en la
+/// base, como los assets de marca, para que entre en los respaldos. `status`: draft, publishing,
+/// published o failed. `externalPostId` y `permalink` los devuelve la red al publicar.
+model SocialPost {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  network         String    @default("instagram")
+  caption         String    @db.Text
+  imageMimeType   String
+  imageFileName   String?
+  image           Bytes
+  status          String    @default("draft")
+  externalPostId  String?
+  permalink       String?
+  errorMessage    String?
+  publishedAt     DateTime?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("SocialPostAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, network, createdAt])
+  @@map("social_posts")
 }

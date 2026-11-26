@@ -16,6 +16,12 @@ export const MODULE_KEYS = [
   'stock',
   'team',
   'integrations',
+  'tasks',
+  'assistant',
+  'messages',
+  'whatsapp',
+  'instagram',
+  'facebook',
 ] as const
 
 export type ModuleKey = typeof MODULE_KEYS[number]
@@ -41,6 +47,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'stock', label: 'Stock', description: 'Inventario, movimientos y caja.', defaultEnabled: false },
   { key: 'team', label: 'Equipo', description: 'Miembros del estudio, invitaciones y roles.', defaultEnabled: true },
   { key: 'integrations', label: 'Integraciones', description: 'Webhooks, API Keys y el endpoint de Meta API.', defaultEnabled: true },
+  { key: 'tasks', label: 'Tareas', description: 'Tareas del equipo con responsable, vencimiento e historial.', defaultEnabled: true },
+  { key: 'assistant', label: 'Asistente IA', description: 'Configuración del asistente que responde el WhatsApp comercial.', defaultEnabled: true },
+  // Redes sociales: bandeja unificada en tablero y una sección por red. Apagadas por defecto.
+  { key: 'messages', label: 'Mensajes', description: 'Tablero con las conversaciones de WhatsApp, Instagram y Facebook, filtrable por red.', defaultEnabled: false },
+  { key: 'whatsapp', label: 'WhatsApp', description: 'Número de WhatsApp de la bandeja de Mensajes: conexión por QR y chats.', defaultEnabled: false },
+  { key: 'instagram', label: 'Instagram', description: 'Mensajes directos de Instagram y publicación de contenido.', defaultEnabled: false },
+  { key: 'facebook', label: 'Facebook', description: 'Mensajes de la página de Facebook (Messenger).', defaultEnabled: false },
 ]
 
 /** Configuración nunca se apaga: sin ella no hay forma de volver a prender los módulos. */
@@ -104,10 +117,13 @@ export function writeModuleState(settings: unknown, state: ModuleState): Record<
  * Combina la configuración del workspace con una excepción puntual de un
  * integrante. Cobranzas es privada por defecto: owner y admin la conservan
  * siempre; member y viewer sólo la ven cuando se los habilita expresamente.
+ * `settings.collectionsOff` la apaga para todos: es para un espacio que no usa
+ * Cobranzas en absoluto (el flag del módulo no alcanza, porque owner y admin lo ignoran).
  */
 export function readMemberModuleState(settings: unknown, memberAccess: unknown, role: string): ModuleState {
   const state = mergeModuleState(readModuleState(settings), asRecord(memberAccess) as Record<string, boolean | undefined>)
   if (role === 'owner' || role === 'admin') state.collections = true
   else if (typeof asRecord(memberAccess).collections !== 'boolean') state.collections = false
+  if (asRecord(settings).collectionsOff === true) state.collections = false
   return state
 }

@@ -14,6 +14,9 @@ import { collectionWhatsAppManager, commercialWhatsAppManager, type CollectionWh
 import { findCommercialLeadByChat } from '../deals/commercial-lead-stage'
 import { dealVisibilityWhere } from '../deals/deal-access'
 import { forceAssistantReply, setAssistantPaused } from './commercial-assistant'
+import { db } from '../../core/database'
+import { NotFoundError } from '../../types'
+import { assertAssignAllowed, assertAssignableMember, assignmentVisibility, canSeeAssignee, lineAssignmentEnabled, syncLeadOwner } from '../social/chat-assignment'
 
 const sendSchema = z.object({
   text: z.string().trim().max(4096).optional(),
@@ -27,10 +30,22 @@ const sendSchema = z.object({
  * Rutas de un número de WhatsApp propio de un módulo: lo usa quien tenga el
  * módulo; vincular o desvincular el número es de owner/admin.
  */
-function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKey) {
+function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, ...modules: ModuleKey[]) {
   return async (app: FastifyInstance) => {
     app.addHook('onRequest', async (req) => authenticate(req))
-    app.addHook('preHandler', requireModule(module))
+    app.addHook('preHandler', requireModule(...modules))
+
+    // Con responsables (bandeja de Mensajes) cada persona sólo abre los chats que puede ver.
+    const assignment = manager.line === 'commercial'
+    const assignmentOn = async (ctx: WorkspaceContext) => assignment && await lineAssignmentEnabled(ctx)
+    app.addHook('preHandler', async (req) => {
+      const chatId = (req.params as { id?: string } | undefined)?.id
+      if (!chatId || !req.routeOptions.url?.includes('/chats/:id')) return
+      const ctx = req.user as WorkspaceContext
+      if (!(await assignmentOn(ctx))) return
+      const chat = await db.collectionWhatsAppChat.findFirst({ where: { id: chatId, workspaceId: ctx.workspaceId, line: manager.line }, select: { assignedToUserId: true } })
+      if (!chat || !canSeeAssignee(ctx, chat.assignedToUserId)) throw new NotFoundError('Chat', chatId)
+    })
 
     app.get('/session', async (req, reply) => {
       const ctx = req.user as WorkspaceContext
@@ -51,7 +66,7 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
     app.get('/chats', async (req, reply) => {
       const ctx = req.user as WorkspaceContext
       const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query)
-      return reply.send(await manager.listChats(ctx.workspaceId, search))
+      return reply.send(await manager.listChats(ctx.workspaceId, search, await assignmentOn(ctx) ? assignmentVisibility(ctx) : {}))
     })
 
     app.get<{ Params: { id: string } }>('/chats/:id/messages', async (req, reply) => {
@@ -61,7 +76,7 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
 
     // Lead del tablero vinculado al chat comercial: etapa actual y columnas, para cambiarla
     // desde el chat (el cambio en sí usa PATCH /deals/:id/move, con sus permisos).
-    if (module === 'commercial') {
+    if (manager.line === 'commercial') {
       app.get<{ Params: { id: string } }>('/chats/:id/lead', async (req, reply) => {
         const ctx = req.user as WorkspaceContext
         const lead = await findCommercialLeadByChat(ctx.workspaceId, req.params.id, dealVisibilityWhere(ctx))
@@ -93,6 +108,20 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
       })
     }
 
+    if (assignment) {
+      // Responsable del chat: el lead del tablero lo sigue.
+      app.put<{ Params: { id: string } }>('/chats/:id/assignee', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
+        const ctx = req.user as WorkspaceContext
+        const { assignedToUserId } = z.object({ assignedToUserId: z.string().min(1).nullable() }).parse(req.body)
+        const chat = await manager.getChat(ctx.workspaceId, req.params.id)
+        assertAssignAllowed(ctx, chat.assignedToUserId, assignedToUserId)
+        await assertAssignableMember(ctx.workspaceId, assignedToUserId)
+        const updated = await manager.assignChat(ctx.workspaceId, chat.id, chat.assignedToUserId, assignedToUserId)
+        await syncLeadOwner(ctx.workspaceId, 'commercialChatId', chat.id, assignedToUserId)
+        return reply.send(updated)
+      })
+    }
+
     app.post<{ Params: { id: string } }>('/chats/:id/read', async (req, reply) => {
       const ctx = req.user as WorkspaceContext
       await manager.markRead(ctx.workspaceId, req.params.id)
@@ -118,7 +147,13 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
       const ctx = req.user as WorkspaceContext
       const body = sendSchema.parse(req.body)
       const file = body.file ? decodeOutboundFile(body.file) : undefined
-      return reply.status(201).send(await manager.sendMessage(ctx.workspaceId, req.params.id, ctx.userId, { text: body.text, file }))
+      const sent = await manager.sendMessage(ctx.workspaceId, req.params.id, ctx.userId, { text: body.text, file })
+      // Quien responde un chat libre se lo queda, como al tomar un ticket.
+      if (await assignmentOn(ctx)) {
+        const taken = await db.collectionWhatsAppChat.updateMany({ where: { id: req.params.id, workspaceId: ctx.workspaceId, assignedToUserId: null }, data: { assignedToUserId: ctx.userId, assignedAt: new Date() } })
+        if (taken.count) await syncLeadOwner(ctx.workspaceId, 'commercialChatId', req.params.id, ctx.userId)
+      }
+      return reply.status(201).send(sent)
     })
 
     app.put<{ Params: { id: string; messageId: string } }>('/chats/:id/messages/:messageId/reaction', { preHandler: requireRole('owner', 'admin', 'member') }, async (req, reply) => {
@@ -145,4 +180,4 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, module: ModuleKe
 export const collectionWhatsAppRoutes = lineWhatsAppRoutes(collectionWhatsAppManager, 'collections')
 
 /** WhatsApp propio de Gestión comercial. */
-export const commercialWhatsAppRoutes = lineWhatsAppRoutes(commercialWhatsAppManager, 'commercial')
+export const commercialWhatsAppRoutes = lineWhatsAppRoutes(commercialWhatsAppManager, 'commercial', 'messages', 'whatsapp')

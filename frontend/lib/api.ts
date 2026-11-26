@@ -506,6 +506,8 @@ function lineWhatsAppApi(prefix: string) {
     setAssistantPaused: (chatId: string, paused: boolean) => api.put<{ id: string; assistantPaused: boolean }>(`${prefix}/chats/${chatId}/assistant`, { paused }),
     /** «Forzar IA»: el asistente contesta ya los mensajes sin respuesta (sólo la línea comercial). */
     forceAssistant: (chatId: string) => api.post<{ forced: boolean; messages: number }>(`${prefix}/chats/${chatId}/assistant/force`),
+    /** Responsable del chat (sólo la línea comercial, con la bandeja de Mensajes). */
+    assign: (chatId: string, assignedToUserId: string | null) => api.put<CollectionWhatsAppChat>(`${prefix}/chats/${chatId}/assignee`, { assignedToUserId }),
   }
 }
 
@@ -517,6 +519,47 @@ export type ChatLead = {
   stageId: string
   stages: { id: string; name: string; position: number; color: string; isWon: boolean; isLost: boolean }[]
   canMove: boolean
+}
+
+// ─── Redes sociales (Mensajes, Instagram, Facebook) ───────────────
+export type SocialNetwork = 'instagram' | 'facebook'
+export type SocialConnection = { id: string; name: string; status: 'connected' | 'disconnected' | 'error'; externalAccountId: string; externalAccountLabel: string | null; lastSyncedAt: string | null }
+export type SocialStatus = {
+  /** La API es accesible desde internet: sin eso Meta no entrega mensajes ni puede publicar. */
+  publicApiReady: boolean
+  webhookEnabled: boolean
+  networks: { network: SocialNetwork; connection: SocialConnection | null; unreadConversations: number }[]
+}
+export type SocialConversation = {
+  id: string; network: SocialNetwork; name: string; username: string | null; avatar: string | null; contactId: string
+  unreadCount: number; lastMessageAt: string | null; lastMessagePreview: string | null; lastMessageFromMe: boolean | null; assignedToUserId: string | null
+}
+export type SocialMessage = { id: string; direction: 'inbound' | 'outbound'; type: string; status: string; text: string | null; sentAt: string; attachments: { type: string; url: string | null; fileName: string | null }[] }
+export type SocialConversationDetail = { conversation: SocialConversation & { canReply: boolean }; messages: SocialMessage[]; lead: ChatLead | null }
+export type SocialPost = {
+  id: string; network: string; caption: string; imageMimeType: string; imageFileName: string | null; status: 'draft' | 'publishing' | 'published' | 'failed'
+  externalPostId: string | null; permalink: string | null; errorMessage: string | null; publishedAt: string | null; createdAt: string; updatedAt: string
+  createdBy: { id: string; firstName: string; lastName: string | null } | null
+}
+
+export type TeamMember = { id: string; firstName: string; lastName: string | null; avatar: string | null; role: string }
+
+export const socialApi = {
+  team: () => api.get<{ members: TeamMember[] }>('/social/team'),
+  assign: (id: string, assignedToUserId: string | null) => api.put<SocialConversationDetail | null>(`/social/conversations/${id}/assignee`, { assignedToUserId }),
+  status: () => api.get<SocialStatus>('/social/status'),
+  connect: (data: { network: SocialNetwork; accountId: string; accessToken: string; name?: string }) => api.post<SocialStatus>('/social/connections', data),
+  disconnect: (network: SocialNetwork) => api.delete<SocialStatus>(`/social/connections/${network}`),
+  conversations: (network?: SocialNetwork) => api.get<{ conversations: SocialConversation[] }>('/social/conversations', { params: network ? { network } : undefined }),
+  conversation: (id: string) => api.get<SocialConversationDetail>(`/social/conversations/${id}`),
+  markRead: (id: string) => api.post(`/social/conversations/${id}/read`),
+  send: (id: string, text: string) => api.post<SocialConversationDetail>(`/social/conversations/${id}/messages`, { text }),
+  posts: () => api.get<{ posts: SocialPost[] }>('/social/posts'),
+  createPost: (data: { caption: string; image: OutboundFilePayload }) => api.post<SocialPost>('/social/posts', data),
+  updatePost: (id: string, caption: string) => api.patch<SocialPost>(`/social/posts/${id}`, { caption }),
+  publishPost: (id: string) => api.post<SocialPost>(`/social/posts/${id}/publish`),
+  deletePost: (id: string) => api.delete(`/social/posts/${id}`),
+  postImage: (id: string) => api.get<Blob>(`/social/posts/${id}/image`, { responseType: 'blob' }),
 }
 
 export type LineWhatsAppApi = ReturnType<typeof lineWhatsAppApi>

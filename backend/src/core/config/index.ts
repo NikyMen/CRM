@@ -25,6 +25,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   API_KEY_PREFIX: z.string().default('crm'),
   FRONTEND_URL: z.string().url().default('http://localhost:3001'),
+  // URL pública de esta API. Meta la usa para descargar la imagen al publicar en Instagram.
+  PUBLIC_API_URL: optionalString(z.string().url()),
   APP_TIMEZONE: z.string().default('America/Asuncion'),
   DEFAULT_CURRENCY: z.string().length(3).default('PYG'),
   GLOBAL_RATE_LIMIT_MAX: z.coerce.number().int().min(300).max(10_000).default(1500),

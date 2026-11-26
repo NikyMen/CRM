@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { db } from '../../core/database'
 import { config } from '../../core/config'
+import type { Prisma } from '@prisma/client'
 import { AppError, NotFoundError, ValidationError } from '../../types'
 import {
   extractMessageDetails,
@@ -71,6 +72,9 @@ const chatSelect = {
   lastMessagePreview: true,
   lastMessageFromMe: true,
   assistantPaused: true,
+  assignedToUserId: true,
+  assignedAt: true,
+  assignedTo: { select: { id: true, firstName: true, lastName: true, avatar: true } },
   company: { select: { id: true, name: true, ruc: true, dv: true, isArchived: true } },
 } as const
 
@@ -205,13 +209,14 @@ export class CollectionWhatsAppManager {
 
   // ── Chats y mensajes ──────────────────────────────────────────────────────
 
-  async listChats(workspaceId: string, search?: string) {
+  async listChats(workspaceId: string, search?: string, scope: Prisma.CollectionWhatsAppChatWhereInput = {}) {
     const term = search?.trim()
     const digits = term?.replace(/\D/g, '')
     return db.collectionWhatsAppChat.findMany({
       where: {
         workspaceId,
         line: this.line,
+        ...scope,
         ...(term ? {
           OR: [
             { displayName: { contains: term, mode: 'insensitive' } },
@@ -242,6 +247,19 @@ export class CollectionWhatsAppManager {
       take: limit,
     })
     return items.reverse()
+  }
+
+  /**
+   * Cambia el responsable con compare-and-set: si otra persona lo tomó mientras tanto,
+   * falla en lugar de pisarlo.
+   */
+  async assignChat(workspaceId: string, chatId: string, expected: string | null, assignedToUserId: string | null) {
+    const result = await db.collectionWhatsAppChat.updateMany({
+      where: { id: chatId, workspaceId, line: this.line, assignedToUserId: expected },
+      data: { assignedToUserId, assignedAt: assignedToUserId ? new Date() : null },
+    })
+    if (!result.count) throw new AppError(409, 'Otra persona cambió el responsable de este chat. Actualizá y volvé a intentar.', 'CHAT_ASSIGNEE_CHANGED')
+    return this.getChat(workspaceId, chatId)
   }
 
   async markRead(workspaceId: string, chatId: string) {

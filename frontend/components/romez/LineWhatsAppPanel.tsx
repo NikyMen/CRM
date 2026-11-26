@@ -17,6 +17,7 @@ import { ChatMedia, isMediaType, MessageReactions, myReaction, ReactionButton, v
 import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/PaymentPromiseDialog'
 import { chatListTime, dayKey, dayLabel, MessageTicks, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 import { brand } from '@/lib/brand'
+import { AssigneeControl, MemberAvatar, memberName } from '@/components/social/AssigneeControl'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
 export type WhatsAppLineConfig = {
@@ -28,6 +29,12 @@ export type WhatsAppLineConfig = {
   api: LineWhatsAppApi
   /** Permite agendar promesas de pago desde el chat (sólo Cobranzas). */
   promises?: boolean
+  /** `false` oculta «Atiende el asistente» y «Forzar IA» (línea comercial sin asistente). */
+  assistant?: boolean
+  /** Cada chat tiene responsable, con filtros Míos y Libres (bandeja de Mensajes). */
+  assignment?: boolean
+  /** `false` oculta todo lo de legajos contables: RUC, «Ver legajo» y la búsqueda por RUC. */
+  clients?: boolean
 }
 
 export const COLLECTIONS_WHATSAPP: WhatsAppLineConfig = {
@@ -49,7 +56,7 @@ export const COMMERCIAL_WHATSAPP: WhatsAppLineConfig = {
   api: commercialWhatsAppApi,
 }
 
-type ChatFilter = 'all' | 'unread' | 'client' | 'prospect'
+type ChatFilter = 'all' | 'unread' | 'client' | 'prospect' | 'mine' | 'free'
 
 function sessionKey(line: WhatsAppLineConfig) {
   return `${line.key}-session`
@@ -80,7 +87,11 @@ export function LineWhatsAppLinkDialog({ line, canManage, onClose }: { line: Wha
 }
 
 /** Chat compartido de la línea: lista de conversaciones y chat, sin tickets ni responsables. */
-export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, currentUserId, onClose }: { line: WhatsAppLineConfig; initialChatId?: string | null; canWrite: boolean; canManage: boolean; currentUserId?: string; onClose: () => void }) {
+/**
+ * Chat compartido de la línea. Con `embedded` se dibuja dentro de la página (sección WhatsApp)
+ * en lugar de en un popup, y sin botón de cerrar.
+ */
+export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, currentUserId, onClose, embedded = false }: { line: WhatsAppLineConfig; initialChatId?: string | null; canWrite: boolean; canManage: boolean; currentUserId?: string; onClose?: () => void; embedded?: boolean }) {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(initialChatId ?? null)
   const [search, setSearch] = useState('')
@@ -109,10 +120,10 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
   useEffect(() => { if (initialChatId) setSelectedId(initialChatId) }, [initialChatId])
   useEffect(() => {
     // Un Esc que ya atendió un popup (reacciones, plantillas, emojis) no cierra el panel.
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !linkOpen && !event.defaultPrevented) onClose() }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !linkOpen && !event.defaultPrevented && !embedded) onClose?.() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, linkOpen])
+  }, [onClose, linkOpen, embedded])
 
   const sessionQuery = useLineWhatsAppSession(line)
   const chatsQuery = useQuery<CollectionWhatsAppChat[]>({ queryKey: [chatsKey, deferredSearch], queryFn: () => line.api.listChats(deferredSearch).then((response) => response.data), refetchInterval: 5_000 })
@@ -121,15 +132,17 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
     unread: chats.filter((chat) => chat.unreadCount > 0).length,
     client: chats.filter((chat) => chat.company).length,
     prospect: chats.filter((chat) => !chat.company).length,
-  }), [chats])
-  const visibleChats = useMemo(() => chats.filter((chat) => filter === 'all' ? true : filter === 'unread' ? chat.unreadCount > 0 : filter === 'client' ? Boolean(chat.company) : !chat.company), [chats, filter])
+    mine: chats.filter((chat) => chat.assignedToUserId && chat.assignedToUserId === currentUserId).length,
+    free: chats.filter((chat) => !chat.assignedToUserId).length,
+  }), [chats, currentUserId])
+  const visibleChats = useMemo(() => chats.filter((chat) => filter === 'all' ? true : filter === 'unread' ? chat.unreadCount > 0 : filter === 'client' ? Boolean(chat.company) : filter === 'mine' ? Boolean(currentUserId) && chat.assignedToUserId === currentUserId : filter === 'free' ? !chat.assignedToUserId : !chat.company), [chats, filter, currentUserId])
   const selected = chats.find((chat) => chat.id === selectedId)
   const connected = sessionQuery.data?.status === 'CONNECTED'
   const sessionLabel = connected ? [sessionQuery.data?.pushName, sessionQuery.data?.phoneNumber ? `+${sessionQuery.data.phoneNumber}` : null].filter(Boolean).join(' · ') || 'Conectado' : 'Sin conexión: vinculá el número desde Configuración'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/45 p-0 backdrop-blur-[2px] sm:p-4" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={line.title} className="ast-rise flex w-full max-w-7xl flex-col overflow-hidden bg-[var(--paper)] shadow-[var(--ast-float-shadow)] sm:rounded-[1.5rem] sm:border sm:border-[var(--line-soft)]">
+    <div className={embedded ? 'flex h-full min-h-0' : 'fixed inset-0 z-50 flex items-stretch justify-center bg-black/45 p-0 backdrop-blur-[2px] sm:p-4'} role="presentation" onMouseDown={embedded ? undefined : (event) => event.target === event.currentTarget && onClose?.()}>
+      <div role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label={line.title} className={clsx('flex w-full flex-col overflow-hidden bg-[var(--paper)]', embedded ? 'rounded-2xl border border-[var(--line-soft)] shadow-[var(--ast-card-shadow)]' : 'ast-rise max-w-7xl shadow-[var(--ast-float-shadow)] sm:rounded-[1.5rem] sm:border sm:border-[var(--line-soft)]')}>
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--line-soft)] px-4 sm:px-5">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] text-white shadow-sm"><WhatsAppLogo size={20} /></span>
           <div className="min-w-0 flex-1">
@@ -140,7 +153,7 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
             </p>
           </div>
           <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setLinkOpen(true)} title="Vincular, reconectar o desvincular el número (QR)"><Settings size={15} /> <span className="hidden sm:inline">Configuración</span></button>
-          <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)] hover:text-[var(--ink-primary)]" onClick={onClose} aria-label={`Cerrar ${line.title}`}><X size={19} /></button>
+          {embedded ? null : <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-[var(--ink-tertiary)] hover:bg-[var(--paper-soft)] hover:text-[var(--ink-primary)]" onClick={onClose} aria-label={`Cerrar ${line.title}`}><X size={19} /></button>}
         </header>
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(290px,360px)_minmax(0,1fr)]">
           <aside className={clsx('min-h-0 flex-col border-r border-[var(--line-soft)] bg-[var(--paper)]', selectedId ? 'hidden md:flex' : 'flex')}>
@@ -149,12 +162,17 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
                 <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Conversaciones</h2>
                 <span className="text-xs text-[var(--ink-muted)]">{visibleChats.length === chats.length ? chats.length : `${visibleChats.length} de ${chats.length}`}</span>
               </div>
-              <label className="relative block"><Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input !rounded-full pl-9" placeholder="Cliente, RUC o teléfono…" /></label>
+              <label className="relative block"><Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="ctrl-input !rounded-full pl-9" placeholder={line.clients === false ? 'Nombre o teléfono…' : 'Cliente, RUC o teléfono…'} /></label>
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filtrar conversaciones">
                 <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>Todas</FilterChip>
                 <FilterChip active={filter === 'unread'} onClick={() => setFilter('unread')}>Sin leer{counts.unread ? <b className="ml-0.5">{counts.unread}</b> : null}</FilterChip>
-                <FilterChip active={filter === 'client'} onClick={() => setFilter('client')}>Clientes{counts.client ? <span className="ml-0.5 opacity-70">{counts.client}</span> : null}</FilterChip>
-                <FilterChip active={filter === 'prospect'} onClick={() => setFilter('prospect')}>Sin legajo{counts.prospect ? <span className="ml-0.5 opacity-70">{counts.prospect}</span> : null}</FilterChip>
+                {line.assignment ? <>
+                  <FilterChip active={filter === 'mine'} onClick={() => setFilter('mine')}>Míos{counts.mine ? <span className="ml-0.5 opacity-70">{counts.mine}</span> : null}</FilterChip>
+                  <FilterChip active={filter === 'free'} onClick={() => setFilter('free')}>Libres{counts.free ? <span className="ml-0.5 opacity-70">{counts.free}</span> : null}</FilterChip>
+                </> : <>
+                  <FilterChip active={filter === 'client'} onClick={() => setFilter('client')}>Clientes{counts.client ? <span className="ml-0.5 opacity-70">{counts.client}</span> : null}</FilterChip>
+                  <FilterChip active={filter === 'prospect'} onClick={() => setFilter('prospect')}>Sin legajo{counts.prospect ? <span className="ml-0.5 opacity-70">{counts.prospect}</span> : null}</FilterChip>
+                </>}
               </div>
               {removeChat.isError ? <p role="alert" className="px-1 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(removeChat.error, 'No se pudo eliminar el chat.')}</p> : null}
             </div>
@@ -178,9 +196,10 @@ export function LineWhatsAppPanel({ line, initialChatId, canWrite, canManage, cu
                         </span>
                         {chat.unreadCount ? <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[var(--wa-green)] px-1.5 text-[10px] font-bold text-white">{chat.unreadCount}</span> : null}
                       </span>
-                      {chat.company || chat.assistantPaused ? <span className="mt-1 flex flex-wrap items-center gap-1">
+                      {chat.company || (chat.assistantPaused && line.assistant !== false) || (line.assignment && chat.assignedTo) ? <span className="mt-1 flex flex-wrap items-center gap-1">
                         {chat.company ? <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><FolderOpen size={10} className="shrink-0" /> <span className="truncate">{chat.displayName && chat.displayName !== chat.company.name ? chat.displayName : 'Cliente con legajo'}</span></span> : null}
-                        {chat.assistantPaused ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lo atiende una persona: el asistente no contesta"><UserRound size={10} /> Persona</span> : null}
+                        {chat.assistantPaused && line.assistant !== false ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lo atiende una persona: el asistente no contesta"><UserRound size={10} /> Persona</span> : null}
+                        {line.assignment && chat.assignedTo ? <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-[var(--paper-inset)] py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-[var(--ink-secondary)]" title="Responsable"><MemberAvatar member={chat.assignedTo} className="h-4 w-4 text-[8px]" /> <span className="truncate">{chat.assignedTo.id === currentUserId ? 'Vos' : memberName(chat.assignedTo)}</span></span> : null}
                       </span> : null}
                     </span>
                   </button>
@@ -302,10 +321,11 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
           <p className="truncate font-display text-[15px] font-semibold leading-tight text-[var(--ink-primary)]">{chat.company.name}</p>
           <div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">Contacto: <ContactName key={chat.id} name={chat.displayName ?? ''} canEdit={canWrite} save={rename} className="font-medium text-[var(--ink-secondary)]" /></div>
         </> : <ContactName key={chat.id} name={chat.displayName || (chat.phoneNumber ? `+${chat.phoneNumber}` : '')} canEdit={canWrite} save={rename} className="font-display text-[15px] font-semibold text-[var(--ink-primary)]" />}
-        <p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p>
+        <p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc && line.clients !== false ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p>
       </div>
       {line.promises && canWrite && chat ? <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
-      {commercial && chat ? <>
+      {line.assignment && chat ? <AssigneeControl assignedToUserId={chat.assignedToUserId} onAssign={async (userId) => { await line.api.assign(chatId, userId); onSent() }} /> : null}
+      {commercial && line.assistant !== false && chat ? <>
         <button
           type="button"
           onClick={() => togglePause.mutate(!paused)}
@@ -329,7 +349,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
           <span className="relative hidden lg:inline">{aiWorking ? 'La IA está respondiendo…' : 'Forzar IA'}</span>
         </button>
       </> : null}
-      {chat?.company && !chat.company.isArchived ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary !min-h-9 hidden !px-3 sm:inline-flex"><FolderOpen size={15} /> Ver legajo</Link> : null}
+      {chat?.company && !chat.company.isArchived && line.clients !== false ? <Link href={`/clients/${chat.company.id}`} className="btn-secondary !min-h-9 hidden !px-3 sm:inline-flex"><FolderOpen size={15} /> Ver legajo</Link> : null}
       {onDelete ? <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--danger)] hover:bg-[var(--danger-paper)] disabled:opacity-40" disabled={deleting} onClick={onDelete} aria-label="Eliminar este chat" title="Eliminar chat"><Trash2 size={16} /></button> : null}
     </header>
     {commercial ? <LeadStageBar line={line} chatId={chatId} /> : null}

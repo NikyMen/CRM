@@ -27,6 +27,7 @@ import { clientVisibilityWhere } from '../clients/client-visibility'
 import { contactAssignmentVisibilityWhere } from '../../core/auth/portfolio-visibility'
 import { convertWonDealToClient } from './deal-conversion'
 import { readCommercialChatId } from './commercial-lead'
+import { networkOfChannel, readSocialConversationId } from '../social/social-lead'
 
 type Deal = Prisma.DealGetPayload<object>
 
@@ -126,8 +127,8 @@ export interface KanbanCard {
     contactName: string | null
     /** Sólo chats comerciales: una persona lo atiende y el asistente no responde. */
     assistantPaused?: boolean
-    /** `commercial`: chat del WhatsApp comercial; si no, el de Tickets. */
-    source: 'tickets' | 'commercial'
+    /** `commercial`: chat del WhatsApp comercial; `instagram` y `facebook`: conversación de esa red; si no, el de Tickets. */
+    source: 'tickets' | 'commercial' | 'instagram' | 'facebook'
   } | null
   createdAt: Date
   updatedAt: Date
@@ -300,8 +301,19 @@ export class DealService {
     const commercialChatIds = [...new Set(deals.map((deal) => readCommercialChatId(deal.customData)).filter((id): id is string => Boolean(id)))]
     const commercialChats = new Map((commercialChatIds.length ? await db.collectionWhatsAppChat.findMany({
       where: { workspaceId, line: 'commercial', id: { in: commercialChatIds } },
-      select: { id: true, jid: true, displayName: true, phoneNumber: true, unreadCount: true, lastMessageAt: true, lastMessagePreview: true, lastMessageFromMe: true, assistantPaused: true, company: { select: { name: true } } },
+      select: { id: true, jid: true, displayName: true, phoneNumber: true, unreadCount: true, lastMessageAt: true, lastMessagePreview: true, lastMessageFromMe: true, assistantPaused: true, assignedToUserId: true, company: { select: { name: true } } },
     }) : []).map((chat) => [chat.id, chat]))
+
+    // Leads que vienen de Instagram o de Facebook: su conversación del módulo de bandeja.
+    const socialConversationIds = [...new Set(deals.map((deal) => readSocialConversationId(deal.customData)).filter((id): id is string => Boolean(id)))]
+    const socialConversations = new Map((socialConversationIds.length ? await db.conversation.findMany({
+      where: { workspaceId, id: { in: socialConversationIds }, ...(assignmentScope ?? {}) },
+      select: {
+        id: true, channel: true, unreadCount: true, lastMessageAt: true, assignedToUserId: true, externalUserId: true,
+        contact: { select: { avatar: true } },
+        messages: { take: 1, orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }], select: { text: true, type: true, direction: true } },
+      },
+    }) : []).map((conversation) => [conversation.id, conversation]))
 
     const now = new Date()
 
@@ -312,6 +324,9 @@ export class DealService {
       const cards = await Promise.all(stageDeals.map(async (d) => {
         const commercialChatId = readCommercialChatId(d.customData)
         const commercialChat = commercialChatId ? commercialChats.get(commercialChatId) : undefined
+        const socialConversationId = readSocialConversationId(d.customData)
+        const socialConversation = socialConversationId ? socialConversations.get(socialConversationId) : undefined
+        const socialNetwork = socialConversation ? networkOfChannel(socialConversation.channel) : null
         const linkedChatJid = this.readWhatsAppChatJid(d.customData)
         const linkedContact =
           d.contacts.find((link) => link.contact.whatsappChats.some((chat) => chat.jid === linkedChatJid)) ??
@@ -332,6 +347,10 @@ export class DealService {
         const contactName = linkedContact
           ? [linkedContact.contact.firstName, linkedContact.contact.lastName].filter(Boolean).join(' ') || null
           : null
+
+        // La conversación social no pasa por un chat de WhatsApp: el nombre sale del contacto del lead.
+        const socialContact = d.contacts[0]?.contact
+        const socialContactName = socialContact ? [socialContact.firstName, socialContact.lastName].filter(Boolean).join(' ') || null : null
 
         return {
           id: d.id,
@@ -354,7 +373,7 @@ export class DealService {
             lidJid: null,
             displayName: commercialChat.company?.name ?? commercialChat.displayName,
             phoneNumber: commercialChat.phoneNumber ?? extractPhoneNumberFromJid(commercialChat.jid),
-            assignedToUserId: null,
+            assignedToUserId: commercialChat.assignedToUserId,
             assignee: null,
             profileImageUrl: await commercialWhatsAppManager.getProfileImageUrl(workspaceId, commercialChat.jid),
             unreadCount: commercialChat.unreadCount,
@@ -364,6 +383,23 @@ export class DealService {
             assistantPaused: commercialChat.assistantPaused,
             contactName,
             source: 'commercial',
+          } : socialConversation && socialNetwork ? {
+            id: socialConversation.id,
+            jid: socialConversation.externalUserId ?? socialConversation.id,
+            lidJid: null,
+            displayName: socialContactName,
+            phoneNumber: null,
+            assignedToUserId: socialConversation.assignedToUserId,
+            assignee: null,
+            profileImageUrl: socialConversation.contact.avatar,
+            unreadCount: socialConversation.unreadCount,
+            lastMessageAt: socialConversation.lastMessageAt,
+            lastMessagePreview: socialConversation.messages[0]
+              ? socialConversation.messages[0].text?.trim() || (socialConversation.messages[0].type === 'image' ? '📷 Foto' : 'Adjunto')
+              : null,
+            lastMessageFromMe: socialConversation.messages[0] ? socialConversation.messages[0].direction === 'outbound' : null,
+            contactName: socialContactName,
+            source: socialNetwork,
           } : chat ? {
             id: chat.id,
             jid: chat.jid,

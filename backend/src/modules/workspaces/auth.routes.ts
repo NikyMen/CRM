@@ -76,6 +76,8 @@ export async function authRoutes(app: FastifyInstance) {
     const body = z.object({
       stockVisible: z.boolean().optional(),
       modules: z.record(z.string(), z.boolean()).optional(),
+      // Apaga Cobranzas para todo el espacio, incluidos owner y admin.
+      collectionsOff: z.boolean().optional(),
     }).parse(req.body)
 
     const workspace = await db.workspace.findUnique({
@@ -90,7 +92,12 @@ export async function authRoutes(app: FastifyInstance) {
     const modules = mergeModuleState(readModuleState(workspace?.settings), patch)
     await db.workspace.update({
       where: { id: ctx.workspaceId },
-      data: { settings: writeModuleState(workspace?.settings, modules) as Prisma.InputJsonValue },
+      data: {
+        settings: {
+          ...writeModuleState(workspace?.settings, modules),
+          ...(typeof body.collectionsOff === 'boolean' ? { collectionsOff: body.collectionsOff } : {}),
+        } as Prisma.InputJsonValue,
+      },
     })
     invalidateModuleCache(ctx.workspaceId)
 
