@@ -59,6 +59,27 @@ Las contraseñas de los usuarios nuevos quedan en `backend/.data/usuarios-vicar.
 ignora). Volver a correr el script no cambia las contraseñas ya creadas. **Nunca** correrlo
 contra producción.
 
+## Producción
+
+Desplegado el 2026-11-26 en **https://vicar.consultoriadigital.io**, en el VPS compartido
+`72.60.15.125` (alias ssh `farmacia`), igual que Wolves (ver [`../wolves/ops/README.md`](../wolves/ops/README.md)):
+
+| Pieza | Vicar |
+| --- | --- |
+| Carpeta | `/var/www/crm-vicar` (de root), datos en `backend/.data` (de `vicar`, 0700) |
+| Usuario Unix | `vicar`, con su daemon `pm2-vicar` |
+| PM2 | `vicar-backend` en `172.18.0.1:3830`, `vicar-frontend` en `172.18.0.1:3831` (`ops/pm2`) |
+| Docker | proyecto `crm-vicar`: `vicar_postgres` 127.0.0.1:55434, `vicar_redis` 127.0.0.1:56381 |
+| HTTPS | Traefik con `/docker/n8n/dynamic/vicar.yml` (`ops/traefik`), certificado de Let's Encrypt |
+
+Es una **demo**: tiene cargados los datos de ejemplo y todas las cuentas (el dueño y los cuatro
+`@vicar.test`) usan la clave compartida que se pasó con `seed-demo.cjs --clave=…`. Antes de
+usarlo con datos reales: borrar la demo (`--borrar`), cambiar las claves y dar de baja los
+usuarios de ejemplo.
+
+En el servidor, `pnpm --filter … ` frena por `pnpm.overrides` (pnpm 10): para el bootstrap se
+usa `backend/node_modules/.bin/tsx prisma/seed.ts` directo.
+
 ## Cómo queda configurado
 
 El cliente pidió la instalación **pelada**: sólo las redes. El menú tiene cuatro entradas.
