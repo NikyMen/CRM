@@ -152,13 +152,14 @@ export class SocialService {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true, leadNumber: true, title: true, stageId: true,
+        appointment: { select: { startsAt: true } },
         pipeline: { select: { stages: { orderBy: { position: 'asc' }, select: { id: true, name: true, position: true, color: true, isWon: true, isLost: true } } } },
       },
     })
     return {
       conversation: { ...this.serializeConversation(conversation), canReply: conversation.connection.status === 'connected' },
       messages: messages.map((message) => ({ ...message, sentAt: message.sentAt ?? message.createdAt })),
-      lead: lead ? { id: lead.id, leadNumber: lead.leadNumber, title: lead.title, stageId: lead.stageId, stages: lead.pipeline.stages, canMove: ctx.role !== 'viewer' } : null,
+      lead: lead ? { id: lead.id, leadNumber: lead.leadNumber, title: lead.title, stageId: lead.stageId, stages: lead.pipeline.stages, canMove: ctx.role !== 'viewer', appointmentAt: lead.appointment?.startsAt ?? null } : null,
     }
   }
 

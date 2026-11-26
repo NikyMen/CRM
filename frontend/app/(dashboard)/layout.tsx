@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import clsx from 'clsx'
-import { BadgeDollarSign, Bell, Bot, ListChecks, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, MessagesSquare, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
+import { BadgeDollarSign, Bell, Bot, ListChecks, Scale, Boxes, BriefcaseBusiness, Building2, ChevronDown, ClipboardCheck, ChevronLeft, ChevronRight, Home, Lock, LogOut, Menu, MessageCircleMore, MessagesSquare, House, CalendarDays, Receipt, Settings, Ticket, UsersRound, X } from 'lucide-react'
 import type { Role } from '@/types'
 import { auth } from '@/lib/auth'
 import { WhatsAppLiveSync } from '@/components/WhatsAppLiveSync'
@@ -31,6 +31,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/redes/whatsapp', label: 'WhatsApp', icon: WhatsAppLogo, roles: ['owner', 'admin', 'member'], module: 'whatsapp' },
   { href: '/redes/instagram', label: 'Instagram', icon: InstagramLogo, roles: ['owner', 'admin', 'member'], module: 'instagram' },
   { href: '/redes/facebook', label: 'Facebook', icon: FacebookLogo, roles: ['owner', 'admin', 'member'], module: 'facebook' },
+  { href: '/propiedades', label: 'Propiedades', icon: House, module: 'properties' },
+  { href: '/calendario', label: 'Calendario', icon: CalendarDays, module: 'calendar' },
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true, module: 'home' },
   { href: '/clients', label: 'Clientes', icon: Building2, module: 'clients' },
   { href: '/sales', label: 'Ventas', icon: Receipt, module: 'sales' },

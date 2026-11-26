@@ -62,6 +62,7 @@ export async function findCommercialLeadByChat(workspaceId: string, chatId: stri
     orderBy: { createdAt: 'desc' },
     select: {
       id: true, leadNumber: true, title: true, stageId: true, stageEnteredAt: true, status: true,
+      appointment: { select: { startsAt: true } },
       pipeline: {
         select: {
           id: true, name: true,

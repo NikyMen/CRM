@@ -10,6 +10,7 @@ import { getErrorMessage } from '@/lib/format'
 import { chatListTime, dayKey, dayLabel, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 import { NETWORKS, NetworkLogo } from './networks'
 import { AssigneeControl, MemberAvatar, memberName, useTeamMembers } from './AssigneeControl'
+import { ScheduleControl } from '@/components/calendar/ScheduleControl'
 
 const detailKey = (id: string) => ['social-conversation', id]
 
@@ -108,6 +109,7 @@ export function SocialThread({ conversationId, onClose }: { conversationId: stri
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {lead ? <ScheduleControl compact dealId={lead.id} appointmentAt={lead.appointmentAt} onChanged={() => queryClient.invalidateQueries({ queryKey: detailKey(conversationId) })} /> : null}
           <AssigneeControl assignedToUserId={conversation.assignedToUserId} onAssign={async (userId) => {
             const response = await socialApi.assign(conversationId, userId)
             if (response.data) queryClient.setQueryData(detailKey(conversationId), response.data)

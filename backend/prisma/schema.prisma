@@ -160,6 +160,8 @@ model Workspace {
   tasks                      Task[]
   taskEvents                 TaskEvent[]
   assets                     WorkspaceAsset[]
+  properties                 Property[]
+  appointments               Appointment[]
   socialPosts                SocialPost[]
 
   @@map("workspaces")
@@ -211,6 +213,8 @@ model User {
   quickReplies               QuickReply[]                      @relation("QuickReplyAuthor")
   collectionWhatsAppMessages CollectionWhatsAppMessage[]       @relation("CollectionWhatsAppSender")
   assignedCollectionChats    CollectionWhatsAppChat[]          @relation("CollectionWhatsAppChatAssignee")
+  assignedProperties         Property[]                        @relation("PropertyAssignee")
+  appointments               Appointment[]                     @relation("AppointmentAssignee")
   assignedPaymentPromises    PaymentPromise[]                  @relation("PaymentPromiseAssignee")
   createdPaymentPromises     PaymentPromise[]                  @relation("PaymentPromiseCreatedBy")
   closedPaymentPromises      PaymentPromise[]                  @relation("PaymentPromiseClosedBy")
@@ -402,12 +406,13 @@ model Deal {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  pipeline   Pipeline      @relation(fields: [pipelineId], references: [id])
-  stage      Stage         @relation(fields: [stageId], references: [id])
-  contacts   DealContact[]
-  activities Activity[]
-  notes      Note[]
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline    Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage       Stage         @relation(fields: [stageId], references: [id])
+  contacts    DealContact[]
+  activities  Activity[]
+  notes       Note[]
+  appointment Appointment?
 
   @@unique([workspaceId, leadNumber])
   @@index([workspaceId])
@@ -1644,4 +1649,64 @@ model SocialPost {
 
   @@index([workspaceId, network, createdAt])
   @@map("social_posts")
+}
+
+/// Propiedad del catálogo inmobiliario. `operation`: sale | rent. `status`: available | reserved |
+/// closed. La foto de portada va en la base (como los assets de marca) para que entre en los
+/// respaldos. `latitude`/`longitude` la ubican en el mapa.
+model Property {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  code             String   @db.VarChar(12)
+  title            String
+  operation        String   @default("sale")
+  propertyType     String   @default("house")
+  status           String   @default("available")
+  price            Decimal? @db.Decimal(15, 2)
+  currency         String   @default("USD")
+  address          String?
+  city             String?
+  neighborhood     String?
+  latitude         Float?
+  longitude        Float?
+  bedrooms         Int?
+  bathrooms        Int?
+  areaM2           Int?
+  description      String   @default("") @db.Text
+  coverImage       Bytes?
+  coverMimeType    String?
+  assignedToUserId String?
+  createdByUserId  String?
+  isArchived       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("PropertyAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, isArchived, createdAt])
+  @@index([workspaceId, assignedToUserId])
+  @@map("properties")
+}
+
+/// Fecha agendada de un lead (visita, llamada, firma). Una por lead: elegirla de nuevo la
+/// reemplaza. Se ve en el Calendario. El responsable es el del lead al agendarla.
+model Appointment {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  dealId           String   @unique
+  startsAt         DateTime
+  note             String?  @db.VarChar(200)
+  assignedToUserId String?
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deal       Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("AppointmentAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, startsAt])
+  @@map("appointments")
 }

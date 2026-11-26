@@ -18,6 +18,7 @@ import { PaymentPromiseDialog, type PromiseTarget } from '@/components/romez/Pay
 import { chatListTime, dayKey, dayLabel, MessageTicks, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
 import { brand } from '@/lib/brand'
 import { AssigneeControl, MemberAvatar, memberName } from '@/components/social/AssigneeControl'
+import { ScheduleControl } from '@/components/calendar/ScheduleControl'
 
 /** Un número de WhatsApp propio de un módulo, aparte del de Tickets. */
 export type WhatsAppLineConfig = {
@@ -324,6 +325,7 @@ function ChatView({ line, chatId, chat, connected, canWrite, canManage, currentU
         <p className="truncate text-xs text-[var(--ink-tertiary)]">{chat?.phoneNumber ? `+${chat.phoneNumber}` : 'Sin teléfono'}{chat?.company?.ruc && line.clients !== false ? ` · RUC ${chat.company.ruc}${chat.company.dv ? `-${chat.company.dv}` : ''}` : ''}</p>
       </div>
       {line.promises && canWrite && chat ? <button type="button" className="btn-secondary !min-h-9 !px-3" onClick={() => setPromiseTarget({ client: chat.company && !chat.company.isArchived ? chat.company : null, chatId: chat.id })} title="El cliente dijo que paga tal día: agendalo para que te lo recuerde"><CalendarClock size={15} /> <span className="hidden sm:inline">Promesa de pago</span></button> : null}
+      {line.assignment && chat ? <LeadSchedule line={line} chatId={chatId} /> : null}
       {line.assignment && chat ? <AssigneeControl assignedToUserId={chat.assignedToUserId} onAssign={async (userId) => { await line.api.assign(chatId, userId); onSent() }} /> : null}
       {commercial && line.assistant !== false && chat ? <>
         <button
@@ -447,6 +449,15 @@ function LeadStageBar({ line, chatId }: { line: WhatsAppLineConfig; chatId: stri
     </div>
     {move.isError ? <p role="alert" className="mt-1 text-xs font-semibold text-[var(--danger)]">{getErrorMessage(move.error)}</p> : null}
   </div>
+}
+
+/** «Agendar» del lead del chat: misma consulta (y caché) que la barra de etapas. */
+function LeadSchedule({ line, chatId }: { line: WhatsAppLineConfig; chatId: string }) {
+  const queryClient = useQueryClient()
+  const leadKey = [`${line.key}-lead`, chatId]
+  const lead = useQuery({ queryKey: leadKey, queryFn: () => line.api.getLead(chatId).then((response) => response.data.lead), refetchInterval: 30_000 }).data
+  if (!lead) return null
+  return <ScheduleControl compact dealId={lead.id} appointmentAt={lead.appointmentAt} onChanged={() => queryClient.invalidateQueries({ queryKey: leadKey })} />
 }
 
 function SendStatus({ message }: { message: CollectionWhatsAppMessage }) {

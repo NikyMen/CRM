@@ -519,6 +519,8 @@ export type ChatLead = {
   stageId: string
   stages: { id: string; name: string; position: number; color: string; isWon: boolean; isLost: boolean }[]
   canMove: boolean
+  /** Fecha agendada del lead (Calendario). */
+  appointmentAt?: string | null
 }
 
 // ─── Redes sociales (Mensajes, Instagram, Facebook) ───────────────
@@ -560,6 +562,43 @@ export const socialApi = {
   publishPost: (id: string) => api.post<SocialPost>(`/social/posts/${id}/publish`),
   deletePost: (id: string) => api.delete(`/social/posts/${id}`),
   postImage: (id: string) => api.get<Blob>(`/social/posts/${id}/image`, { responseType: 'blob' }),
+}
+
+// ─── Propiedades ──────────────────────────────────────────────────
+export type PropertyOperation = 'sale' | 'rent'
+export type PropertyType = 'house' | 'apartment' | 'land' | 'commercial' | 'country' | 'other'
+export type PropertyStatus = 'available' | 'reserved' | 'closed'
+export type Property = {
+  id: string; code: string; title: string; operation: PropertyOperation; propertyType: PropertyType; status: PropertyStatus
+  price: string | null; currency: 'USD' | 'ARS'; address: string | null; city: string | null; neighborhood: string | null
+  latitude: number | null; longitude: number | null; bedrooms: number | null; bathrooms: number | null; areaM2: number | null
+  description: string; assignedToUserId: string | null; hasImage: boolean; imageVersion: number; createdAt: string; updatedAt: string
+  assignedTo: { id: string; firstName: string; lastName: string | null; avatar: string | null } | null
+}
+export type PropertyInput = Partial<Omit<Property, 'id' | 'code' | 'price' | 'hasImage' | 'imageVersion' | 'createdAt' | 'updatedAt' | 'assignedTo'>> & { price?: number | null; image?: OutboundFilePayload }
+
+export const propertiesApi = {
+  list: (params?: { search?: string; operation?: PropertyOperation; status?: PropertyStatus }) => api.get<{ properties: Property[] }>('/properties', { params }),
+  create: (data: PropertyInput) => api.post<Property>('/properties', data),
+  update: (id: string, data: PropertyInput) => api.patch<Property>(`/properties/${id}`, data),
+  assign: (id: string, assignedToUserId: string | null) => api.put<Property>(`/properties/${id}/assignee`, { assignedToUserId }),
+  archive: (id: string) => api.delete(`/properties/${id}`),
+  image: (id: string) => api.get<Blob>(`/properties/${id}/image`, { responseType: 'blob' }),
+}
+
+// ─── Calendario ───────────────────────────────────────────────────
+export type CalendarAppointment = {
+  id: string; startsAt: string; note: string | null; assignedToUserId: string | null
+  assignedTo: { id: string; firstName: string; lastName: string | null; avatar: string | null } | null
+  deal: { id: string; title: string; leadNumber: string; stage: { name: string; color: string } }
+  network: 'whatsapp' | 'instagram' | 'facebook' | null
+  chatId: string | null
+}
+
+export const calendarApi = {
+  list: (from: Date, to: Date) => api.get<{ appointments: CalendarAppointment[] }>('/calendar', { params: { from: from.toISOString(), to: to.toISOString() } }),
+  schedule: (dealId: string, startsAt: Date, note?: string | null) => api.put(`/calendar/deals/${dealId}`, { startsAt: startsAt.toISOString(), note }),
+  clear: (dealId: string) => api.delete(`/calendar/deals/${dealId}`),
 }
 
 export type LineWhatsAppApi = ReturnType<typeof lineWhatsAppApi>

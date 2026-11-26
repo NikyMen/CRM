@@ -105,6 +105,8 @@ export interface KanbanCard {
   expectedCloseDate: Date | null
   daysInStage: number
   isRotten: boolean
+  /** Fecha agendada del lead (Calendario). */
+  appointmentAt: Date | null
   chat: {
     id: string
     jid: string
@@ -262,6 +264,7 @@ export class DealService {
         stageEnteredAt: true,
         stageId: true,
         customData: true,
+        appointment: { select: { startsAt: true } },
         createdAt: true,
         updatedAt: true,
         contacts: {
@@ -367,6 +370,7 @@ export class DealService {
           expectedCloseDate: d.expectedCloseDate,
           daysInStage,
           isRotten,
+          appointmentAt: d.appointment?.startsAt ?? null,
           chat: commercialChat ? {
             id: commercialChat.id,
             jid: commercialChat.jid,

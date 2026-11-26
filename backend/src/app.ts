@@ -46,6 +46,8 @@ import { dailyReportRoutes } from './modules/daily-reports/daily-report.routes'
 import { stockRoutes } from './modules/stock/stock.routes'
 import { brandingRoutes } from './modules/branding/branding.routes'
 import { socialRoutes } from './modules/social/social.routes'
+import { propertyRoutes } from './modules/properties/property.routes'
+import { calendarRoutes } from './modules/calendar/calendar.routes'
 import { quickReplyRoutes } from './modules/quick-replies/quick-reply.routes'
 import { taskRoutes } from './modules/tasks/task.routes'
 import { assistantInboundRoutes, assistantRoutes } from './modules/assistant/assistant.routes'
@@ -215,6 +217,8 @@ export async function buildApp() {
   await app.register(stockRoutes, { prefix: `${API}/stock` })
   await app.register(brandingRoutes, { prefix: `${API}/branding` })
   await app.register(socialRoutes, { prefix: `${API}/social`, eventBus })
+  await app.register(propertyRoutes, { prefix: `${API}/properties` })
+  await app.register(calendarRoutes, { prefix: `${API}/calendar` })
 
   app.addHook('onReady', async () => {
     await whatsAppManager.startBackgroundRuntime()

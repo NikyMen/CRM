@@ -116,6 +116,8 @@ export interface KanbanCard {
   expectedCloseDate?: string
   daysInStage: number
   isRotten: boolean
+  /** Fecha agendada del lead (Calendario). */
+  appointmentAt?: string | null
   chat?: {
     id: string
     jid: string

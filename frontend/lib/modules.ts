@@ -20,6 +20,8 @@ export const MODULE_KEYS = [
   'whatsapp',
   'instagram',
   'facebook',
+  'properties',
+  'calendar',
 ] as const
 
 export type ModuleKey = typeof MODULE_KEYS[number]
@@ -52,6 +54,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: 'whatsapp', label: 'WhatsApp', description: 'Número de WhatsApp de la bandeja de Mensajes: conexión por QR y chats.', defaultEnabled: false },
   { key: 'instagram', label: 'Instagram', description: 'Mensajes directos de Instagram y publicación de contenido.', defaultEnabled: false },
   { key: 'facebook', label: 'Facebook', description: 'Mensajes de la página de Facebook (Messenger).', defaultEnabled: false },
+  { key: 'properties', label: 'Propiedades', description: 'Catálogo y mapa de propiedades con responsable.', defaultEnabled: false },
+  { key: 'calendar', label: 'Calendario', description: 'Fechas agendadas desde los chats y los leads.', defaultEnabled: false },
 ]
 
 export const DEFAULT_MODULE_STATE: ModuleState = MODULE_DEFINITIONS.reduce((state, definition) => {
@@ -82,6 +86,8 @@ export const MODULE_PATHS: Record<ModuleKey, string[]> = {
   whatsapp: ['/redes/whatsapp'],
   instagram: ['/redes/instagram'],
   facebook: ['/redes/facebook'],
+  properties: ['/propiedades'],
+  calendar: ['/calendario'],
 }
 
 export function normalizeModuleState(value: unknown): ModuleState {

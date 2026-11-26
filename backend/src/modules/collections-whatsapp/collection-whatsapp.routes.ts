@@ -88,6 +88,7 @@ function lineWhatsAppRoutes(manager: CollectionWhatsAppManager, ...modules: Modu
             title: lead.title,
             stageId: lead.stageId,
             stages: lead.pipeline.stages,
+            appointmentAt: lead.appointment?.startsAt ?? null,
             canMove: ctx.role !== 'viewer',
           },
         })

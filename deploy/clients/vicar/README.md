@@ -93,6 +93,8 @@ El cliente pidió la instalación **pelada**: sólo las redes. El menú tiene cu
 
 - **Responsable en todos los chats**, como en Tickets: owner y admin asignan a cualquiera desde el chat; un vendedor toma un chat libre o libera el suyo, y quien responde un chat libre se lo queda. Cada vendedor ve sólo lo suyo y lo libre. El lead del tablero sigue al responsable de su chat. En Mensajes se filtra por responsable (Míos, cada persona del equipo o Libres) además de por red.
 - Menú del usuario: sólo Equipo y Cerrar sesión (`NEXT_PUBLIC_USER_MENU_HIDE=notifications,settings` en `brand.env`). Configuración se abre escribiendo `/settings`. En WhatsApp no se muestra nada de RUC ni legajos. En Mensajes, «Ocultar embudo» esconde la barra de proporciones (se recuerda por navegador).
+- **Propiedades** (`/propiedades`): catálogo de 1, 2 o 3 por fila según el ancho, buscador (título, código, barrio, dirección) y filtro venta/alquiler; «Nueva propiedad» con foto, datos y ubicación tocando el mapa. Cada propiedad tiene responsable (mismas reglas que los chats). La pestaña **Mapa** (`/propiedades/mapa`) muestra todas con su precio sobre OpenStreetMap (Leaflet).
+- **Calendario** (`/calendario`): por defecto los próximos 30 días. Las fechas se eligen con «Agendar» en cada chat (WhatsApp, Instagram, Facebook); una por lead, se ve también en su tarjeta del tablero.
 - Columnas del tablero: Consulta recibida → Calificación → Visita coordinada →
   Propuesta / reserva → Negociación → Operación cerrada (ganada) → No concretado (perdida).
 - Módulos prendidos: Mensajes, WhatsApp, Instagram, Facebook y Equipo (está en el menú del

@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities'
-import { BarChart3, Building2, Check, CheckCheck, ChevronDown, ChevronUp, Hourglass, Loader2, Pencil, Search, Send, Settings, ThumbsDown, ThumbsUp, UserRound, X } from 'lucide-react'
+import { BarChart3, Building2, CalendarClock, Check, CheckCheck, ChevronDown, ChevronUp, Hourglass, Loader2, Pencil, Search, Send, Settings, ThumbsDown, ThumbsUp, UserRound, X } from 'lucide-react'
 import clsx from 'clsx'
 import { ChatIdentityPanel } from '@/components/ChatIdentityPanel'
 import PipelinesPage from '@/app/(dashboard)/pipelines/page'
@@ -32,6 +32,7 @@ import { NETWORKS, NetworkLogo, type NetworkKey } from '@/components/social/netw
 import { SocialChatPanel } from '@/components/social/SocialChat'
 import { MESSAGES_WHATSAPP } from '@/components/social/whatsapp-line'
 import { MemberAvatar, memberName, useTeamMembers } from '@/components/social/AssigneeControl'
+import { appointmentLabel, isPast } from '@/components/calendar/ScheduleControl'
 import { WhatsAppLogo } from '@/components/WhatsAppLogo'
 import { COMMERCIAL_WHATSAPP, LineWhatsAppLinkDialog, LineWhatsAppPanel, useLineWhatsAppSession } from '@/components/romez/LineWhatsAppPanel'
 import { chatListTime, messageTime, WaAvatar } from '@/components/romez/WaChatBits'
@@ -198,6 +199,7 @@ function DealCardBody({ deal }: { deal: KanbanCard }) {
       {chat?.assistantPaused && variant !== 'messages' ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lo atiende una persona: el asistente no contesta"><UserRound size={10} /> Persona</span> : null}
       {unread ? <span className="rounded-full bg-[var(--wa-green)] px-2 py-0.5 text-[10px] font-bold text-white">{unread} sin leer</span> : null}
       {deal.isRotten ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]" title="Lleva demasiado tiempo en esta etapa"><Hourglass size={10} /> {deal.daysInStage} d quieto</span> : deal.daysInStage > 0 ? <span className="text-[10px] text-[var(--ink-muted)]">{deal.daysInStage} d en la etapa</span> : null}
+      {deal.appointmentAt ? <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', isPast(deal.appointmentAt) ? 'bg-[var(--paper-inset)] text-[var(--ink-tertiary)]' : 'bg-[var(--brand-paper)] text-[var(--brand-blue)]')} title="Fecha agendada"><CalendarClock size={10} /> {appointmentLabel(deal.appointmentAt)}</span> : null}
       {deal.companyId && variant !== 'messages' ? <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ast-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ast-accent)]"><Building2 size={10} /> Cliente</span> : null}
       {variant === 'messages' ? assignee
         ? <span className="ml-auto inline-flex max-w-[9rem] items-center gap-1 rounded-full bg-[var(--paper-inset)] py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-[var(--ink-secondary)]" title={`Responsable: ${memberName(assignee)}`}><MemberAvatar member={assignee} className="h-4 w-4 text-[8px]" /> <span className="truncate">{assignee.firstName}</span></span>

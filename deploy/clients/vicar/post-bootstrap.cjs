@@ -37,7 +37,7 @@ const ACCOUNTING_CHECKLISTS = ['Cierre tributario mensual', 'Liquidación mensua
 // Instalación "pelada": sólo la bandeja de redes. Mensajes es el tablero con las tres redes;
 // WhatsApp, Instagram (con Publicar) y Facebook son la sección de cada una. Equipo queda prendido
 // porque sin él no se pueden crear los usuarios de los vendedores (vive en el menú del usuario).
-const MODULES_ON = ['messages', 'whatsapp', 'instagram', 'facebook', 'team']
+const MODULES_ON = ['messages', 'whatsapp', 'instagram', 'facebook', 'properties', 'calendar', 'team']
 const MODULES_OFF = ['home', 'clients', 'sales', 'daily-reports', 'commercial', 'collections', 'customer-service', 'tickets', 'internal-chat', 'stock', 'integrations', 'tasks', 'assistant']
 
 ;(async () => {

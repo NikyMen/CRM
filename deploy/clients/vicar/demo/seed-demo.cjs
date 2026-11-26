@@ -206,6 +206,32 @@ const POSTS = [
   { foto: 'local-comercial.jpg', by: 'eve', caption: '🏬 LOCAL EN ALQUILER · Av. 3 de Abril\n\n80 m² con baño y depósito, ideal comercio.\n$ 800.000 por mes\n\n📲 Escribinos para coordinar una visita\n\n#vicarinmobiliaria #localcomercial #alquiler #corrientes' },
 ]
 
+// ─── Catálogo de propiedades (sección Propiedades y Mapa) ───────────
+// Ubicaciones aproximadas en Corrientes capital y alrededores. Código "D-…" = demo.
+const CATALOG = [
+  { code: 'D-101', foto: 'casa-santa-ana.jpg', title: 'Casa 3 dormitorios con patio y cochera', operation: 'sale', type: 'house', price: 95000, currency: 'USD', address: 'Belgrano 450', neighborhood: 'Centro', city: 'Santa Ana', lat: -27.4562, lng: -58.6547, bed: 3, bath: 2, m2: 160, owner: 'maxi', desc: 'Casa en planta baja con patio, parrilla y cochera para dos autos. Escritura al día.' },
+  { code: 'D-102', foto: 'depto-centro.jpg', title: 'Departamento 2 ambientes a estrenar', operation: 'rent', type: 'apartment', price: 450000, currency: 'ARS', address: 'Junín 1240, 4° B', neighborhood: 'Centro', city: 'Corrientes', lat: -27.4678, lng: -58.8341, bed: 1, bath: 1, m2: 48, owner: 'seba', desc: 'Luminoso, con balcón al frente. Expensas bajas. Acepta mascotas chicas.' },
+  { code: 'D-103', foto: 'quinta-pileta.jpg', title: 'Quinta con pileta y quincho sobre Ruta 12', operation: 'sale', type: 'country', price: 140000, currency: 'USD', address: 'Ruta Nacional 12 km 1035', neighborhood: 'Laguna Brava', city: 'Corrientes', lat: -27.4931, lng: -58.7402, bed: 2, bath: 2, m2: 10000, owner: 'seba', desc: 'Una hectárea parquizada, casa principal, pileta y quincho. Ideal fines de semana.' },
+  { code: 'D-104', foto: 'terreno-barrio.jpg', title: 'Terreno 12x30 con todos los servicios', operation: 'sale', type: 'land', price: 28000, currency: 'USD', address: 'Pasaje Los Ceibos s/n', neighborhood: 'Aeroclub', city: 'Corrientes', lat: -27.4486, lng: -58.7935, bed: null, bath: null, m2: 360, owner: null, desc: 'Lote llano, con luz, agua y cloacas. Barrio en crecimiento.' },
+  { code: 'D-105', foto: 'local-comercial.jpg', title: 'Local comercial 80 m² sobre avenida', operation: 'rent', type: 'commercial', price: 800000, currency: 'ARS', address: 'Av. 3 de Abril 1250', neighborhood: 'Centro', city: 'Corrientes', lat: -27.4739, lng: -58.8276, bed: null, bath: 1, m2: 80, owner: 'maxi', desc: 'Vidriera amplia, baño y depósito. Mucho tránsito peatonal.' },
+  { code: 'D-106', foto: 'casa-familiar.jpg', title: 'Casa 4 dormitorios con quincho y pileta', operation: 'sale', type: 'house', price: 120000, currency: 'USD', address: 'Los Paraísos 820', neighborhood: 'Laguna Seca', city: 'Corrientes', lat: -27.5012, lng: -58.8064, bed: 4, bath: 3, m2: 240, owner: 'seba', status: 'reserved', desc: 'Casa familiar en lote de 600 m², quincho con parrilla y pileta.' },
+  { code: 'D-107', foto: 'depto-centro.jpg', title: 'Departamento 3 ambientes frente a la Costanera', operation: 'sale', type: 'apartment', price: 115000, currency: 'USD', address: 'Av. Costanera Gral. San Martín 1680, 7° A', neighborhood: 'Costanera', city: 'Corrientes', lat: -27.4598, lng: -58.8383, bed: 2, bath: 2, m2: 85, owner: 'maxi', desc: 'Vista al río, cochera cubierta y amenities.' },
+  { code: 'D-108', foto: 'casa-santa-ana.jpg', title: 'Casa 2 dormitorios para alquilar', operation: 'rent', type: 'house', price: 600000, currency: 'ARS', address: 'Pago Largo 2150', neighborhood: 'San Gerónimo', city: 'Corrientes', lat: -27.4874, lng: -58.8205, bed: 2, bath: 1, m2: 95, owner: null, desc: 'Patio con galería. Ideal familia. Contrato por 3 años.' },
+  { code: 'D-109', foto: 'local-comercial.jpg', title: 'Oficina en edificio corporativo', operation: 'rent', type: 'commercial', price: 520000, currency: 'ARS', address: 'Carlos Pellegrini 1040, piso 2', neighborhood: 'Centro', city: 'Corrientes', lat: -27.4652, lng: -58.8310, bed: null, bath: 1, m2: 55, owner: 'eve', status: 'closed', desc: 'Oficina con recepción y dos despachos.' },
+]
+
+// Fechas agendadas (Calendario): días desde hoy y hora.
+const AGENDA = [
+  { lead: 'Lucía Fernández', inDays: 2, at: '10:00', note: 'Visita casa Santa Ana' },
+  { lead: 'Carolina Ruiz', inDays: 1, at: '11:30', note: 'Firma de reserva en la oficina' },
+  { lead: 'Valeria Sosa', inDays: 4, at: '17:00', note: 'Llamada por el contrato del local' },
+  { lead: 'Martín Gómez', inDays: 6, at: '09:30', note: 'Visita depto Junín' },
+  { lead: 'Florencia Ayala', inDays: 3, at: '17:00', note: 'Visita casa Santa Ana' },
+  { lead: 'Camila Ojeda', inDays: 9, at: '16:00', note: 'Visita quinta Ruta 12' },
+  { lead: 'Marta Giménez', inDays: 12, at: '10:30', note: 'Firma boleto' },
+  { lead: 'Rosa Benítez', inDays: 18, at: '12:00', note: 'Entrega de llaves' },
+]
+
 // ─── WhatsApp de Tickets: postventa de inquilinos y propietarios ────
 const TICKETS = [
   {
@@ -261,6 +287,7 @@ async function wipe(workspaceId) {
   const demoConversations = await db.conversation.findMany({ where: { workspaceId, connectionId: { in: demoConnections.map((c) => c.id) } }, select: { id: true } })
   counts.leadsRedes = (await db.deal.deleteMany({ where: { workspaceId, OR: [{ id: '-' }, ...demoConversations.map((c) => ({ customData: { path: ['socialConversationId'], equals: c.id } }))] } })).count
   counts.conversacionesRedes = (await db.channelConnection.deleteMany({ where: { id: { in: demoConnections.map((c) => c.id) } } })).count ? demoConversations.length : 0
+  counts.propiedades = (await db.property.deleteMany({ where: { workspaceId, code: { startsWith: 'D-' } } })).count
   counts.publicaciones = (await db.socialPost.deleteMany({ where: { workspaceId, imageFileName: { startsWith: 'demo-' } } })).count
   counts.contactos = (await db.contact.deleteMany({ where: { workspaceId, tags: { has: DEMO_TAG } } })).count
   counts.tareas = (await db.task.deleteMany({ where: { workspaceId, description: { startsWith: '[demo]' } } })).count
@@ -455,6 +482,29 @@ async function main() {
     await db.socialPost.create({ data: { workspaceId, network: 'instagram', caption: post.caption, image: fs.readFileSync(path.join(PHOTOS, post.foto)), imageMimeType: 'image/jpeg', imageFileName: `demo-${post.foto}`, createdByUserId: users[post.by].id } })
   }
   console.log(`Publicaciones de Instagram: ${POSTS.length} borradores`)
+
+  for (const p of CATALOG) {
+    await db.property.create({
+      data: {
+        workspaceId, code: p.code, title: p.title, operation: p.operation, propertyType: p.type, status: p.status ?? 'available', price: String(p.price), currency: p.currency,
+        address: p.address, neighborhood: p.neighborhood, city: p.city, latitude: p.lat, longitude: p.lng, bedrooms: p.bed, bathrooms: p.bath, areaM2: p.m2,
+        description: p.desc, assignedToUserId: p.owner ? users[p.owner].id : null, createdByUserId: users.santi.id,
+        coverImage: fs.readFileSync(path.join(PHOTOS, p.foto)), coverMimeType: 'image/jpeg',
+      },
+    })
+  }
+  console.log(`Propiedades: ${CATALOG.length} en el catálogo y el mapa`)
+
+  let scheduled = 0
+  for (const item of AGENDA) {
+    const deal = await db.deal.findFirst({ where: { workspaceId, isArchived: false, customData: { path: ['demo'], equals: true }, title: { startsWith: item.lead } }, select: { id: true, ownerId: true } })
+    if (!deal) continue
+    const [h, m] = item.at.split(':').map(Number)
+    const when = new Date(now); when.setDate(when.getDate() + item.inDays); when.setHours(h, m, 0, 0)
+    await db.appointment.create({ data: { workspaceId, dealId: deal.id, startsAt: when, note: item.note, assignedToUserId: deal.ownerId, createdByUserId: users.santi.id } })
+    scheduled += 1
+  }
+  console.log(`Calendario: ${scheduled} fechas agendadas en los próximos días`)
   if (!full) return
 
   // WhatsApp de Tickets
